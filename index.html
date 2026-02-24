@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Lector EPUB con TTS</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://js.puter.com/v2/"></script>
     <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
         *, *::before, *::after {
@@ -2512,8 +2513,8 @@
                 aiActivePanel = 'a';
                 const slot = getSlotForSentence(typeof currentSentenceIndex !== 'undefined' ? currentSentenceIndex : 0);
                 solicitarImagenParaSlot(slot);
-                solicitarImagenParaSlot(slot + 1);
-                solicitarImagenParaSlot(slot + 2);
+                setTimeout(() => solicitarImagenParaSlot(slot + 1), 800);
+                setTimeout(() => solicitarImagenParaSlot(slot + 2), 1600);
             } else {
                 btn.classList.remove('ai-active');
                 btn.textContent = '🖼 IA Imágenes';
@@ -2655,41 +2656,210 @@
             return `https://image.pollinations.ai/prompt/${encoded}?model=flux&width=1280&height=720&seed=${seed}&nologo=true&enhance=true&private=true`;
         }
 
-        // Genera una URL de imagen probando distintos modelos/servicios
-        function buildImageUrls(prompt, seed) {
-            const enc = encodeURIComponent(prompt.slice(0, 300)); // limitar longitud
-            const shortEnc = encodeURIComponent(getStyleTag());
-            return [
-                // Pollinations con distintos modelos
-                `https://image.pollinations.ai/prompt/${enc}?model=flux&width=1280&height=720&seed=${seed}&nologo=true`,
-                `https://image.pollinations.ai/prompt/${enc}?model=turbo&width=1280&height=720&seed=${seed}&nologo=true`,
-                `https://image.pollinations.ai/prompt/${enc}?width=1280&height=720&seed=${seed}&nologo=true`,
-                // Prompt más corto si todo falla
-                `https://image.pollinations.ai/prompt/${shortEnc}?model=flux&width=1280&height=720&seed=${seed}&nologo=true`,
-                `https://image.pollinations.ai/prompt/${shortEnc}?width=1280&height=720&seed=${seed}&nologo=true`,
-            ];
-        }
+        // ── STABLE HORDE: generación AI distribuida, anónima, sin API key ──
+        // API docs: https://stablehorde.net/api/
+        const HORDE_API = 'https://stablehorde.net/api/v2';
+        const hordeQueue = {};   // slot → { jobId, polling }
 
-        async function cargarImagenConFallback(urls, slot) {
-            for (let i = 0; i < urls.length; i++) {
-                const url = urls[i];
-                const ok = await new Promise(resolve => {
-                    const img = new Image();
-                    const t = setTimeout(() => { img.src = ''; resolve(false); }, 18000);
-                    img.onload = () => { clearTimeout(t); resolve(true); };
-                    img.onerror = (e) => { clearTimeout(t); console.warn(`Imagen falló (intento ${i + 1}):`, url.slice(0, 80)); resolve(false); };
-                    img.src = url;
-                });
-                if (ok) {
-                    if (aiLoadingSlot === slot) aiLoadingSlot = null;
-                    mostrarImagenEnPanel(slot, url);
-                    console.log(`🖼 Imagen lista (intento ${i + 1}) — slot ${slot}`);
-                    return;
+        // Modelos disponibles en Stable Horde (sin key anónima)
+        const HORDE_MODELS = ['Deliberate 3.0', 'Dreamshaper 8', 'AbsoluteReality 1.8.1', 'Deliberate'];
+
+        async function generarImagenStableHorde(prompt, seed, slot) {
+            // Obtener modelos disponibles para elegir uno válido
+            let modelosActivos = HORDE_MODELS;
+            try {
+                const mr = await fetch(`${HORDE_API}/status/models?type=image&min_count=1`, { signal: AbortSignal.timeout(5000) });
+                if (mr.ok) {
+                    const lista = await mr.json();
+                    modelosActivos = lista.slice(0, 5).map(m => m.name);
+                    console.log('Horde modelos disponibles:', modelosActivos.slice(0, 3).join(', '));
+                }
+            } catch (e) { /* usar lista por defecto */ }
+
+            // Intentar enviar, con reintento si hay 429
+            for (let intento = 0; intento < 3; intento++) {
+                if (intento > 0) await new Promise(r => setTimeout(r, 5000 * intento));
+                try {
+                    const resp = await fetch(`${HORDE_API}/generate/async`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'apikey': '0000000000' },
+                        body: JSON.stringify({
+                            prompt: prompt.slice(0, 500),
+                            params: {
+                                width: 1024, height: 576,
+                                steps: 20, cfg_scale: 7,
+                                seed: String(seed),
+                                sampler_name: 'k_euler_a'
+                            },
+                            models: [modelosActivos[0]],
+                            r2: true,
+                            nsfw: false,
+                            slow_workers: true
+                        })
+                    });
+                    if (resp.status === 429) {
+                        console.warn(`Horde 429, reintentando en ${5 * (intento + 1)}s...`);
+                        continue;
+                    }
+                    if (!resp.ok) {
+                        const txt = await resp.text();
+                        console.warn(`Horde ${resp.status}:`, txt.slice(0, 100));
+                        // Intentar con siguiente modelo
+                        if (modelosActivos.length > 1) modelosActivos.shift();
+                        continue;
+                    }
+                    const { id } = await resp.json();
+                    if (!id) continue;
+                    console.log(`🎨 Horde job enviado: ${id} (slot ${slot})`);
+                    return await pollHordeJob(id, slot);
+                } catch (e) {
+                    console.warn('Horde error:', e.message);
                 }
             }
-            // Si todas fallaron, ocultar el panel de imagen
-            if (aiLoadingSlot === slot) aiLoadingSlot = null;
-            console.warn(`🖼 Todas las URLs fallaron para slot ${slot}`);
+            return null;
+        }
+
+        async function pollHordeJob(jobId, slot, attempts = 0) {
+            if (attempts > 40) return null; // máx ~2 min
+            await new Promise(r => setTimeout(r, 3000));
+            try {
+                const resp = await fetch(`${HORDE_API}/generate/check/${jobId}`);
+                if (!resp.ok) return null;
+                const status = await resp.json();
+                if (status.done) {
+                    // Obtener la imagen
+                    const resp2 = await fetch(`${HORDE_API}/generate/status/${jobId}`);
+                    const data = await resp2.json();
+                    const imgUrl = data?.generations?.[0]?.img;
+                    if (imgUrl) {
+                        console.log(`🖼 Horde imagen lista — slot ${slot}`);
+                        return imgUrl;
+                    }
+                    return null;
+                }
+                console.log(`⏳ Horde esperando (slot ${slot}): queue=${status.queue_position}, workers=${status.waiting}`);
+                return await pollHordeJob(jobId, slot, attempts + 1);
+            } catch (e) { return null; }
+        }
+
+        // ── PUTER.JS: imagen IA gratuita sin API key, sin queue ──
+        // Usa modelo FLUX.1 Schnell (rápido) o SDXL como fallback
+        // El "User-Pays" model: el usuario cubre el costo de sus propias generaciones
+        let puterDisponible = true; // optimistic — verificamos en el primer intento
+
+        async function intentarPuter(prompt, seed) {
+            // Verificar disponibilidad en tiempo real (Puter carga async)
+            if (!puterDisponible) return null;
+            if (typeof puter === 'undefined' || !puter?.ai?.txt2img) {
+                console.log('Puter.js no cargado, saltando...');
+                puterDisponible = false;
+                return null;
+            }
+            try {
+                // txt2img devuelve un HTMLImageElement con src ya cargado
+                const imgEl = await Promise.race([
+                    puter.ai.txt2img(prompt.slice(0, 300), {
+                        model: 'black-forest-labs/FLUX.1-schnell',
+                    }),
+                    new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 28000))
+                ]);
+                if (imgEl && imgEl.src) {
+                    console.log('✅ Puter.js imagen lista:', imgEl.src.slice(0, 60));
+                    return imgEl.src;
+                }
+                return null;
+            } catch (e) {
+                console.warn('Puter.js falló:', e.message);
+                // Si falla por auth o cuenta, no reintentar
+                if (e.message && (e.message.includes('401') || e.message.includes('auth') || e.message.includes('sign'))) {
+                    puterDisponible = false;
+                }
+                return null;
+            }
+        }
+
+        // Pollinations — rate limit: 1 req cada 15s en tier anónimo
+        let pollinationsLastRequest = 0;
+
+        async function intentarPollinations(prompt, seed) {
+            // Respetar rate limit: esperar si hace menos de 16s del último request
+            const ahora = Date.now();
+            const espera = Math.max(0, 16000 - (ahora - pollinationsLastRequest));
+            if (espera > 0) await new Promise(r => setTimeout(r, espera));
+            pollinationsLastRequest = Date.now();
+
+            // Endpoint correcto: image.pollinations.ai
+            const shortPrompt = prompt.slice(0, 280);
+            const urls = [
+                `https://image.pollinations.ai/prompt/${encodeURIComponent(shortPrompt)}?width=1280&height=720&seed=${seed}&model=flux&nologo=true`,
+                `https://image.pollinations.ai/prompt/${encodeURIComponent(shortPrompt)}?width=1280&height=720&seed=${seed}&model=turbo&nologo=true`,
+                `https://image.pollinations.ai/prompt/${encodeURIComponent(getStyleTag())}?width=1280&height=720&seed=${seed}&model=flux&nologo=true`,
+            ];
+            for (let i = 0; i < urls.length; i++) {
+                const ok = await new Promise(resolve => {
+                    const img = new Image();
+                    // Timeout reducido a 12s para no bloquear la cola demasiado tiempo
+                    const t = setTimeout(() => { img.src = ''; resolve(false); }, 12000);
+                    img.onload = () => { clearTimeout(t); resolve(true); };
+                    img.onerror = () => { clearTimeout(t); resolve(false); };
+                    img.src = urls[i];
+                });
+                if (ok) { console.log(`Pollinations OK (modelo ${i + 1}):`, urls[i].slice(0, 80)); return urls[i]; }
+            }
+            return null;
+        }
+
+        // Cola serializada para Pollinations — garantiza 1 request activo a la vez
+        // Cada tarea devuelve su URL para evitar el bug de variable compartida
+        let pollinationsQueue = Promise.resolve(null);
+
+        function encolarPollinations(prompt, seed) {
+            // Encadena la tarea ANTES de ejecutar nada — retorna la promesa del resultado
+            const tareaActual = pollinationsQueue.then(() => intentarPollinations(prompt, seed));
+            // La cola global espera a que esta tarea termine (sin propagar el valor)
+            pollinationsQueue = tareaActual.then(() => null, () => null);
+            return tareaActual;
+        }
+
+        // Cola serializada para Horde — garantiza 1 job activo a la vez con key anónima
+        let hordeQueue2 = Promise.resolve();
+
+        function encolarHorde(prompt, seed, slot) {
+            const tarea = hordeQueue2.then(async () => {
+                console.log(`🎨 Pollinations no disponible, usando Stable Horde para slot ${slot}...`);
+                const hordeUrl = await generarImagenStableHorde(prompt, seed, slot);
+                if (aiLoadingSlot === slot) aiLoadingSlot = null;
+                if (hordeUrl) mostrarImagenEnPanel(slot, hordeUrl);
+                else console.warn(`🖼 Sin imagen para slot ${slot}`);
+            });
+            hordeQueue2 = tarea.then(() => null, () => null);
+            return tarea;
+        }
+
+        async function cargarImagenConFallback(prompt, seed, slot) {
+            // 1️⃣ Puter.js — sin key, sin queue, FLUX Schnell (~5-10s)
+            const puterUrl = await intentarPuter(prompt, seed);
+            if (puterUrl) {
+                if (aiLoadingSlot === slot) aiLoadingSlot = null;
+                mostrarImagenEnPanel(slot, puterUrl);
+                return;
+            }
+
+            // 2️⃣ Pollinations — serializado, 1 req cada 16s
+            const polUrl = await encolarPollinations(prompt, seed);
+            if (polUrl) {
+                if (aiLoadingSlot === slot) aiLoadingSlot = null;
+                mostrarImagenEnPanel(slot, polUrl);
+                return;
+            }
+
+            // 3️⃣ Stable Horde — slots 0 y 1 solamente, cola serializada
+            if (slot <= 1) {
+                encolarHorde(prompt, seed, slot);
+            } else {
+                if (aiLoadingSlot === slot) aiLoadingSlot = null;
+                console.warn(`🖼 Slot ${slot} omitido (pre-carga lejana), imagen no disponible`);
+            }
         }
 
         async function solicitarImagenParaSlot(slot) {
@@ -2703,8 +2873,7 @@
             console.log(`🧠 Generando prompt — slot ${slot}`);
             const prompt = await generarPromptConClaude(fragmento);
             const seed = slot * 113 + 7;
-            const urls = buildImageUrls(prompt, seed);
-            cargarImagenConFallback(urls, slot);
+            cargarImagenConFallback(prompt, seed, slot);
         }
 
         function mostrarImagenEnPanel(slot, url) {
@@ -2733,9 +2902,11 @@
             const slotActual = getSlotForSentence(sentenceIdx);
             solicitarImagenParaSlot(slotActual);
 
-            // Pre-cargar los 2 slots siguientes (lookahead)
-            solicitarImagenParaSlot(slotActual + 1);
-            solicitarImagenParaSlot(slotActual + 2);
+            // Pre-cargar slots siguientes con delay escalonado para no saturar APIs
+            // Slot+1: empezar cuando slot actual ya está en cola (800ms)
+            // Slot+2: solo si los anteriores ya están procesando (1600ms)
+            setTimeout(() => solicitarImagenParaSlot(slotActual + 1), 800);
+            setTimeout(() => solicitarImagenParaSlot(slotActual + 2), 1600);
         }
 
         // ═══════════════════════════════════════
