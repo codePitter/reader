@@ -1998,6 +1998,7 @@
                     <span id="kol-tts-pct" style="font-size:0.6rem;color:var(--text-dim);min-width:26px;">100%</span>
                 </div>
                 <button id="btn-toggle-ai-img" onclick="toggleAIImages()" title="Imágenes IA de fondo">🖼 IA</button>
+                <button onclick="toggleOrKey()" title="Configurar key para mejor calidad de prompts" style="background:none;border:1px solid #2e2a22;border-radius:6px;color:#5a5248;cursor:pointer;padding:4px 8px;font-size:0.7rem;">⚙</button>
                 <button id="btn-export-video" onclick="exportarVideo()" title="Exportar video">⬇</button>
                 <button id="btn-cancel-export" onclick="cancelarExportacion()" style="display:none;" title="Cancelar exportación">✕</button>
                 <button id="btn-fullscreen" onclick="toggleFullscreen()" title="Pantalla completa">⛶</button>
@@ -2135,8 +2136,6 @@
             aiActivePanel = 'a';
             aiSlotActivo = false;
             aiLoadingSlot = null;
-            Object.keys(_aiSlotUrl).forEach(k => delete _aiSlotUrl[k]);
-            _aiQueue.length = 0;
             document.getElementById('ai-bg-a').style.opacity = '0';
             document.getElementById('ai-bg-b').style.opacity = '0';
             document.getElementById('ai-bg-overlay').style.background = 'rgba(8,7,6,0)';
@@ -2537,6 +2536,33 @@
             return AI_DEFAULT_STYLE;
         }
 
+        // OpenRouter key panel (opcional — mejora calidad de prompts)
+        function toggleOrKey() {
+            let panel = document.getElementById('or-key-panel');
+            if (!panel) {
+                panel = document.createElement('div');
+                panel.id = 'or-key-panel';
+                panel.style.cssText = 'position:fixed;bottom:70px;right:20px;background:#1a1814;border:1px solid #2e2a22;border-radius:8px;padding:12px;z-index:300;width:280px;font-family:"DM Mono",monospace;font-size:0.62rem;';
+                panel.innerHTML = `
+                            <div style="color:#8a8070;margin-bottom:8px;">🔑 OpenRouter API key (opcional)<br><span style="color:#5a5248;font-size:0.55rem;">Mejora la calidad de prompts de imagen. Gratis en openrouter.ai</span></div>
+                            <div style="display:flex;gap:6px;">
+                                <input id="or-key-input" type="password" placeholder="sk-or-..." value="${localStorage.getItem('openrouter_key') || ''}"
+                                    style="flex:1;background:#0f0e0c;border:1px solid #2e2a22;border-radius:4px;color:#e8e0d0;padding:5px 8px;font-family:inherit;font-size:0.62rem;">
+                                <button onclick="guardarOrKey()" style="background:#7eb89a;border:none;border-radius:4px;color:#0f0e0c;padding:5px 10px;cursor:pointer;font-size:0.62rem;">OK</button>
+                            </div>
+                            <div style="color:#5a5248;margin-top:6px;font-size:0.55rem;">Registrate gratis → openrouter.ai → usa modelos gratuitos (Llama-3, Gemma, etc.)</div>
+                        `;
+                document.body.appendChild(panel);
+            } else {
+                panel.remove();
+            }
+        }
+        function guardarOrKey() {
+            const k = document.getElementById('or-key-input').value.trim();
+            if (k) { localStorage.setItem('openrouter_key', k); mostrarNotificacion('✓ OpenRouter key guardada'); }
+            document.getElementById('or-key-panel')?.remove();
+        }
+
         function toggleAIImages() {
             aiImagesEnabled = !aiImagesEnabled;
             const btn = document.getElementById('btn-toggle-ai-img');
@@ -2567,7 +2593,7 @@
         // ── Cache de prompts ──
         const aiPromptCache = {};
 
-        // Genera el prompt visual usando Pollinations GET API (sin CORS, sin key, sin POST)
+        // Genera el prompt visual — cascada de proveedores de texto
         async function generarPromptConClaude(fragmento) {
             const cacheKey = fragmento.slice(0, 100);
             if (aiPromptCache[cacheKey]) return aiPromptCache[cacheKey];
@@ -2576,59 +2602,77 @@
             const universeHint = aiDetectedUniverse
                 ? `From webnovel "${aiDetectedUniverse}", match its visual style.`
                 : '';
-
-            // System prompt compacto
             const systemPrompt = `You are an image prompt generator. ${universeHint} Given a fiction passage, output ONLY an English image generation prompt (max 60 words): describe the specific environment, mood, lighting, time of day; never name characters, describe by silhouette or role only; always end with: "${styleTag}". No preamble.`;
-
-            // Texto del pasaje
             const pasaje = fragmento.slice(0, 350).replace(/"/g, "'");
 
-            // Helper: detectar si el texto es el aviso de deprecación u otro error
-            function esRespuestaInvalida(txt) {
-                return !txt || txt.length < 20 ||
-                    txt.includes('IMPORTANT NOTICE') ||
-                    txt.includes('deprecated') ||
-                    txt.includes('DEPRECATED') ||
-                    txt.includes('please update') ||
-                    txt.includes('Please update') ||
-                    txt.toUpperCase().includes('NOTICE');
+            function esValido(txt) {
+                return txt && txt.length > 20 &&
+                    !txt.includes('IMPORTANT NOTICE') && !txt.includes('deprecated') &&
+                    !txt.toUpperCase().includes('NOTICE') && !txt.includes('please update');
             }
 
-            // Intentar con Pollinations (timeout corto para no bloquear)
+            // ── 1. Pollinations GET (sin rate limit, sin POST, sin key) ──
             try {
+                const q = encodeURIComponent(systemPrompt + '\n\nPassage: ' + pasaje);
                 const ctrl = new AbortController();
-                const timer = setTimeout(() => ctrl.abort(), 6000);
-                const res = await fetch('https://text.pollinations.ai/openai', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        model: 'mistral',
-                        messages: [
-                            { role: 'system', content: systemPrompt },
-                            { role: 'user', content: pasaje }
-                        ],
-                        private: true,
-                        seed: Math.floor(Math.random() * 9999)
-                    }),
-                    signal: ctrl.signal
-                });
-                clearTimeout(timer);
+                const t = setTimeout(() => ctrl.abort(), 7000);
+                const res = await fetch(
+                    `https://text.pollinations.ai/${q}?model=mistral&seed=${Date.now() % 9999}&private=true`,
+                    { signal: ctrl.signal }
+                );
+                clearTimeout(t);
                 if (res.ok) {
-                    const data = await res.json();
-                    let prompt = (data?.choices?.[0]?.message?.content || '').trim();
-                    prompt = prompt.split('\n')[0].trim();
-                    if (!esRespuestaInvalida(prompt)) {
-                        aiPromptCache[cacheKey] = prompt;
-                        console.log('Prompt (Pollinations/mistral):', prompt.slice(0, 80));
-                        return prompt;
+                    const txt = (await res.text()).trim().split('\n')[0].trim();
+                    if (esValido(txt)) {
+                        aiPromptCache[cacheKey] = txt;
+                        console.log('Prompt (Pollinations GET):', txt.slice(0, 80));
+                        return txt;
                     }
                 }
-            } catch (e) { /* timeout o error — usar prompt local */ }
+            } catch (e) { console.log('Pollinations GET falló:', e.message); }
 
-            // Prompt local: extracción semántica sin LLM
+            // ── 2. Openrouter free tier (llama-3 gratuito, sin tarjeta) ──
+            // Solo si hay key guardada en localStorage
+            const orKey = localStorage.getItem('openrouter_key');
+            if (orKey) {
+                try {
+                    const ctrl = new AbortController();
+                    const t = setTimeout(() => ctrl.abort(), 8000);
+                    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${orKey}`,
+                            'HTTP-Referer': location.origin,
+                            'X-Title': 'EPUB Reader'
+                        },
+                        body: JSON.stringify({
+                            model: 'meta-llama/llama-3.2-3b-instruct:free',
+                            messages: [
+                                { role: 'system', content: systemPrompt },
+                                { role: 'user', content: pasaje }
+                            ],
+                            max_tokens: 120
+                        }),
+                        signal: ctrl.signal
+                    });
+                    clearTimeout(t);
+                    if (res.ok) {
+                        const d = await res.json();
+                        const txt = (d?.choices?.[0]?.message?.content || '').trim().split('\n')[0].trim();
+                        if (esValido(txt)) {
+                            aiPromptCache[cacheKey] = txt;
+                            console.log('Prompt (OpenRouter llama-3 free):', txt.slice(0, 80));
+                            return txt;
+                        }
+                    }
+                } catch (e) { console.log('OpenRouter falló:', e.message); }
+            }
+
+            // ── 3. Fallback: prompt semántico local (sin red, instantáneo) ──
             const promptLocal = construirPromptDirecto(fragmento, styleTag);
             aiPromptCache[cacheKey] = promptLocal;
-            console.log('Prompt (local):', promptLocal.slice(0, 80));
+            console.log('Prompt (local semántico):', promptLocal.slice(0, 80));
             return promptLocal;
         }
 
@@ -2691,7 +2735,7 @@
         // URL de Pollinations — model=flux, parámetros documentados
         function pollinationsUrl(prompt, seed) {
             const encoded = encodeURIComponent(prompt);
-            return `https://image.pollinations.ai/prompt/${encoded}?model=flux&width=1280&height=720&seed=${seed}&nologo=true&private=true`;
+            return `https://image.pollinations.ai/prompt/${encoded}?model=flux&width=1280&height=720&seed=${seed}&nologo=true&enhance=true&private=true`;
         }
 
         // ═══════════════════════════════════════
@@ -2888,60 +2932,61 @@
             console.log(`🎨 Fondo procedural generado — slot ${slot} (${tipo})`);
         }
 
-        // Cola de slots pendientes para respetar el rate-limit de Pollinations (~1 req/15s anon)
-        const _aiQueue = [];
-        let _aiQueueRunning = false;
-
-        async function _processAiQueue() {
-            if (_aiQueueRunning) return;
-            _aiQueueRunning = true;
-            while (_aiQueue.length > 0) {
-                const { prompt, seed, slot } = _aiQueue.shift();
-                await _cargarPollinations(prompt, seed, slot);
-                // Pollinations pide ~1 req/15s en tier anónimo; 12s = margen seguro
-                if (_aiQueue.length > 0) await new Promise(r => setTimeout(r, 12000));
-            }
-            _aiQueueRunning = false;
-        }
-
-        async function _cargarPollinations(prompt, seed, slot) {
-            if (!aiImagesEnabled) return;
-            const url = pollinationsUrl(prompt, seed);
-            console.log(`🖼 Cargando Pollinations — slot ${slot}:`, prompt.slice(0, 60));
-
-            // Mostrar fondo procedural inmediatamente mientras espera
-            dibujarFondoProcedural(slot, prompt);
-
-            return new Promise((resolve) => {
-                const img = new Image();
-                const timeout = setTimeout(() => {
-                    console.warn(`⚠ Timeout Pollinations slot ${slot} — manteniendo procedural`);
-                    resolve();
-                }, 55000); // 55s timeout
-
-                img.onload = () => {
-                    clearTimeout(timeout);
-                    if (!aiImagesEnabled) { resolve(); return; }
-                    // Reemplazar el fondo procedural con la imagen real (force=true)
-                    mostrarImagenEnPanel(slot, url, true);
-                    console.log(`✅ Imagen Pollinations cargada — slot ${slot}`);
-                    resolve();
-                };
-
-                img.onerror = () => {
-                    clearTimeout(timeout);
-                    console.warn(`❌ Error Pollinations slot ${slot} — manteniendo procedural`);
-                    resolve();
-                };
-
-                img.src = url;
-            });
-        }
+        // Cola para no saturar Pollinations — máx 1 petición simultánea de imagen
+        let _imgQueue = Promise.resolve();
+        const _imgCache = {};
 
         async function cargarImagenConFallback(prompt, seed, slot) {
-            // Encolar para respetar rate-limit; procedural aparece inmediatamente
-            _aiQueue.push({ prompt, seed, slot });
-            _processAiQueue();
+            if (!aiImagesEnabled) return;
+
+            // Mostrar fondo procedural INSTANTÁNEO mientras carga la imagen real
+            dibujarFondoProcedural(slot, prompt);
+
+            // Encolar para no saturar
+            _imgQueue = _imgQueue.then(() => _intentarCargarImagen(prompt, seed, slot));
+        }
+
+        async function _intentarCargarImagen(prompt, seed, slot) {
+            if (!aiImagesEnabled) return;
+            const cKey = slot + '_' + seed;
+            if (_imgCache[cKey]) { mostrarImagenEnPanel(slot, _imgCache[cKey]); return; }
+
+            // Proveedores de imagen en cascada
+            const proveedores = [
+                // 1. Pollinations flux (gratuito, sin key, funciona online)
+                () => `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?model=flux&width=1280&height=720&seed=${seed}&nologo=true&enhance=true&private=true`,
+                // 2. Pollinations turbo (más rápido, menor calidad)
+                () => `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?model=turbo&width=1280&height=720&seed=${seed}&nologo=true&private=true`,
+                // 3. Pollinations flux con prompt más corto (por si el prompt es muy largo)
+                () => `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt.slice(0, 200))}?model=flux&width=1024&height=576&seed=${seed}&nologo=true`,
+            ];
+
+            for (const getUrl of proveedores) {
+                if (!aiImagesEnabled) return;
+                const url = getUrl();
+                const ok = await new Promise(resolve => {
+                    const img = new Image();
+                    img.crossOrigin = 'anonymous';
+                    // Timeout: si en 25s no cargó, intentar siguiente
+                    const timer = setTimeout(() => { img.src = ''; resolve(false); }, 25000);
+                    img.onload = () => {
+                        clearTimeout(timer);
+                        // Verificar que no sea imagen de error (Pollinations devuelve 200 con imagen de error)
+                        if (img.naturalWidth < 100) { resolve(false); return; }
+                        _imgCache[cKey] = url;
+                        mostrarImagenEnPanel(slot, url);
+                        console.log(`🖼 Imagen cargada — slot ${slot} (${img.naturalWidth}x${img.naturalHeight})`);
+                        resolve(true);
+                    };
+                    img.onerror = () => { clearTimeout(timer); resolve(false); };
+                    img.src = url;
+                });
+                if (ok) return;
+                // Pausa entre intentos para no saturar
+                await new Promise(r => setTimeout(r, 1500));
+            }
+            // Si todo falla, el fondo procedural ya está visible — nada más que hacer
+            console.log(`⚠ Imagen IA no disponible — slot ${slot}, manteniendo procedural`);
         }
 
         async function solicitarImagenParaSlot(slot) {
@@ -2958,39 +3003,22 @@
             cargarImagenConFallback(prompt, seed, slot);
         }
 
-        // Guarda la URL actual mostrada por slot para detectar upgrade procedural→Pollinations
-        const _aiSlotUrl = {};
-
-        function mostrarImagenEnPanel(slot, url, force) {
+        function mostrarImagenEnPanel(slot, url) {
             if (!aiImagesEnabled) return;
-
-            // Si el slot ya está activo con la MISMA url, no hacer nada
-            if (_aiSlotUrl[slot] === url) return;
-
-            // Si es un slot distinto al activo Y no es force (upgrade Pollinations), ignorar slots muy viejos
-            if (slot !== aiCurrentSlot && !force && slot < aiCurrentSlot - 1) return;
-
-            const esMismoSlot = (slot === aiCurrentSlot);
 
             const panelAct = aiActivePanel === 'a' ? 'ai-bg-a' : 'ai-bg-b';
             const panelPrev = aiActivePanel === 'a' ? 'ai-bg-b' : 'ai-bg-a';
             const divAct = document.getElementById(panelAct);
             const divPrev = document.getElementById(panelPrev);
 
-            if (esMismoSlot) {
-                // Upgrade en el panel activo sin crossfade (ya está visible)
-                divAct.style.backgroundImage = `url("${url}")`;
-            } else {
-                // Nuevo slot: crossfade al panel inactivo
-                divPrev.style.backgroundImage = `url("${url}")`;
-                divPrev.style.opacity = '1';
-                divAct.style.opacity = '0';
-                aiActivePanel = aiActivePanel === 'a' ? 'b' : 'a';
-                aiCurrentSlot = slot;
-            }
+            if (slot === aiCurrentSlot) return;
 
-            _aiSlotUrl[slot] = url;
+            divAct.style.backgroundImage = `url("${url}")`;
+            divAct.style.opacity = '1';
+            divPrev.style.opacity = '0';
             document.getElementById('ai-bg-overlay').style.background = 'rgba(8,7,6,0.48)';
+            aiActivePanel = aiActivePanel === 'a' ? 'b' : 'a';
+            aiCurrentSlot = slot;
             aiSlotActivo = true;
         }
 
