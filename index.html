@@ -2135,6 +2135,8 @@
             aiActivePanel = 'a';
             aiSlotActivo = false;
             aiLoadingSlot = null;
+            Object.keys(_aiSlotUrl).forEach(k => delete _aiSlotUrl[k]);
+            _aiQueue.length = 0;
             document.getElementById('ai-bg-a').style.opacity = '0';
             document.getElementById('ai-bg-b').style.opacity = '0';
             document.getElementById('ai-bg-overlay').style.background = 'rgba(8,7,6,0)';
@@ -2689,233 +2691,257 @@
         // URL de Pollinations — model=flux, parámetros documentados
         function pollinationsUrl(prompt, seed) {
             const encoded = encodeURIComponent(prompt);
-            return `https://image.pollinations.ai/prompt/${encoded}?model=flux&width=1280&height=720&seed=${seed}&nologo=true&enhance=true&private=true`;
+            return `https://image.pollinations.ai/prompt/${encoded}?model=flux&width=1280&height=720&seed=${seed}&nologo=true&private=true`;
         }
 
-        // ── STABLE HORDE: generación AI distribuida, anónima, sin API key ──
-        // API docs: https://stablehorde.net/api/
-        const HORDE_API = 'https://stablehorde.net/api/v2';
-        const hordeQueue = {};   // slot → { jobId, polling }
+        // ═══════════════════════════════════════
+        // GENERADOR DE FONDOS PROCEDURAL (Canvas 2D)
+        // Sin APIs externas — 100% local, instantáneo
+        // ═══════════════════════════════════════
 
-        // Modelos disponibles en Stable Horde (sin key anónima)
-        const HORDE_MODELS = ['Deliberate 3.0', 'Dreamshaper 8', 'AbsoluteReality 1.8.1', 'Deliberate'];
+        // Paletas de colores por tipo de escena (derivadas del prompt construido localmente)
+        const SCENE_PALETTES = {
+            forest: { sky: ['#0a0f0a', '#0d1a0e', '#081208'], mid: ['#1a2e1a', '#0f2010'], fog: '#1a2a1a', stars: false },
+            city: { sky: ['#050810', '#080c18', '#060a14'], mid: ['#0a1020', '#151c2e'], fog: '#0d1525', stars: true, neon: true },
+            dungeon: { sky: ['#080608', '#100a08', '#0a0608'], mid: ['#1a1008', '#120c06'], fog: '#100808', stars: false },
+            desert: { sky: ['#1a0a04', '#200c06', '#180a04'], mid: ['#2a1008', '#1e0c06'], fog: '#200a06', stars: false },
+            ocean: { sky: ['#040810', '#06101a', '#040c16'], mid: ['#081428', '#0a1830'], fog: '#060e1e', stars: true },
+            castle: { sky: ['#08060c', '#100810', '#0c060a'], mid: ['#180a18', '#140810'], fog: '#0e060c', stars: true },
+            cave: { sky: ['#040408', '#060610', '#040408'], mid: ['#080820', '#060618'], fog: '#040412', stars: false, glow: true },
+            temple: { sky: ['#0a0806', '#120e08', '#0e0a04'], mid: ['#1e160a', '#180e06'], fog: '#140c06', stars: false },
+            space: { sky: ['#020206', '#04040c', '#020208'], mid: ['#06040e', '#080614'], fog: '#040410', stars: true, nebula: true },
+            hospital: { sky: ['#080c0a', '#0a100c', '#060a08'], mid: ['#0e1410', '#0c120e'], fog: '#0a1008', stars: false },
+            mansion: { sky: ['#080608', '#0e0a0c', '#0a0808'], mid: ['#160e12', '#120c10'], fog: '#100a0e', stars: false },
+            default: { sky: ['#060608', '#080810', '#060608'], mid: ['#0c0c14', '#0a0a10'], fog: '#080810', stars: true },
+        };
 
-        async function generarImagenStableHorde(prompt, seed, slot) {
-            // Obtener modelos disponibles para elegir uno válido
-            let modelosActivos = HORDE_MODELS;
-            try {
-                const mr = await fetch(`${HORDE_API}/status/models?type=image&min_count=1`, { signal: AbortSignal.timeout(5000) });
-                if (mr.ok) {
-                    const lista = await mr.json();
-                    modelosActivos = lista.slice(0, 5).map(m => m.name);
-                    console.log('Horde modelos disponibles:', modelosActivos.slice(0, 3).join(', '));
-                }
-            } catch (e) { /* usar lista por defecto */ }
-
-            // Intentar enviar, con reintento si hay 429
-            for (let intento = 0; intento < 3; intento++) {
-                if (intento > 0) await new Promise(r => setTimeout(r, 5000 * intento));
-                try {
-                    const resp = await fetch(`${HORDE_API}/generate/async`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'apikey': '0000000000' },
-                        body: JSON.stringify({
-                            prompt: prompt.slice(0, 500),
-                            params: {
-                                width: 1024, height: 576,
-                                steps: 20, cfg_scale: 7,
-                                seed: String(seed),
-                                sampler_name: 'k_euler_a'
-                            },
-                            models: [modelosActivos[0]],
-                            r2: true,
-                            nsfw: false,
-                            slow_workers: true
-                        })
-                    });
-                    if (resp.status === 429) {
-                        console.warn(`Horde 429, reintentando en ${5 * (intento + 1)}s...`);
-                        continue;
-                    }
-                    if (!resp.ok) {
-                        const txt = await resp.text();
-                        console.warn(`Horde ${resp.status}:`, txt.slice(0, 100));
-                        // Intentar con siguiente modelo
-                        if (modelosActivos.length > 1) modelosActivos.shift();
-                        continue;
-                    }
-                    const { id } = await resp.json();
-                    if (!id) continue;
-                    console.log(`🎨 Horde job enviado: ${id} (slot ${slot})`);
-                    return await pollHordeJob(id, slot);
-                } catch (e) {
-                    console.warn('Horde error:', e.message);
-                }
-            }
-            return null;
+        // Detectar tipo de escena desde el prompt textual
+        function detectarTipoEscena(prompt) {
+            const t = prompt.toLowerCase();
+            if (/forest|bosque|jungle|selva|tree|árbol|gnarled|ancient dark/.test(t)) return 'forest';
+            if (/city|ciudad|urban|neon|asphalt|building|edificio|dystopian/.test(t)) return 'city';
+            if (/dungeon|celda|prison|jail|stone|calabozo/.test(t)) return 'dungeon';
+            if (/desert|wasteland|desierto|sand|arena|scorched/.test(t)) return 'desert';
+            if (/ocean|sea|mar|coast|costa|wave|cliff/.test(t)) return 'ocean';
+            if (/castle|fortress|castillo|battlement|raven/.test(t)) return 'castle';
+            if (/cave|cavern|cueva|stalactite|bioluminescent|underground/.test(t)) return 'cave';
+            if (/temple|altar|shrine|templo|pillar/.test(t)) return 'temple';
+            if (/space|cosmos|nebula|starship|galaxy|espacio/.test(t)) return 'space';
+            if (/hospital|clinic|corridor|fluorescent/.test(t)) return 'hospital';
+            if (/mansion|manor|palace|palacio|hall|grand/.test(t)) return 'mansion';
+            return 'default';
         }
 
-        async function pollHordeJob(jobId, slot, attempts = 0) {
-            if (attempts > 40) return null; // máx ~2 min
-            await new Promise(r => setTimeout(r, 3000));
-            try {
-                const resp = await fetch(`${HORDE_API}/generate/check/${jobId}`);
-                if (!resp.ok) return null;
-                const status = await resp.json();
-                if (status.done) {
-                    // Obtener la imagen
-                    const resp2 = await fetch(`${HORDE_API}/generate/status/${jobId}`);
-                    const data = await resp2.json();
-                    const imgUrl = data?.generations?.[0]?.img;
-                    if (imgUrl) {
-                        console.log(`🖼 Horde imagen lista — slot ${slot}`);
-                        return imgUrl;
-                    }
-                    return null;
-                }
-                console.log(`⏳ Horde esperando (slot ${slot}): queue=${status.queue_position}, workers=${status.waiting}`);
-                return await pollHordeJob(jobId, slot, attempts + 1);
-            } catch (e) { return null; }
-        }
+        // Dibuja el fondo procedural en el div usando un canvas temporal
+        function dibujarFondoProcedural(slot, prompt) {
+            if (!aiImagesEnabled) return;
 
-        // ── CRAIYON: imagen IA gratuita, sin signup, sin key, CORS abierto ──
-        // API no oficial pero estable. V3 devuelve links directos a pics.craiyon.com
-        async function intentarCraiyon(prompt, seed) {
-            try {
-                const res = await Promise.race([
-                    fetch('https://api.craiyon.com/v3', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            prompt: prompt.slice(0, 400),
-                            negative_prompt: 'text, watermark, blurry, ugly, deformed',
-                            model: 'art',
-                            token: null,
-                            version: 'c4ue22fb7kb6wlac'
-                        })
-                    }),
-                    new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 40000))
-                ]);
-                if (!res.ok) return null;
-                const data = await res.json();
-                // V3: data.images = array de paths relativos
-                // V1 fallback: data.images = array de base64
-                if (data?.images?.length) {
-                    const img = data.images[0];
-                    // Si es una URL relativa (v3)
-                    if (typeof img === 'string' && !img.startsWith('data:') && img.length < 200) {
-                        const url = `https://pics.craiyon.com/${img}`;
-                        console.log('✅ Craiyon imagen lista:', url.slice(0, 70));
-                        return url;
-                    }
-                    // Si es base64 (v1/fallback)
-                    if (typeof img === 'string' && img.length > 200) {
-                        const url = `data:image/webp;base64,${img}`;
-                        console.log('✅ Craiyon imagen lista (base64)');
-                        return url;
-                    }
-                }
-                return null;
-            } catch (e) {
-                console.warn('Craiyon falló:', e.message?.slice(0, 60));
-                return null;
-            }
-        }
+            const tipo = detectarTipoEscena(prompt);
+            const pal = SCENE_PALETTES[tipo] || SCENE_PALETTES.default;
+            const seed = slot * 113 + 7;
+            const rng = (n => { let s = seed + n; return () => { s = (s * 16807 + 0) % 2147483647; return (s - 1) / 2147483646; }; })(0);
 
-        // Pollinations — rate limit anónimo: 1 req/15s. Con referrer: mejor prioridad sin signup.
-        // Docs: https://github.com/pollinations/pollinations/blob/master/APIDOCS.md
-        let pollinationsLastRequest = 0;
-        // Intervalo adaptativo: empieza en 8s (agresivo con referrer), sube si hay 429, baja si hay éxito
-        let pollinationsInterval = 8000;
+            // Crear canvas offscreen
+            const W = 1280, H = 720;
+            const cv = document.createElement('canvas');
+            cv.width = W; cv.height = H;
+            const c = cv.getContext('2d');
 
-        async function intentarPollinations(prompt, seed) {
-            const ahora = Date.now();
-            const espera = Math.max(0, pollinationsInterval - (ahora - pollinationsLastRequest));
-            if (espera > 0) await new Promise(r => setTimeout(r, espera));
-            pollinationsLastRequest = Date.now();
+            // — Gradiente de cielo —
+            const skyGrad = c.createLinearGradient(0, 0, 0, H * 0.65);
+            skyGrad.addColorStop(0, pal.sky[0]);
+            skyGrad.addColorStop(0.5, pal.sky[1]);
+            skyGrad.addColorStop(1, pal.sky[2] || pal.sky[1]);
+            c.fillStyle = skyGrad;
+            c.fillRect(0, 0, W, H);
 
-            const shortPrompt = prompt.slice(0, 280);
-            // referrer actúa como identificador de app — da mejor prioridad que anónimo puro, sin login
-            const ref = encodeURIComponent(window.location.hostname || 'localhost');
-            const urls = [
-                // turbo primero: más rápido (~3-5s), calidad aceptable para fondos
-                `https://image.pollinations.ai/prompt/${encodeURIComponent(shortPrompt)}?width=1280&height=720&seed=${seed}&model=turbo&nologo=true&referrer=${ref}`,
-                // flux: mejor calidad si turbo falla
-                `https://image.pollinations.ai/prompt/${encodeURIComponent(shortPrompt)}?width=1280&height=720&seed=${seed}&model=flux&nologo=true&referrer=${ref}`,
-                // fallback con prompt mínimo (solo style tag)
-                `https://image.pollinations.ai/prompt/${encodeURIComponent(getStyleTag())}?width=1280&height=720&seed=${seed}&model=turbo&nologo=true&referrer=${ref}`,
-            ];
-            for (let i = 0; i < urls.length; i++) {
-                const ok = await new Promise(resolve => {
-                    const img = new Image();
-                    const t = setTimeout(() => { img.src = ''; resolve(false); }, 15000);
-                    img.onload = () => { clearTimeout(t); resolve(true); };
-                    img.onerror = () => { clearTimeout(t); resolve(false); };
-                    img.src = urls[i];
-                });
-                if (ok) {
-                    // Éxito → bajar el intervalo (más agresivo la próxima vez)
-                    pollinationsInterval = Math.max(6000, pollinationsInterval - 1000);
-                    console.log(`Pollinations OK (${i === 0 ? 'turbo' : i === 1 ? 'flux' : 'fallback'}):`, urls[i].slice(0, 80));
-                    return urls[i];
+            // — Estrellas —
+            if (pal.stars) {
+                for (let i = 0; i < 180; i++) {
+                    const x = rng() * W, y = rng() * H * 0.6;
+                    const r = rng() * 1.2 + 0.3;
+                    const alpha = rng() * 0.7 + 0.3;
+                    c.beginPath();
+                    c.arc(x, y, r, 0, Math.PI * 2);
+                    c.fillStyle = `rgba(255,245,230,${alpha})`;
+                    c.fill();
                 }
             }
-            // Fallo → subir el intervalo (evitar baneos)
-            pollinationsInterval = Math.min(20000, pollinationsInterval + 3000);
-            return null;
+
+            // — Nebulosa (espacio) —
+            if (pal.nebula) {
+                for (let i = 0; i < 3; i++) {
+                    const nx = rng() * W, ny = rng() * H * 0.5;
+                    const nr = 80 + rng() * 120;
+                    const colors = ['rgba(80,40,120,', 'rgba(40,60,120,', 'rgba(100,30,80,'];
+                    const ng = c.createRadialGradient(nx, ny, 0, nx, ny, nr);
+                    ng.addColorStop(0, colors[i % 3] + '0.18)');
+                    ng.addColorStop(1, colors[i % 3] + '0)');
+                    c.fillStyle = ng;
+                    c.fillRect(0, 0, W, H);
+                }
+            }
+
+            // — Luces de neón (ciudad) —
+            if (pal.neon) {
+                const neonColors = ['rgba(0,200,255,', 'rgba(255,50,150,', 'rgba(80,255,180,', 'rgba(255,180,0,'];
+                for (let i = 0; i < 5; i++) {
+                    const nx = rng() * W, ny = H * 0.4 + rng() * H * 0.3;
+                    const nr = 30 + rng() * 60;
+                    const col = neonColors[Math.floor(rng() * neonColors.length)];
+                    const ng = c.createRadialGradient(nx, ny, 0, nx, ny, nr);
+                    ng.addColorStop(0, col + '0.12)');
+                    ng.addColorStop(1, col + '0)');
+                    c.fillStyle = ng;
+                    c.fillRect(0, 0, W, H);
+                }
+            }
+
+            // — Brillo bioluminiscente (cueva) —
+            if (pal.glow) {
+                for (let i = 0; i < 8; i++) {
+                    const gx = rng() * W, gy = H * 0.3 + rng() * H * 0.5;
+                    const gr = 15 + rng() * 40;
+                    const glowColors = ['rgba(80,180,255,', 'rgba(100,255,200,', 'rgba(160,100,255,'];
+                    const col = glowColors[Math.floor(rng() * glowColors.length)];
+                    const gg = c.createRadialGradient(gx, gy, 0, gx, gy, gr);
+                    gg.addColorStop(0, col + '0.25)');
+                    gg.addColorStop(1, col + '0)');
+                    c.fillStyle = gg;
+                    c.fillRect(0, 0, W, H);
+                }
+            }
+
+            // — Siluetas de fondo (elementos medios) —
+            const numShapes = 6 + Math.floor(rng() * 5);
+            for (let i = 0; i < numShapes; i++) {
+                const x = (i / numShapes) * W + (rng() - 0.5) * (W / numShapes);
+                const baseH = H * (0.3 + rng() * 0.3);
+                const w = W / numShapes * (0.6 + rng() * 0.8);
+                const col = pal.mid[Math.floor(rng() * pal.mid.length)];
+
+                if (tipo === 'forest') {
+                    // Árboles
+                    c.fillStyle = col;
+                    c.beginPath();
+                    c.moveTo(x, H);
+                    c.lineTo(x - w * 0.5, baseH);
+                    c.lineTo(x - w * 0.25, baseH + H * 0.08);
+                    c.lineTo(x - w * 0.45, baseH - H * 0.1);
+                    c.lineTo(x, baseH - H * 0.18);
+                    c.lineTo(x + w * 0.45, baseH - H * 0.1);
+                    c.lineTo(x + w * 0.25, baseH + H * 0.08);
+                    c.lineTo(x + w * 0.5, baseH);
+                    c.closePath();
+                    c.fill();
+                } else if (tipo === 'city') {
+                    // Rascacielos
+                    const bW = w * 0.5 + rng() * w * 0.4;
+                    const bH = baseH + rng() * H * 0.2;
+                    c.fillStyle = col;
+                    c.fillRect(x - bW / 2, bH, bW, H - bH);
+                    // Ventanas
+                    c.fillStyle = rng() > 0.7 ? 'rgba(255,220,100,0.15)' : 'rgba(100,180,255,0.08)';
+                    for (let wy = bH + 8; wy < H - 10; wy += 14) {
+                        for (let wx = x - bW / 2 + 5; wx < x + bW / 2 - 5; wx += 10) {
+                            if (rng() > 0.4) c.fillRect(wx, wy, 5, 7);
+                        }
+                    }
+                } else if (tipo === 'castle' || tipo === 'mansion') {
+                    // Torres
+                    const tW = w * 0.4;
+                    c.fillStyle = col;
+                    c.fillRect(x - tW / 2, baseH, tW, H - baseH);
+                    // Almenas
+                    for (let m = x - tW / 2; m < x + tW / 2; m += tW / 3) {
+                        c.fillRect(m, baseH - H * 0.05, tW / 4, H * 0.05);
+                    }
+                } else {
+                    // Forma genérica: colina/roca
+                    c.fillStyle = col;
+                    c.beginPath();
+                    c.moveTo(x - w * 0.7, H);
+                    c.quadraticCurveTo(x, baseH, x + w * 0.7, H);
+                    c.closePath();
+                    c.fill();
+                }
+            }
+
+            // — Niebla / bruma en el suelo —
+            const fogGrad = c.createLinearGradient(0, H * 0.65, 0, H);
+            fogGrad.addColorStop(0, pal.fog + '00');
+            fogGrad.addColorStop(0.4, pal.fog + 'aa');
+            fogGrad.addColorStop(1, pal.fog + 'ff');
+            c.fillStyle = fogGrad;
+            c.fillRect(0, H * 0.55, W, H * 0.45);
+
+            // — Viñeta dramática en los bordes —
+            const vig = c.createRadialGradient(W / 2, H / 2, H * 0.2, W / 2, H / 2, H * 0.9);
+            vig.addColorStop(0, 'rgba(0,0,0,0)');
+            vig.addColorStop(1, 'rgba(0,0,0,0.72)');
+            c.fillStyle = vig;
+            c.fillRect(0, 0, W, H);
+
+            // Convertir a data URL y mostrar como fondo
+            const dataUrl = cv.toDataURL('image/jpeg', 0.88);
+            mostrarImagenEnPanel(slot, dataUrl);
+            console.log(`🎨 Fondo procedural generado — slot ${slot} (${tipo})`);
         }
 
-        // Cola serializada para Pollinations — garantiza 1 request activo a la vez
-        // Cada tarea devuelve su URL para evitar el bug de variable compartida
-        let pollinationsQueue = Promise.resolve(null);
+        // Cola de slots pendientes para respetar el rate-limit de Pollinations (~1 req/15s anon)
+        const _aiQueue = [];
+        let _aiQueueRunning = false;
 
-        function encolarPollinations(prompt, seed) {
-            // Encadena la tarea ANTES de ejecutar nada — retorna la promesa del resultado
-            const tareaActual = pollinationsQueue.then(() => intentarPollinations(prompt, seed));
-            // La cola global espera a que esta tarea termine (sin propagar el valor)
-            pollinationsQueue = tareaActual.then(() => null, () => null);
-            return tareaActual;
+        async function _processAiQueue() {
+            if (_aiQueueRunning) return;
+            _aiQueueRunning = true;
+            while (_aiQueue.length > 0) {
+                const { prompt, seed, slot } = _aiQueue.shift();
+                await _cargarPollinations(prompt, seed, slot);
+                // Pollinations pide ~1 req/15s en tier anónimo; 12s = margen seguro
+                if (_aiQueue.length > 0) await new Promise(r => setTimeout(r, 12000));
+            }
+            _aiQueueRunning = false;
         }
 
-        // Cola serializada para Horde — garantiza 1 job activo a la vez con key anónima
-        let hordeQueue2 = Promise.resolve();
+        async function _cargarPollinations(prompt, seed, slot) {
+            if (!aiImagesEnabled) return;
+            const url = pollinationsUrl(prompt, seed);
+            console.log(`🖼 Cargando Pollinations — slot ${slot}:`, prompt.slice(0, 60));
 
-        function encolarHorde(prompt, seed, slot) {
-            const tarea = hordeQueue2.then(async () => {
-                console.log(`🎨 Pollinations no disponible, usando Stable Horde para slot ${slot}...`);
-                const hordeUrl = await generarImagenStableHorde(prompt, seed, slot);
-                if (aiLoadingSlot === slot) aiLoadingSlot = null;
-                if (hordeUrl) mostrarImagenEnPanel(slot, hordeUrl);
-                else console.warn(`🖼 Sin imagen para slot ${slot}`);
+            // Mostrar fondo procedural inmediatamente mientras espera
+            dibujarFondoProcedural(slot, prompt);
+
+            return new Promise((resolve) => {
+                const img = new Image();
+                const timeout = setTimeout(() => {
+                    console.warn(`⚠ Timeout Pollinations slot ${slot} — manteniendo procedural`);
+                    resolve();
+                }, 55000); // 55s timeout
+
+                img.onload = () => {
+                    clearTimeout(timeout);
+                    if (!aiImagesEnabled) { resolve(); return; }
+                    // Reemplazar el fondo procedural con la imagen real (force=true)
+                    mostrarImagenEnPanel(slot, url, true);
+                    console.log(`✅ Imagen Pollinations cargada — slot ${slot}`);
+                    resolve();
+                };
+
+                img.onerror = () => {
+                    clearTimeout(timeout);
+                    console.warn(`❌ Error Pollinations slot ${slot} — manteniendo procedural`);
+                    resolve();
+                };
+
+                img.src = url;
             });
-            hordeQueue2 = tarea.then(() => null, () => null);
-            return tarea;
         }
 
         async function cargarImagenConFallback(prompt, seed, slot) {
-            // 1️⃣ Craiyon — sin signup, sin key, CORS abierto (~15-30s, buena calidad)
-            const craiyonUrl = await intentarCraiyon(prompt, seed);
-            if (craiyonUrl) {
-                if (aiLoadingSlot === slot) aiLoadingSlot = null;
-                mostrarImagenEnPanel(slot, craiyonUrl);
-                return;
-            }
-
-            // 2️⃣ Pollinations — serializado, intervalo adaptativo, turbo-first, con referrer
-            const polUrl = await encolarPollinations(prompt, seed);
-            if (polUrl) {
-                if (aiLoadingSlot === slot) aiLoadingSlot = null;
-                mostrarImagenEnPanel(slot, polUrl);
-                return;
-            }
-
-            // 3️⃣ Stable Horde — slots 0 y 1 solamente, cola serializada (1 job a la vez)
-            if (slot <= 1) {
-                encolarHorde(prompt, seed, slot);
-            } else {
-                if (aiLoadingSlot === slot) aiLoadingSlot = null;
-                console.warn(`🖼 Slot ${slot} omitido (todos los proveedores fallaron), imagen no disponible`);
-            }
+            // Encolar para respetar rate-limit; procedural aparece inmediatamente
+            _aiQueue.push({ prompt, seed, slot });
+            _processAiQueue();
         }
 
         async function solicitarImagenParaSlot(slot) {
@@ -2932,22 +2958,39 @@
             cargarImagenConFallback(prompt, seed, slot);
         }
 
-        function mostrarImagenEnPanel(slot, url) {
+        // Guarda la URL actual mostrada por slot para detectar upgrade procedural→Pollinations
+        const _aiSlotUrl = {};
+
+        function mostrarImagenEnPanel(slot, url, force) {
             if (!aiImagesEnabled) return;
+
+            // Si el slot ya está activo con la MISMA url, no hacer nada
+            if (_aiSlotUrl[slot] === url) return;
+
+            // Si es un slot distinto al activo Y no es force (upgrade Pollinations), ignorar slots muy viejos
+            if (slot !== aiCurrentSlot && !force && slot < aiCurrentSlot - 1) return;
+
+            const esMismoSlot = (slot === aiCurrentSlot);
 
             const panelAct = aiActivePanel === 'a' ? 'ai-bg-a' : 'ai-bg-b';
             const panelPrev = aiActivePanel === 'a' ? 'ai-bg-b' : 'ai-bg-a';
             const divAct = document.getElementById(panelAct);
             const divPrev = document.getElementById(panelPrev);
 
-            if (slot === aiCurrentSlot) return;
+            if (esMismoSlot) {
+                // Upgrade en el panel activo sin crossfade (ya está visible)
+                divAct.style.backgroundImage = `url("${url}")`;
+            } else {
+                // Nuevo slot: crossfade al panel inactivo
+                divPrev.style.backgroundImage = `url("${url}")`;
+                divPrev.style.opacity = '1';
+                divAct.style.opacity = '0';
+                aiActivePanel = aiActivePanel === 'a' ? 'b' : 'a';
+                aiCurrentSlot = slot;
+            }
 
-            divAct.style.backgroundImage = `url("${url}")`;
-            divAct.style.opacity = '1';
-            divPrev.style.opacity = '0';
+            _aiSlotUrl[slot] = url;
             document.getElementById('ai-bg-overlay').style.background = 'rgba(8,7,6,0.48)';
-            aiActivePanel = aiActivePanel === 'a' ? 'b' : 'a';
-            aiCurrentSlot = slot;
             aiSlotActivo = true;
         }
 
