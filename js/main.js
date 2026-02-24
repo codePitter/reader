@@ -100,6 +100,7 @@ async function leerOracionLocal(index) {
 
     currentSentenceIndex = index;
     actualizarProgreso();
+    if (typeof actualizarSlideAI === 'function') actualizarSlideAI(index);
 
     const texto = sentences[index];
     mostrarNotificacion(`Generando audio ${index + 1}/${sentences.length}...`);
@@ -199,7 +200,12 @@ document.getElementById('volume-control').addEventListener('input', function (e)
 });
 
 function dividirEnOraciones(texto) {
-    return texto.match(/[^.!?]+[.!?]+/g) || [texto];
+    // Captura oraciones con puntuación Y el texto restante sin puntuación al final
+    const conPuntuacion = texto.match(/[^.!?]+[.!?]+/g) || [];
+    const ultimoCaracter = conPuntuacion.join('').length;
+    const resto = texto.slice(ultimoCaracter).trim();
+    if (resto.length > 0) conPuntuacion.push(resto);
+    return conPuntuacion.length > 0 ? conPuntuacion : [texto];
 }
 
 function actualizarEstadoTTS(estado) {
@@ -265,6 +271,7 @@ function leerOracion(index) {
     currentSentenceIndex = index;
     actualizarProgreso();
     resaltarOracion(index);
+    if (typeof actualizarSlideAI === 'function') actualizarSlideAI(index);
 
     utterance = new SpeechSynthesisUtterance(sentences[index]);
 
@@ -278,8 +285,14 @@ function leerOracion(index) {
     utterance.volume = parseFloat(document.getElementById('volume-control').value) / 100;
 
     utterance.onend = function () {
-        if (isReading && !isPaused) {
-            leerOracion(index + 1);
+        if (!isReading || isPaused) return;
+        const next = index + 1;
+        if (next >= sentences.length) {
+            // Fin del texto — detener limpiamente
+            detenerTTS();
+            mostrarNotificacion('✓ Lectura finalizada');
+        } else {
+            leerOracion(next);
         }
     };
 
@@ -314,6 +327,14 @@ function iniciarTTS() {
     envolverOracionesEnSpans(contenido, sentences);
 
     actualizarEstadoTTS('reproduciendo');
+
+    // Detectar género con IA y abrir Modo Video automáticamente
+    if (typeof detectarGeneroConIA === 'function') {
+        detectarGeneroConIA();
+    }
+    if (typeof abrirKaraoke === 'function') {
+        abrirKaraoke();
+    }
 
     // Usar API local si está disponible
     if (servidorTTSDisponible) {
@@ -441,8 +462,51 @@ function finalizarProgresoTraduccion() {
     if (fill) { fill.style.width = '100%'; setTimeout(() => { fill.style.width = '0%'; }, 1000); }
     if (label) label.textContent = '⏹ Sin reproducción';
     if (pctEl) { pctEl.textContent = '100%'; setTimeout(() => { pctEl.style.display = 'none'; }, 1200); }
-    mostrarNotificacion('✓ Traducción completada');
 }
+
+function mostrarProgresoRevision(msg) {
+    var label = document.getElementById('tts-status-label');
+    var fill = document.getElementById('progress-fill');
+    var pctEl = document.getElementById('tts-percent');
+    if (fill) fill.style.width = '100%';
+    if (label) label.innerHTML = '<span style="color:var(--accent)">\uD83D\uDD0D</span> ' + msg;
+    if (pctEl) { pctEl.textContent = ''; pctEl.style.display = 'none'; }
+}
+
+function esParrafoEnIngles(texto) {
+    if (!texto || texto.trim().length < 15) return false;
+    var marcadores = /\b(the|and|with|that|this|from|they|their|there|were|have|been|would|could|should|which|when|then|than|what|said|into|your|will|about|after|before|while|through|where|being|those|these|just|also|such|each|some|only|over|under|like|even|back|take|make|come|know|think|look|well|much|more|him|her|his|was|not|but|for|are)\b/gi;
+    var palabras = texto.trim().split(/\s+/).filter(function (w) { return w.length > 2; });
+    if (palabras.length < 4) return false;
+    var hits = (texto.match(marcadores) || []).length;
+    return (hits / palabras.length) > 0.15;
+}
+
+async function revisarYRetraducirTexto(texto) {
+    mostrarProgresoRevision('Revisando traducci\u00f3n...');
+    var parrafos = texto.split(/\n\n+/);
+    var sinTraducir = 0;
+    for (var i = 0; i < parrafos.length; i++) {
+        var p = parrafos[i].trim();
+        if (!p) continue;
+        if (esParrafoEnIngles(p)) {
+            sinTraducir++;
+            mostrarProgresoRevision('Corrigiendo ' + sinTraducir + ' fragmento(s) sin traducir...');
+            try {
+                var ret = await traducirFragmento(p);
+                if (ret && ret !== p && !esParrafoEnIngles(ret)) parrafos[i] = ret;
+            } catch (e) { }
+            await new Promise(function (r) { setTimeout(r, 200); });
+        }
+    }
+    var msg = sinTraducir === 0
+        ? 'Revisi\u00f3n completa \u2713'
+        : 'Revisi\u00f3n completa \u2713 \u2014 ' + sinTraducir + ' fragmento(s) corregido(s)';
+    mostrarProgresoRevision(msg);
+    await new Promise(function (r) { setTimeout(r, 1500); });
+    return parrafos.join('\n\n');
+}
+
 
 // Traducir texto usando MyMemory API (párrafo a párrafo)
 async function traducirTexto(texto) {
@@ -480,24 +544,75 @@ async function traducirTexto(texto) {
             traducidos.push(t);
         }
 
-        // Pausa entre párrafos para no saturar la API
+        // Pausa entre párrafos para no saturar la API (reducida para mayor velocidad)
         if (i < parrafos.length - 1) {
-            await new Promise(r => setTimeout(r, 300));
+            await new Promise(r => setTimeout(r, 150));
         }
     }
 
     finalizarProgresoTraduccion();
-    return traducidos.join('\n\n');
+    var textoFinal = traducidos.join('\n\n');
+
+    // Paso de revisión: retraducir fragmentos que quedaron en inglés
+    textoFinal = await revisarYRetraducirTexto(textoFinal);
+
+    mostrarNotificacion('✓ Traducción completada');
+
+    // Auto-reproducir si la opción está activa
+    var autoPlay = document.getElementById('auto-play-after-translate');
+    if (autoPlay && autoPlay.checked) {
+        setTimeout(function () {
+            var contenido = document.getElementById('texto-contenido');
+            if (contenido) contenido.textContent = textoFinal;
+            if (typeof iniciarTTS === 'function') iniciarTTS();
+        }, 600);
+    }
+
+    return textoFinal;
 }
 
 // Divide un texto largo en fragmentos sin cortar palabras a mitad
 function dividirEnSubfragmentos(texto, maxChars) {
     const fragmentos = [];
-    const oraciones = texto.match(/[^.!?]+[.!?]+/g) || [texto];
-    let actual = '';
+    // Capturar oraciones con puntuación Y el resto sin puntuación al final
+    const oraciones = texto.match(/[^.!?]+[.!?]+/g) || [];
+    const ultimoIdx = oraciones.join('').length;
+    const resto = texto.slice(ultimoIdx).trim();
+    if (resto) oraciones.push(resto);
 
+    // Si no se encontró ninguna oración, dividir por palabras
+    if (oraciones.length === 0) {
+        const palabras = texto.split(' ');
+        let actual = '';
+        for (const palabra of palabras) {
+            if ((actual + ' ' + palabra).trim().length > maxChars && actual.length > 0) {
+                fragmentos.push(actual.trim());
+                actual = palabra;
+            } else {
+                actual += (actual ? ' ' : '') + palabra;
+            }
+        }
+        if (actual.trim()) fragmentos.push(actual.trim());
+        return fragmentos;
+    }
+
+    let actual = '';
     for (const oracion of oraciones) {
-        if ((actual + ' ' + oracion).trim().length > maxChars && actual.length > 0) {
+        // Si una sola oración ya supera el límite, dividirla por palabras
+        if (oracion.length > maxChars) {
+            if (actual.trim()) { fragmentos.push(actual.trim()); actual = ''; }
+            const palabras = oracion.split(' ');
+            let subActual = '';
+            for (const palabra of palabras) {
+                if ((subActual + ' ' + palabra).trim().length > maxChars && subActual.length > 0) {
+                    fragmentos.push(subActual.trim());
+                    subActual = palabra;
+                } else {
+                    subActual += (subActual ? ' ' : '') + palabra;
+                }
+            }
+            if (subActual.trim()) fragmentos.push(subActual.trim());
+        } else if ((actual + ' ' + oracion).trim().length > maxChars && actual.length > 0) {
             fragmentos.push(actual.trim());
             actual = oracion;
         } else {
@@ -509,52 +624,73 @@ function dividirEnSubfragmentos(texto, maxChars) {
     return fragmentos;
 }
 
-async function traducirFragmento(fragmento) {
+async function traducirFragmento(fragmento, intentos = 3) {
     if (!fragmento || !fragmento.trim()) return fragmento;
 
     // Intentar primero con Google Translate (API no oficial, sin key)
-    try {
-        const gtUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=es&dt=t&q=${encodeURIComponent(fragmento)}`;
-        const response = await fetch(gtUrl);
-        if (response.ok) {
-            const data = await response.json();
-            // La respuesta es un array anidado: [[["traduccion","original",...],...],...]
-            if (data && data[0]) {
-                const traduccion = data[0]
-                    .filter(item => item && item[0])
-                    .map(item => item[0])
-                    .join('');
-                if (traduccion && traduccion.trim()) {
-                    return traduccion;
+    for (let intento = 1; intento <= intentos; intento++) {
+        try {
+            const gtUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=es&dt=t&q=${encodeURIComponent(fragmento)}`;
+            const response = await fetch(gtUrl);
+            if (response.ok) {
+                const data = await response.json();
+                if (data && data[0]) {
+                    const traduccion = data[0]
+                        .filter(item => item && item[0])
+                        .map(item => item[0])
+                        .join('');
+                    if (traduccion && traduccion.trim()) {
+                        return traduccion;
+                    }
                 }
             }
+            break; // respuesta ok pero vacía, salir del loop
+        } catch (e) {
+            if (intento < intentos) {
+                await new Promise(r => setTimeout(r, 400 * intento));
+            } else {
+                console.warn('Google Translate falló tras varios intentos, usando MyMemory...', e.message);
+            }
         }
-    } catch (e) {
-        console.warn('Google Translate falló, intentando MyMemory...', e.message);
     }
 
-    // Fallback: MyMemory API
-    try {
-        const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(fragmento)}&langpair=en|es`;
-        const response = await fetch(url);
-        if (!response.ok) return fragmento;
-
-        const data = await response.json();
-        if (data.responseStatus === 200 && data.responseData && data.responseData.translatedText) {
-            const resultado = data.responseData.translatedText;
-            if (resultado === resultado.toUpperCase() && fragmento !== fragmento.toUpperCase()) {
+    // Fallback: MyMemory API (con reintentos)
+    for (let intento = 1; intento <= intentos; intento++) {
+        try {
+            const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(fragmento)}&langpair=en|es`;
+            const response = await fetch(url);
+            if (!response.ok) {
+                if (intento < intentos) { await new Promise(r => setTimeout(r, 400 * intento)); continue; }
                 return fragmento;
             }
-            return resultado;
+
+            const data = await response.json();
+            if (data.responseStatus === 200 && data.responseData && data.responseData.translatedText) {
+                const resultado = data.responseData.translatedText;
+                // Solo descartar si es TODO mayúsculas Y tiene más de 3 palabras (señal real de error de API)
+                const palabras = resultado.trim().split(/\s+/);
+                if (palabras.length > 3 && resultado === resultado.toUpperCase() && fragmento !== fragmento.toUpperCase()) {
+                    if (intento < intentos) { await new Promise(r => setTimeout(r, 500)); continue; }
+                    return fragmento;
+                }
+                return resultado;
+            }
+            if (data.responseStatus === 429 || (data.responseDetails && data.responseDetails.includes('DAILY'))) {
+                mostrarNotificacion('⚠️ Límite diario de traducción alcanzado');
+                return fragmento;
+            }
+            if (intento < intentos) { await new Promise(r => setTimeout(r, 400 * intento)); continue; }
+            return fragmento;
+        } catch (error) {
+            if (intento < intentos) {
+                await new Promise(r => setTimeout(r, 400 * intento));
+            } else {
+                console.error('Error en traducción tras varios intentos:', error);
+                return fragmento;
+            }
         }
-        if (data.responseStatus === 429 || (data.responseDetails && data.responseDetails.includes('DAILY'))) {
-            mostrarNotificacion('⚠️ Límite diario de traducción alcanzado');
-        }
-        return fragmento;
-    } catch (error) {
-        console.error('Error en traducción:', error);
-        return fragmento;
     }
+    return fragmento;
 }
 
 // Toggle de traducción automática
@@ -565,6 +701,7 @@ function toggleAutoTranslate() {
     if (traduccionAutomatica) {
         statusElement.textContent = '✓ Traducción automática activada (EN → ES)';
         statusElement.className = 'translation-status active';
+        var apOn = document.getElementById('auto-play-row'); if (apOn) apOn.style.display = 'flex';
 
         // Recargar el capítulo actual con traducción
         const selector = document.getElementById('chapters');
@@ -574,6 +711,7 @@ function toggleAutoTranslate() {
     } else {
         statusElement.textContent = 'Traducción desactivada';
         statusElement.className = 'translation-status';
+        var apOff = document.getElementById('auto-play-row'); if (apOff) apOff.style.display = 'none';
 
         // Recargar el capítulo actual sin traducción
         const selector = document.getElementById('chapters');
@@ -809,7 +947,7 @@ async function cargarCapitulo(ruta) {
 
         // Traducir automáticamente si está activado
         if (traduccionAutomatica) {
-            document.getElementById('texto-contenido').textContent = '⏳ Traduciendo capítulo, por favor espera...';
+            document.getElementById('texto-contenido').textContent = 'Traduciendo capítulo, por favor espera...';
             document.getElementById('tts-status').textContent = 'Traduciendo...';
             textoCompleto = await traducirTexto(textoCompleto);
             document.getElementById('tts-status').textContent = 'Detenido';
@@ -823,7 +961,10 @@ async function cargarCapitulo(ruta) {
 
         mostrarNotificacion(traduccionAutomatica ? '✓ Capítulo cargado y traducido' : 'Capítulo cargado correctamente');
 
-        // ELIMINADO: Auto-scroll a la sección de contenido
+        // Si el modo video está abierto, iniciar reproducción automáticamente al terminar de cargar/traducir
+        if (typeof karaokeActive !== 'undefined' && karaokeActive) {
+            setTimeout(() => { iniciarTTS(); }, 200);
+        }
 
     } catch (error) {
         console.error('Error al cargar capítulo:', error);
