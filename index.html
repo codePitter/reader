@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Lector EPUB con TTS</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    <script src="https://js.puter.com/v2/"></script>
     <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
         *, *::before, *::after {
@@ -947,6 +946,31 @@
             margin-top: 16px;
             width: min(900px, 95vw);
             position: relative;
+        }
+
+        /* En pantalla completa, el overlay cubre toda la pantalla */
+        :fullscreen #karaoke-overlay,
+        :-webkit-full-screen #karaoke-overlay {
+            position: fixed !important;
+            inset: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            border-radius: 0 !important;
+            max-width: none !important;
+            justify-content: center;
+        }
+
+            :fullscreen #karaoke-overlay #ai-bg-wrap,
+            :-webkit-full-screen #karaoke-overlay #ai-bg-wrap {
+                width: 100vw !important;
+                height: calc(100vh - 80px) !important;
+                max-width: none !important;
+                border-radius: 0 !important;
+            }
+
+        :fullscreen .karaoke-bar,
+        :-webkit-full-screen .karaoke-bar {
+            width: 95vw !important;
         }
 
         .karaoke-track {
@@ -1944,29 +1968,39 @@
 
         <!-- Barra inferior principal -->
         <div class="karaoke-bar">
-            <!-- Info del capítulo + controles de música -->
-            <div style="display:flex;align-items:center;gap:8px;">
-                <span class="karaoke-track" id="karaoke-track-label">Sin capítulo</span>
-                <div style="display:flex;align-items:center;gap:4px;margin-left:8px;">
-                    <button class="kbtn kbtn-music" onclick="karaokeMusicaPrev()" title="Música anterior">&#9664;</button>
-                    <span id="karaoke-music-label" style="font-size:0.58rem;color:var(--text-dim);font-family:'DM Mono',monospace;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">♪</span>
-                    <button class="kbtn kbtn-music" onclick="karaokeMusicaSiguiente()" title="Música siguiente">&#9654;</button>
-                </div>
+            <!-- Izquierda: controles de música + volumen música -->
+            <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
+                <button class="kbtn kbtn-music" onclick="karaokeMusicaPrev()" title="Pista anterior">&#9664;</button>
+                <span id="karaoke-music-label" style="font-size:0.58rem;color:var(--text-dim);font-family:'DM Mono',monospace;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">♪</span>
+                <button class="kbtn kbtn-music" onclick="karaokeMusicaSiguiente()" title="Pista siguiente">&#9654;</button>
+                <!-- Volumen música justo a la derecha -->
+                <input type="range" id="kol-music-vol" min="0" max="100" value="20" step="5"
+                       style="width:55px;accent-color:var(--accent2);cursor:pointer;vertical-align:middle;margin-left:6px;"
+                       oninput="setAmbientVolume(this.value); document.getElementById('kol-music-pct').textContent=this.value+'%'">
+                <span id="kol-music-pct" style="font-size:0.6rem;color:var(--text-dim);min-width:26px;">20%</span>
             </div>
 
-            <!-- Controles centrados: nav + play/pause -->
+            <!-- Centro: nav capítulos + play -->
             <div class="karaoke-playbar">
                 <button class="kbtn kbtn-nav" id="kbtn-prev" onclick="karaokeCapituloAnterior()" title="Capítulo anterior">&#9664;&#9664;</button>
                 <button class="kbtn kbtn-play" id="kbtn-playpause" onclick="karaokeTogglePlay()" title="Play / Pausa">&#9654;</button>
                 <button class="kbtn kbtn-nav" id="kbtn-next" onclick="karaokeCapituloSiguiente()" title="Capítulo siguiente">&#9654;&#9654;</button>
             </div>
 
-            <!-- Acciones: exportar y cerrar -->
+            <!-- Derecha: volumen TTS + IA + exportar + fullscreen -->
             <div class="karaoke-controls">
-                <button id="btn-toggle-ai-img" onclick="toggleAIImages()" title="Activar/desactivar imágenes IA de fondo">🖼 IA Imágenes</button>
-                <button id="btn-export-video" onclick="exportarVideo()">⬇ Exportar video</button>
-                <button id="btn-cancel-export" onclick="cancelarExportacion()" style="display:none;">✕ Cancelar</button>
-                <button onclick="cerrarKaraoke()">Cerrar</button>
+                <!-- 🗣 Volumen TTS -->
+                <div style="display:flex;align-items:center;gap:3px;" title="Volumen voz">
+                    <span style="font-size:0.7rem;">🗣</span>
+                    <input type="range" id="kol-tts-vol" min="0" max="100" value="100" step="5"
+                           style="width:55px;accent-color:var(--accent);cursor:pointer;vertical-align:middle;"
+                           oninput="setTTSVolume(this.value); document.getElementById('kol-tts-pct').textContent=this.value+'%'">
+                    <span id="kol-tts-pct" style="font-size:0.6rem;color:var(--text-dim);min-width:26px;">100%</span>
+                </div>
+                <button id="btn-toggle-ai-img" onclick="toggleAIImages()" title="Imágenes IA de fondo">🖼 IA</button>
+                <button id="btn-export-video" onclick="exportarVideo()" title="Exportar video">⬇</button>
+                <button id="btn-cancel-export" onclick="cancelarExportacion()" style="display:none;" title="Cancelar exportación">✕</button>
+                <button id="btn-fullscreen" onclick="toggleFullscreen()" title="Pantalla completa">⛶</button>
             </div>
         </div>
     </div>
@@ -2093,7 +2127,7 @@
             karaokeActive = true;
 
             const capitulo = document.getElementById('current-chapter-title').textContent || 'Capítulo';
-            document.getElementById('karaoke-track-label').textContent = capitulo;
+
 
             // Reiniciar sistema de imágenes IA para el nuevo capítulo
             aiSlotSolicitado = {};
@@ -2110,6 +2144,8 @@
             }
 
             renderKaraokeFrame();
+            // Sincronizar sliders de volumen con los valores actuales
+            setTimeout(() => document.dispatchEvent(new Event('karaokeOpened')), 100);
         }
 
         function cerrarKaraoke() {
@@ -2312,7 +2348,7 @@
             const totalFrames = Math.ceil(totalSec * FPS);
 
             mostrarNotificacion(`⏳ Generando ${sentences.length} escenas... (${Math.ceil(totalSec)}s de video)`);
-            document.getElementById('karaoke-track-label').textContent = '⏳ Generando video en segundo plano...';
+
 
             // Usar un canvas offscreen para no interferir con la vista live
             const offCanvas = document.createElement('canvas');
@@ -2351,7 +2387,7 @@
                 document.getElementById('btn-export-video').style.display = 'inline';
                 document.getElementById('btn-cancel-export').style.display = 'none';
                 mostrarNotificacion('✓ Video generado y descargado');
-                document.getElementById('karaoke-track-label').textContent = cap;
+
             };
 
             karaokeRecorder.start();
@@ -2388,7 +2424,7 @@
                 // Progreso
                 if (frameIdx % (FPS * 2) === 0) {
                     const pct = Math.round((frameIdx / totalFrames) * 100);
-                    document.getElementById('karaoke-track-label').textContent = `⏳ Generando video... ${pct}%`;
+
                 }
 
                 if (frameIdx >= totalFrames) {
@@ -2742,70 +2778,90 @@
             } catch (e) { return null; }
         }
 
-        // ── PUTER.JS: imagen IA gratuita sin API key, sin queue ──
-        // Usa modelo FLUX.1 Schnell (rápido) o SDXL como fallback
-        // El "User-Pays" model: el usuario cubre el costo de sus propias generaciones
-        let puterDisponible = true; // optimistic — verificamos en el primer intento
-
-        async function intentarPuter(prompt, seed) {
-            // Verificar disponibilidad en tiempo real (Puter carga async)
-            if (!puterDisponible) return null;
-            if (typeof puter === 'undefined' || !puter?.ai?.txt2img) {
-                console.log('Puter.js no cargado, saltando...');
-                puterDisponible = false;
-                return null;
-            }
+        // ── CRAIYON: imagen IA gratuita, sin signup, sin key, CORS abierto ──
+        // API no oficial pero estable. V3 devuelve links directos a pics.craiyon.com
+        async function intentarCraiyon(prompt, seed) {
             try {
-                // txt2img devuelve un HTMLImageElement con src ya cargado
-                const imgEl = await Promise.race([
-                    puter.ai.txt2img(prompt.slice(0, 300), {
-                        model: 'black-forest-labs/FLUX.1-schnell',
+                const res = await Promise.race([
+                    fetch('https://api.craiyon.com/v3', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            prompt: prompt.slice(0, 400),
+                            negative_prompt: 'text, watermark, blurry, ugly, deformed',
+                            model: 'art',
+                            token: null,
+                            version: 'c4ue22fb7kb6wlac'
+                        })
                     }),
-                    new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 28000))
+                    new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 40000))
                 ]);
-                if (imgEl && imgEl.src) {
-                    console.log('✅ Puter.js imagen lista:', imgEl.src.slice(0, 60));
-                    return imgEl.src;
+                if (!res.ok) return null;
+                const data = await res.json();
+                // V3: data.images = array de paths relativos
+                // V1 fallback: data.images = array de base64
+                if (data?.images?.length) {
+                    const img = data.images[0];
+                    // Si es una URL relativa (v3)
+                    if (typeof img === 'string' && !img.startsWith('data:') && img.length < 200) {
+                        const url = `https://pics.craiyon.com/${img}`;
+                        console.log('✅ Craiyon imagen lista:', url.slice(0, 70));
+                        return url;
+                    }
+                    // Si es base64 (v1/fallback)
+                    if (typeof img === 'string' && img.length > 200) {
+                        const url = `data:image/webp;base64,${img}`;
+                        console.log('✅ Craiyon imagen lista (base64)');
+                        return url;
+                    }
                 }
                 return null;
             } catch (e) {
-                console.warn('Puter.js falló:', e.message);
-                // Si falla por auth o cuenta, no reintentar
-                if (e.message && (e.message.includes('401') || e.message.includes('auth') || e.message.includes('sign'))) {
-                    puterDisponible = false;
-                }
+                console.warn('Craiyon falló:', e.message?.slice(0, 60));
                 return null;
             }
         }
 
-        // Pollinations — rate limit: 1 req cada 15s en tier anónimo
+        // Pollinations — rate limit anónimo: 1 req/15s. Con referrer: mejor prioridad sin signup.
+        // Docs: https://github.com/pollinations/pollinations/blob/master/APIDOCS.md
         let pollinationsLastRequest = 0;
+        // Intervalo adaptativo: empieza en 8s (agresivo con referrer), sube si hay 429, baja si hay éxito
+        let pollinationsInterval = 8000;
 
         async function intentarPollinations(prompt, seed) {
-            // Respetar rate limit: esperar si hace menos de 16s del último request
             const ahora = Date.now();
-            const espera = Math.max(0, 16000 - (ahora - pollinationsLastRequest));
+            const espera = Math.max(0, pollinationsInterval - (ahora - pollinationsLastRequest));
             if (espera > 0) await new Promise(r => setTimeout(r, espera));
             pollinationsLastRequest = Date.now();
 
-            // Endpoint correcto: image.pollinations.ai
             const shortPrompt = prompt.slice(0, 280);
+            // referrer actúa como identificador de app — da mejor prioridad que anónimo puro, sin login
+            const ref = encodeURIComponent(window.location.hostname || 'localhost');
             const urls = [
-                `https://image.pollinations.ai/prompt/${encodeURIComponent(shortPrompt)}?width=1280&height=720&seed=${seed}&model=flux&nologo=true`,
-                `https://image.pollinations.ai/prompt/${encodeURIComponent(shortPrompt)}?width=1280&height=720&seed=${seed}&model=turbo&nologo=true`,
-                `https://image.pollinations.ai/prompt/${encodeURIComponent(getStyleTag())}?width=1280&height=720&seed=${seed}&model=flux&nologo=true`,
+                // turbo primero: más rápido (~3-5s), calidad aceptable para fondos
+                `https://image.pollinations.ai/prompt/${encodeURIComponent(shortPrompt)}?width=1280&height=720&seed=${seed}&model=turbo&nologo=true&referrer=${ref}`,
+                // flux: mejor calidad si turbo falla
+                `https://image.pollinations.ai/prompt/${encodeURIComponent(shortPrompt)}?width=1280&height=720&seed=${seed}&model=flux&nologo=true&referrer=${ref}`,
+                // fallback con prompt mínimo (solo style tag)
+                `https://image.pollinations.ai/prompt/${encodeURIComponent(getStyleTag())}?width=1280&height=720&seed=${seed}&model=turbo&nologo=true&referrer=${ref}`,
             ];
             for (let i = 0; i < urls.length; i++) {
                 const ok = await new Promise(resolve => {
                     const img = new Image();
-                    // Timeout reducido a 12s para no bloquear la cola demasiado tiempo
-                    const t = setTimeout(() => { img.src = ''; resolve(false); }, 12000);
+                    const t = setTimeout(() => { img.src = ''; resolve(false); }, 15000);
                     img.onload = () => { clearTimeout(t); resolve(true); };
                     img.onerror = () => { clearTimeout(t); resolve(false); };
                     img.src = urls[i];
                 });
-                if (ok) { console.log(`Pollinations OK (modelo ${i + 1}):`, urls[i].slice(0, 80)); return urls[i]; }
+                if (ok) {
+                    // Éxito → bajar el intervalo (más agresivo la próxima vez)
+                    pollinationsInterval = Math.max(6000, pollinationsInterval - 1000);
+                    console.log(`Pollinations OK (${i === 0 ? 'turbo' : i === 1 ? 'flux' : 'fallback'}):`, urls[i].slice(0, 80));
+                    return urls[i];
+                }
             }
+            // Fallo → subir el intervalo (evitar baneos)
+            pollinationsInterval = Math.min(20000, pollinationsInterval + 3000);
             return null;
         }
 
@@ -2837,15 +2893,15 @@
         }
 
         async function cargarImagenConFallback(prompt, seed, slot) {
-            // 1️⃣ Puter.js — sin key, sin queue, FLUX Schnell (~5-10s)
-            const puterUrl = await intentarPuter(prompt, seed);
-            if (puterUrl) {
+            // 1️⃣ Craiyon — sin signup, sin key, CORS abierto (~15-30s, buena calidad)
+            const craiyonUrl = await intentarCraiyon(prompt, seed);
+            if (craiyonUrl) {
                 if (aiLoadingSlot === slot) aiLoadingSlot = null;
-                mostrarImagenEnPanel(slot, puterUrl);
+                mostrarImagenEnPanel(slot, craiyonUrl);
                 return;
             }
 
-            // 2️⃣ Pollinations — serializado, 1 req cada 16s
+            // 2️⃣ Pollinations — serializado, intervalo adaptativo, turbo-first, con referrer
             const polUrl = await encolarPollinations(prompt, seed);
             if (polUrl) {
                 if (aiLoadingSlot === slot) aiLoadingSlot = null;
@@ -2853,12 +2909,12 @@
                 return;
             }
 
-            // 3️⃣ Stable Horde — slots 0 y 1 solamente, cola serializada
+            // 3️⃣ Stable Horde — slots 0 y 1 solamente, cola serializada (1 job a la vez)
             if (slot <= 1) {
                 encolarHorde(prompt, seed, slot);
             } else {
                 if (aiLoadingSlot === slot) aiLoadingSlot = null;
-                console.warn(`🖼 Slot ${slot} omitido (pre-carga lejana), imagen no disponible`);
+                console.warn(`🖼 Slot ${slot} omitido (todos los proveedores fallaron), imagen no disponible`);
             }
         }
 
@@ -3054,6 +3110,88 @@
                 sel.appendChild(opt);
             });
         }
+
+        // ═══════════════════════════════════════
+        // PANTALLA COMPLETA
+        // ═══════════════════════════════════════
+        function toggleFullscreen() {
+            const btn = document.getElementById('btn-fullscreen');
+            if (!document.fullscreenElement) {
+                // Fullscreen en documentElement para evitar congelamiento del navegador
+                document.documentElement.requestFullscreen().then(() => {
+                    btn.textContent = '✕FS';
+                    btn.title = 'Salir de pantalla completa';
+                }).catch(e => console.warn('Fullscreen error:', e.message));
+            } else {
+                document.exitFullscreen().catch(() => { });
+            }
+        }
+        document.addEventListener('fullscreenchange', () => {
+            const btn = document.getElementById('btn-fullscreen');
+            if (!btn) return;
+            if (!document.fullscreenElement) {
+                btn.textContent = '⛶';
+                btn.title = 'Pantalla completa';
+            }
+        });
+
+        // ═══════════════════════════════════════
+        // VOLUMEN TTS INDEPENDIENTE
+        // ═══════════════════════════════════════
+        function setTTSVolume(val) {
+            const v = parseFloat(val) / 100;
+            // Aplicar al audio local (XTTS API)
+            if (typeof audioActual !== 'undefined' && audioActual) {
+                audioActual.volume = v;
+            }
+            // Sincronizar con el control de volumen principal del sidebar
+            const mainVol = document.getElementById('volume-control');
+            if (mainVol) {
+                mainVol.value = val;
+                const lbl = document.getElementById('volume-value');
+                if (lbl) lbl.textContent = val;
+            }
+        }
+        // Sincronizar sliders al abrir el modo video
+        document.addEventListener('karaokeOpened', () => {
+            const vol = document.getElementById('volume-control');
+            if (vol) {
+                const v = vol.value;
+                const ttsSlider = document.getElementById('kol-tts-vol');
+                const ttsPct = document.getElementById('kol-tts-pct');
+                if (ttsSlider) ttsSlider.value = v;
+                if (ttsPct) ttsPct.textContent = v + '%';
+            }
+            const ambVol = document.getElementById('ambient-volume');
+            if (ambVol) {
+                const av = ambVol.value;
+                const musicSlider = document.getElementById('kol-music-vol');
+                const musicPct = document.getElementById('kol-music-pct');
+                if (musicSlider) musicSlider.value = av;
+                if (musicPct) musicPct.textContent = av + '%';
+            }
+        });
+
+        // ═══════════════════════════════════════
+        // AUTO-SIGUIENTE PISTA DE MÚSICA
+        // ═══════════════════════════════════════
+        async function _onTrackEnded() {
+            console.log('🎵 Pista terminada — cargando siguiente...');
+            if (typeof ambientGenre !== 'undefined' && ambientGenre) {
+                await siguienteTrack();
+            }
+        }
+        // Vigilar freesoundAudio para enganchar el evento 'ended'
+        let _lastHookedAudio = null;
+        setInterval(() => {
+            if (typeof freesoundAudio !== 'undefined' && freesoundAudio && freesoundAudio !== _lastHookedAudio) {
+                _lastHookedAudio = freesoundAudio;
+                freesoundAudio.loop = false;  // Desactivar loop para que dispare 'ended'
+                freesoundAudio.addEventListener('ended', _onTrackEnded);
+                console.log('🎵 Auto-next enganchado al track actual');
+            }
+        }, 1000);
+
     </script>
 
 </body>
