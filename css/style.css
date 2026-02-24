@@ -1,0 +1,458 @@
+/* Reset y estilos base */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Georgia', 'Times New Roman', serif;
+    background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+    min-height: 100vh;
+    padding: 20px;
+}
+
+.container {
+    max-width: 900px;
+    margin: 0 auto;
+    background: white;
+    border-radius: 15px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    overflow: hidden;
+}
+
+/* Header */
+.header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    padding: 30px;
+    text-align: center;
+    color: white;
+}
+
+    .header h1 {
+        font-size: 2em;
+        margin-bottom: 10px;
+    }
+
+    .header p {
+        opacity: 0.9;
+        font-size: 1.1em;
+    }
+
+/* Tools Section */
+.tools-section {
+    background: #f8f9fa;
+    padding: 25px;
+    border-bottom: 2px solid #e9ecef;
+}
+
+    .tools-section h2 {
+        color: #495057;
+        margin-bottom: 15px;
+        font-size: 1.3em;
+    }
+
+.file-upload-section {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 15px;
+    background: white;
+    border-radius: 8px;
+    margin-bottom: 15px;
+}
+
+.file-label {
+    cursor: pointer;
+    display: inline-block;
+}
+
+#epub-file {
+    display: none;
+}
+
+.file-name {
+    color: #6c757d;
+    font-style: italic;
+}
+
+/* Chapter Selector */
+.chapter-selector {
+    display: none;
+    margin-top: 15px;
+}
+
+    .chapter-selector label {
+        display: block;
+        margin-bottom: 8px;
+        color: #495057;
+        font-weight: bold;
+    }
+
+.chapter-select {
+    width: 100%;
+    padding: 12px;
+    border: 2px solid #dee2e6;
+    border-radius: 8px;
+    font-size: 1em;
+    background: white;
+    cursor: pointer;
+    transition: border-color 0.3s;
+}
+
+    .chapter-select:focus {
+        outline: none;
+        border-color: #667eea;
+    }
+
+/* Translation Section */
+.translation-section {
+    margin-top: 15px;
+    padding: 15px;
+    background: white;
+    border-radius: 8px;
+}
+
+.toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    font-weight: bold;
+    color: #495057;
+}
+
+    .toggle-label input[type="checkbox"] {
+        width: 20px;
+        height: 20px;
+        cursor: pointer;
+    }
+
+.translation-status {
+    margin-top: 10px;
+    padding: 10px;
+    border-radius: 6px;
+    background: #e9ecef;
+    color: #6c757d;
+    font-size: 0.9em;
+}
+
+    .translation-status.active {
+        background: #d4edda;
+        color: #155724;
+    }
+
+/* Replace Section */
+.replace-section {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+    .replace-section input {
+        padding: 12px;
+        border: 2px solid #dee2e6;
+        border-radius: 8px;
+        font-size: 1em;
+        transition: border-color 0.3s;
+    }
+
+        .replace-section input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+/* Buttons */
+.btn {
+    padding: 12px 24px;
+    border: none;
+    border-radius: 8px;
+    font-size: 1em;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+    }
+
+.btn-secondary {
+    background: #6c757d;
+    color: white;
+}
+
+    .btn-secondary:hover {
+        background: #5a6268;
+        transform: translateY(-2px);
+    }
+
+.btn-success {
+    background: #28a745;
+    color: white;
+}
+
+    .btn-success:hover {
+        background: #218838;
+    }
+
+/* Stats */
+.stats {
+    display: flex;
+    gap: 20px;
+    margin-top: 15px;
+    padding: 15px;
+    background: white;
+    border-radius: 8px;
+    font-size: 0.9em;
+    color: #6c757d;
+}
+
+    .stats span {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+
+/* TTS Section */
+.tts-section {
+    background: #fff3cd;
+    padding: 25px;
+    border-bottom: 2px solid #ffc107;
+}
+
+    .tts-section h2 {
+        color: #856404;
+        margin-bottom: 15px;
+        font-size: 1.3em;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+.tts-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.tts-buttons {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.btn-tts {
+    background: #ffc107;
+    color: #212529;
+    padding: 12px 24px;
+    border: none;
+    border-radius: 8px;
+    font-size: 1em;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+    .btn-tts:hover {
+        background: #e0a800;
+        transform: translateY(-2px);
+    }
+
+    .btn-tts:disabled {
+        background: #6c757d;
+        cursor: not-allowed;
+        opacity: 0.6;
+    }
+
+.tts-settings {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+}
+
+.tts-setting {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+    .tts-setting label {
+        color: #856404;
+        font-weight: bold;
+        font-size: 0.9em;
+    }
+
+    .tts-setting select,
+    .tts-setting input[type="range"] {
+        padding: 8px;
+        border: 2px solid #ffc107;
+        border-radius: 6px;
+        font-size: 0.95em;
+    }
+
+.tts-status {
+    padding: 12px;
+    background: white;
+    border-radius: 8px;
+    border: 2px solid #ffc107;
+    color: #856404;
+    font-weight: bold;
+    text-align: center;
+}
+
+    .tts-status.speaking {
+        background: #d4edda;
+        border-color: #28a745;
+        color: #155724;
+        animation: pulse 2s infinite;
+    }
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.7;
+    }
+}
+
+.progress-bar {
+    width: 100%;
+    height: 6px;
+    background: #e9ecef;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #ffc107, #ff9800);
+    width: 0%;
+    transition: width 0.3s;
+}
+
+/* Content Section */
+.content-section {
+    padding: 40px;
+}
+
+#texto-contenido {
+    font-size: 1.2em;
+    line-height: 1.8;
+    color: #212529;
+    text-align: justify;
+    hyphens: auto;
+    white-space: pre-wrap;
+}
+
+/* Editor Section */
+.editor-section {
+    background: #f8f9fa;
+    padding: 25px;
+    border-top: 2px solid #e9ecef;
+}
+
+    .editor-section h2 {
+        color: #495057;
+        margin-bottom: 15px;
+        font-size: 1.3em;
+    }
+
+#editor-texto {
+    width: 100%;
+    min-height: 300px;
+    padding: 20px;
+    border: 2px solid #dee2e6;
+    border-radius: 8px;
+    font-family: 'Georgia', serif;
+    font-size: 1.1em;
+    line-height: 1.8;
+    resize: vertical;
+}
+
+    #editor-texto:focus {
+        outline: none;
+        border-color: #667eea;
+    }
+
+.button-group {
+    display: flex;
+    gap: 10px;
+    margin-top: 15px;
+}
+
+/* Notification */
+.notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 15px 25px;
+    background: #28a745;
+    color: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    opacity: 0;
+    transform: translateY(-20px);
+    transition: all 0.3s;
+    z-index: 1000;
+}
+
+    .notification.show {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+/* Loading Animation */
+.loading {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid #667eea;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-left: 10px;
+}
+
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .replace-section {
+        grid-template-columns: 1fr;
+    }
+
+    .tts-buttons {
+        flex-direction: column;
+    }
+
+    .tts-settings {
+        grid-template-columns: 1fr;
+    }
+
+    .stats {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .button-group {
+        flex-direction: column;
+    }
+}
