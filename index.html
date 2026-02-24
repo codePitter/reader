@@ -939,11 +939,175 @@
                 color: var(--text);
             }
 
+        /* ── Panel de índice de capítulos en modo video ── */
+        #karaoke-index-panel {
+            display: none;
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 260px;
+            height: 100%;
+            background: rgba(15, 14, 12, 0.92);
+            border-left: 1px solid var(--border);
+            border-radius: 0 12px 12px 0;
+            flex-direction: column;
+            z-index: 5;
+            backdrop-filter: blur(4px);
+            overflow: hidden;
+        }
+
+            #karaoke-index-panel.open {
+                display: flex;
+            }
+
+        #karaoke-index-header {
+            padding: 10px 14px 8px;
+            font-size: 0.65rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+
+        #karaoke-index-search {
+            margin: 8px 10px;
+            padding: 6px 10px;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            color: var(--text);
+            font-family: 'DM Mono', monospace;
+            font-size: 0.7rem;
+            outline: none;
+            width: calc(100% - 20px);
+            flex-shrink: 0;
+        }
+
+            #karaoke-index-search:focus {
+                border-color: var(--accent);
+            }
+
+        #karaoke-index-list {
+            flex: 1;
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: var(--border) transparent;
+        }
+
+        .karaoke-index-item {
+            padding: 8px 14px;
+            font-size: 0.68rem;
+            color: var(--text-muted);
+            cursor: pointer;
+            border-bottom: 1px solid rgba(46,42,34,0.4);
+            transition: background 0.15s, color 0.15s;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            font-family: 'DM Mono', monospace;
+        }
+
+            .karaoke-index-item:hover {
+                background: var(--surface2);
+                color: var(--text);
+            }
+
+            .karaoke-index-item.active {
+                color: var(--accent);
+                background: rgba(200,169,110,0.08);
+            }
+
+        /* ── Barra de progreso tipo YouTube en karaoke ── */
+        #karaoke-progress-wrap {
+            width: min(900px, 95vw);
+            margin-top: 12px;
+            position: relative;
+            user-select: none;
+        }
+
+        #karaoke-progress-track {
+            height: 4px;
+            background: rgba(255,255,255,0.15);
+            border-radius: 4px;
+            position: relative;
+            cursor: pointer;
+            transition: height 0.15s ease;
+        }
+
+            #karaoke-progress-track:hover {
+                height: 6px;
+            }
+
+                #karaoke-progress-track:hover #karaoke-progress-thumb {
+                    opacity: 1;
+                    transform: translateX(-50%) scale(1);
+                }
+
+        #karaoke-progress-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, var(--accent), var(--accent2));
+            border-radius: 4px;
+            pointer-events: none;
+            position: relative;
+        }
+
+        #karaoke-progress-thumb {
+            position: absolute;
+            right: -7px;
+            top: 50%;
+            transform: translateX(-50%) scale(0);
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: var(--accent);
+            opacity: 0;
+            transition: opacity 0.15s, transform 0.15s;
+            pointer-events: none;
+        }
+
+        /* Tooltip de preview */
+        #karaoke-seek-tooltip {
+            position: absolute;
+            bottom: 16px;
+            transform: translateX(-50%);
+            background: rgba(18,16,14,0.95);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 6px 10px;
+            font-size: 0.65rem;
+            color: var(--text);
+            font-family: 'DM Mono', monospace;
+            max-width: 220px;
+            white-space: pre-wrap;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.15s;
+            z-index: 10;
+            text-align: center;
+            line-height: 1.4;
+        }
+
+            #karaoke-seek-tooltip.visible {
+                opacity: 1;
+            }
+
+        #karaoke-progress-time {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.6rem;
+            color: var(--text-dim);
+            font-family: 'DM Mono', monospace;
+            margin-top: 4px;
+            padding: 0 2px;
+        }
+
         .karaoke-bar {
             display: flex;
             align-items: center;
             gap: 16px;
-            margin-top: 16px;
+            margin-top: 8px;
             width: min(900px, 95vw);
             position: relative;
         }
@@ -970,6 +1134,11 @@
 
         :fullscreen .karaoke-bar,
         :-webkit-full-screen .karaoke-bar {
+            width: 95vw !important;
+        }
+
+        :fullscreen #karaoke-progress-wrap,
+        :-webkit-full-screen #karaoke-progress-wrap {
             width: 95vw !important;
         }
 
@@ -1107,6 +1276,7 @@
             <div id="texto-contenido" style="font-family:'Lora',serif;font-size:1.1rem;line-height:1.85;color:var(--text);max-width:680px;margin:0 auto;">
                 <p style="color:var(--text-dim);font-style:italic;">Carga un archivo EPUB desde el panel lateral para comenzar a leer...</p>
             </div>
+            <!-- Barra de progreso de traducción → ahora solo en el overlay del modo video -->
         </div>
 
         <div class="editor-panel" id="editor-panel">
@@ -1964,6 +2134,54 @@
                 pointer-events:none;
             "></div>
             <canvas id="karaoke-canvas" width="1280" height="720" style="position:absolute;inset:0;width:100%;height:100%;z-index:1;background:transparent;border-radius:12px;"></canvas>
+
+            <!-- Overlay de progreso de traducción: centrado sobre la pantalla del visor -->
+            <div id="karaoke-translation-progress" style="
+                display:none;
+                position:absolute;
+                inset:0;
+                z-index:10;
+                flex-direction:column;
+                align-items:center;
+                justify-content:center;
+                gap:14px;
+                border-radius:12px;
+                background:rgba(8,7,6,0.72);
+                backdrop-filter:blur(2px);
+            ">
+                <span style="font-family:'DM Mono',monospace;font-size:0.9rem;color:var(--accent2);font-style:italic;letter-spacing:0.04em;">
+                    Traduciendo capítulo, por favor espera...
+                </span>
+                <div style="width:60%;height:4px;background:var(--border);border-radius:4px;overflow:hidden;">
+                    <div id="ktl-fill" style="height:100%;width:0%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:4px;transition:width 0.4s ease;"></div>
+                </div>
+                <span id="ktl-pct" style="font-size:0.75rem;color:var(--text-dim);font-family:'DM Mono',monospace;">0%</span>
+            </div>
+
+            <!-- Panel lateral de índice de capítulos -->
+            <div id="karaoke-index-panel">
+                <div id="karaoke-index-header">📖 Capítulos</div>
+                <input id="karaoke-index-search" type="text" placeholder="Buscar capítulo..." oninput="filtrarIndiceKaraoke(this.value)">
+                <div id="karaoke-index-list"></div>
+            </div>
+        </div>
+
+        <!-- Barra de progreso tipo YouTube -->
+        <div id="karaoke-progress-wrap">
+            <div id="karaoke-seek-tooltip">...</div>
+            <div id="karaoke-progress-track"
+                 onmouseenter="karaokeProgressHover(true)"
+                 onmouseleave="karaokeProgressHover(false)"
+                 onmousemove="karaokeProgressMouseMove(event)"
+                 onclick="karaokeProgressSeek(event)">
+                <div id="karaoke-progress-fill">
+                    <div id="karaoke-progress-thumb"></div>
+                </div>
+            </div>
+            <div id="karaoke-progress-time">
+                <span id="kp-current">0 / 0</span>
+                <span id="kp-total"></span>
+            </div>
         </div>
 
         <!-- Barra inferior principal -->
@@ -1998,7 +2216,7 @@
                     <span id="kol-tts-pct" style="font-size:0.6rem;color:var(--text-dim);min-width:26px;">100%</span>
                 </div>
                 <button id="btn-toggle-ai-img" onclick="toggleAIImages()" title="Imágenes IA de fondo">🖼 IA</button>
-                <button onclick="toggleOrKey()" title="Configurar key para mejor calidad de prompts" style="background:none;border:1px solid #2e2a22;border-radius:6px;color:#5a5248;cursor:pointer;padding:4px 8px;font-size:0.7rem;">⚙</button>
+                <button id="btn-toggle-index" onclick="toggleKaraokeIndex()" title="Índice de capítulos">☰</button>
                 <button id="btn-export-video" onclick="exportarVideo()" title="Exportar video">⬇</button>
                 <button id="btn-cancel-export" onclick="cancelarExportacion()" style="display:none;" title="Cancelar exportación">✕</button>
                 <button id="btn-fullscreen" onclick="toggleFullscreen()" title="Pantalla completa">⛶</button>
@@ -2145,6 +2363,8 @@
             }
 
             renderKaraokeFrame();
+            // Poblar el índice de capítulos
+            poblarIndiceKaraoke();
             // Sincronizar sliders de volumen con los valores actuales
             setTimeout(() => document.dispatchEvent(new Event('karaokeOpened')), 100);
         }
@@ -2536,33 +2756,6 @@
             return AI_DEFAULT_STYLE;
         }
 
-        // OpenRouter key panel (opcional — mejora calidad de prompts)
-        function toggleOrKey() {
-            let panel = document.getElementById('or-key-panel');
-            if (!panel) {
-                panel = document.createElement('div');
-                panel.id = 'or-key-panel';
-                panel.style.cssText = 'position:fixed;bottom:70px;right:20px;background:#1a1814;border:1px solid #2e2a22;border-radius:8px;padding:12px;z-index:300;width:280px;font-family:"DM Mono",monospace;font-size:0.62rem;';
-                panel.innerHTML = `
-                            <div style="color:#8a8070;margin-bottom:8px;">🔑 OpenRouter API key (opcional)<br><span style="color:#5a5248;font-size:0.55rem;">Mejora la calidad de prompts de imagen. Gratis en openrouter.ai</span></div>
-                            <div style="display:flex;gap:6px;">
-                                <input id="or-key-input" type="password" placeholder="sk-or-..." value="${localStorage.getItem('openrouter_key') || ''}"
-                                    style="flex:1;background:#0f0e0c;border:1px solid #2e2a22;border-radius:4px;color:#e8e0d0;padding:5px 8px;font-family:inherit;font-size:0.62rem;">
-                                <button onclick="guardarOrKey()" style="background:#7eb89a;border:none;border-radius:4px;color:#0f0e0c;padding:5px 10px;cursor:pointer;font-size:0.62rem;">OK</button>
-                            </div>
-                            <div style="color:#5a5248;margin-top:6px;font-size:0.55rem;">Registrate gratis → openrouter.ai → usa modelos gratuitos (Llama-3, Gemma, etc.)</div>
-                        `;
-                document.body.appendChild(panel);
-            } else {
-                panel.remove();
-            }
-        }
-        function guardarOrKey() {
-            const k = document.getElementById('or-key-input').value.trim();
-            if (k) { localStorage.setItem('openrouter_key', k); mostrarNotificacion('✓ OpenRouter key guardada'); }
-            document.getElementById('or-key-panel')?.remove();
-        }
-
         function toggleAIImages() {
             aiImagesEnabled = !aiImagesEnabled;
             const btn = document.getElementById('btn-toggle-ai-img');
@@ -2593,7 +2786,7 @@
         // ── Cache de prompts ──
         const aiPromptCache = {};
 
-        // Genera el prompt visual — cascada de proveedores de texto
+        // Genera el prompt visual usando Pollinations GET API (sin CORS, sin key, sin POST)
         async function generarPromptConClaude(fragmento) {
             const cacheKey = fragmento.slice(0, 100);
             if (aiPromptCache[cacheKey]) return aiPromptCache[cacheKey];
@@ -2602,77 +2795,59 @@
             const universeHint = aiDetectedUniverse
                 ? `From webnovel "${aiDetectedUniverse}", match its visual style.`
                 : '';
+
+            // System prompt compacto
             const systemPrompt = `You are an image prompt generator. ${universeHint} Given a fiction passage, output ONLY an English image generation prompt (max 60 words): describe the specific environment, mood, lighting, time of day; never name characters, describe by silhouette or role only; always end with: "${styleTag}". No preamble.`;
+
+            // Texto del pasaje
             const pasaje = fragmento.slice(0, 350).replace(/"/g, "'");
 
-            function esValido(txt) {
-                return txt && txt.length > 20 &&
-                    !txt.includes('IMPORTANT NOTICE') && !txt.includes('deprecated') &&
-                    !txt.toUpperCase().includes('NOTICE') && !txt.includes('please update');
+            // Helper: detectar si el texto es el aviso de deprecación u otro error
+            function esRespuestaInvalida(txt) {
+                return !txt || txt.length < 20 ||
+                    txt.includes('IMPORTANT NOTICE') ||
+                    txt.includes('deprecated') ||
+                    txt.includes('DEPRECATED') ||
+                    txt.includes('please update') ||
+                    txt.includes('Please update') ||
+                    txt.toUpperCase().includes('NOTICE');
             }
 
-            // ── 1. Pollinations GET (sin rate limit, sin POST, sin key) ──
+            // Intentar con Pollinations (timeout corto para no bloquear)
             try {
-                const q = encodeURIComponent(systemPrompt + '\n\nPassage: ' + pasaje);
                 const ctrl = new AbortController();
-                const t = setTimeout(() => ctrl.abort(), 7000);
-                const res = await fetch(
-                    `https://text.pollinations.ai/${q}?model=mistral&seed=${Date.now() % 9999}&private=true`,
-                    { signal: ctrl.signal }
-                );
-                clearTimeout(t);
+                const timer = setTimeout(() => ctrl.abort(), 6000);
+                const res = await fetch('https://text.pollinations.ai/openai', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        model: 'mistral',
+                        messages: [
+                            { role: 'system', content: systemPrompt },
+                            { role: 'user', content: pasaje }
+                        ],
+                        private: true,
+                        seed: Math.floor(Math.random() * 9999)
+                    }),
+                    signal: ctrl.signal
+                });
+                clearTimeout(timer);
                 if (res.ok) {
-                    const txt = (await res.text()).trim().split('\n')[0].trim();
-                    if (esValido(txt)) {
-                        aiPromptCache[cacheKey] = txt;
-                        console.log('Prompt (Pollinations GET):', txt.slice(0, 80));
-                        return txt;
+                    const data = await res.json();
+                    let prompt = (data?.choices?.[0]?.message?.content || '').trim();
+                    prompt = prompt.split('\n')[0].trim();
+                    if (!esRespuestaInvalida(prompt)) {
+                        aiPromptCache[cacheKey] = prompt;
+                        console.log('Prompt (Pollinations/mistral):', prompt.slice(0, 80));
+                        return prompt;
                     }
                 }
-            } catch (e) { console.log('Pollinations GET falló:', e.message); }
+            } catch (e) { /* timeout o error — usar prompt local */ }
 
-            // ── 2. Openrouter free tier (llama-3 gratuito, sin tarjeta) ──
-            // Solo si hay key guardada en localStorage
-            const orKey = localStorage.getItem('openrouter_key');
-            if (orKey) {
-                try {
-                    const ctrl = new AbortController();
-                    const t = setTimeout(() => ctrl.abort(), 8000);
-                    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${orKey}`,
-                            'HTTP-Referer': location.origin,
-                            'X-Title': 'EPUB Reader'
-                        },
-                        body: JSON.stringify({
-                            model: 'meta-llama/llama-3.2-3b-instruct:free',
-                            messages: [
-                                { role: 'system', content: systemPrompt },
-                                { role: 'user', content: pasaje }
-                            ],
-                            max_tokens: 120
-                        }),
-                        signal: ctrl.signal
-                    });
-                    clearTimeout(t);
-                    if (res.ok) {
-                        const d = await res.json();
-                        const txt = (d?.choices?.[0]?.message?.content || '').trim().split('\n')[0].trim();
-                        if (esValido(txt)) {
-                            aiPromptCache[cacheKey] = txt;
-                            console.log('Prompt (OpenRouter llama-3 free):', txt.slice(0, 80));
-                            return txt;
-                        }
-                    }
-                } catch (e) { console.log('OpenRouter falló:', e.message); }
-            }
-
-            // ── 3. Fallback: prompt semántico local (sin red, instantáneo) ──
+            // Prompt local: extracción semántica sin LLM
             const promptLocal = construirPromptDirecto(fragmento, styleTag);
             aiPromptCache[cacheKey] = promptLocal;
-            console.log('Prompt (local semántico):', promptLocal.slice(0, 80));
+            console.log('Prompt (local):', promptLocal.slice(0, 80));
             return promptLocal;
         }
 
@@ -2932,61 +3107,9 @@
             console.log(`🎨 Fondo procedural generado — slot ${slot} (${tipo})`);
         }
 
-        // Cola para no saturar Pollinations — máx 1 petición simultánea de imagen
-        let _imgQueue = Promise.resolve();
-        const _imgCache = {};
-
         async function cargarImagenConFallback(prompt, seed, slot) {
-            if (!aiImagesEnabled) return;
-
-            // Mostrar fondo procedural INSTANTÁNEO mientras carga la imagen real
+            // Generación local instantánea — sin APIs externas, sin CORS, sin queue
             dibujarFondoProcedural(slot, prompt);
-
-            // Encolar para no saturar
-            _imgQueue = _imgQueue.then(() => _intentarCargarImagen(prompt, seed, slot));
-        }
-
-        async function _intentarCargarImagen(prompt, seed, slot) {
-            if (!aiImagesEnabled) return;
-            const cKey = slot + '_' + seed;
-            if (_imgCache[cKey]) { mostrarImagenEnPanel(slot, _imgCache[cKey]); return; }
-
-            // Proveedores de imagen en cascada
-            const proveedores = [
-                // 1. Pollinations flux (gratuito, sin key, funciona online)
-                () => `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?model=flux&width=1280&height=720&seed=${seed}&nologo=true&enhance=true&private=true`,
-                // 2. Pollinations turbo (más rápido, menor calidad)
-                () => `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?model=turbo&width=1280&height=720&seed=${seed}&nologo=true&private=true`,
-                // 3. Pollinations flux con prompt más corto (por si el prompt es muy largo)
-                () => `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt.slice(0, 200))}?model=flux&width=1024&height=576&seed=${seed}&nologo=true`,
-            ];
-
-            for (const getUrl of proveedores) {
-                if (!aiImagesEnabled) return;
-                const url = getUrl();
-                const ok = await new Promise(resolve => {
-                    const img = new Image();
-                    img.crossOrigin = 'anonymous';
-                    // Timeout: si en 25s no cargó, intentar siguiente
-                    const timer = setTimeout(() => { img.src = ''; resolve(false); }, 25000);
-                    img.onload = () => {
-                        clearTimeout(timer);
-                        // Verificar que no sea imagen de error (Pollinations devuelve 200 con imagen de error)
-                        if (img.naturalWidth < 100) { resolve(false); return; }
-                        _imgCache[cKey] = url;
-                        mostrarImagenEnPanel(slot, url);
-                        console.log(`🖼 Imagen cargada — slot ${slot} (${img.naturalWidth}x${img.naturalHeight})`);
-                        resolve(true);
-                    };
-                    img.onerror = () => { clearTimeout(timer); resolve(false); };
-                    img.src = url;
-                });
-                if (ok) return;
-                // Pausa entre intentos para no saturar
-                await new Promise(r => setTimeout(r, 1500));
-            }
-            // Si todo falla, el fondo procedural ya está visible — nada más que hacer
-            console.log(`⚠ Imagen IA no disponible — slot ${slot}, manteniendo procedural`);
         }
 
         async function solicitarImagenParaSlot(slot) {
@@ -3048,11 +3171,19 @@
                     iniciarTTS();
                 } else {
                     reanudarTTS();
+                    // Reanudar audio ambiental si estaba sonando antes de la pausa
+                    if (typeof freesoundAudio !== 'undefined' && freesoundAudio && freesoundAudio.paused) {
+                        freesoundAudio.play().catch(() => { });
+                    }
                 }
                 btn.innerHTML = '&#9646;&#9646;'; // pausa
                 btn.classList.remove('paused');
             } else {
                 pausarTTS();
+                // Pausar también el audio ambiental
+                if (typeof freesoundAudio !== 'undefined' && freesoundAudio && !freesoundAudio.paused) {
+                    freesoundAudio.pause();
+                }
                 btn.innerHTML = '&#9654;'; // play
                 btn.classList.add('paused');
             }
@@ -3071,32 +3202,113 @@
                 .filter(o => !o.disabled && o.value);
         }
 
-        function karaokeCapituloAnterior() {
-            const sel = document.getElementById('chapters');
-            const opts = _getChapterOptions();
-            const idx = opts.findIndex(o => o.value === sel.value);
-            if (idx > 0) {
-                sel.value = opts[idx - 1].value;
-                sel.dispatchEvent(new Event('change'));
-                // Reiniciar TTS con el nuevo capítulo
-                setTimeout(() => { detenerTTS(); iniciarTTS(); }, 300);
-            } else {
-                mostrarNotificacion('Ya estás en el primer capítulo');
-            }
+        // Obtiene el texto real de un capítulo (sin cargarlo en pantalla)
+        async function _getChapterText(ruta) {
+            if (!ruta || typeof archivosHTML === 'undefined' || !archivosHTML[ruta]) return '';
+            try {
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(archivosHTML[ruta], 'text/html');
+                const body = doc.body.cloneNode(true);
+                body.querySelectorAll('script, style, nav, header, footer').forEach(el => el.remove());
+                let texto = '';
+                body.querySelectorAll('p, h1, h2, h3, h4, h5, h6, div').forEach(el => {
+                    const t = el.innerText ? el.innerText.trim() : '';
+                    if (t.length > 0) texto += t + ' ';
+                });
+                return texto.trim();
+            } catch { return ''; }
         }
 
-        function karaokeCapituloSiguiente() {
+        async function karaokeNavegar(direccion) {
             const sel = document.getElementById('chapters');
             const opts = _getChapterOptions();
-            const idx = opts.findIndex(o => o.value === sel.value);
-            if (idx < opts.length - 1) {
-                sel.value = opts[idx + 1].value;
-                sel.dispatchEvent(new Event('change'));
-                setTimeout(() => { detenerTTS(); iniciarTTS(); }, 300);
-            } else {
-                mostrarNotificacion('Ya estás en el último capítulo');
+            let idx = opts.findIndex(o => o.value === sel.value);
+            if (idx === -1) return;
+
+            const MAX_SKIP = 20;
+            let intentos = 0;
+
+            while (intentos < MAX_SKIP) {
+                idx += direccion;
+                if (idx < 0) { mostrarNotificacion('Ya estás en el primer capítulo'); return; }
+                if (idx >= opts.length) { mostrarNotificacion('Ya estás en el último capítulo'); return; }
+
+                const texto = await _getChapterText(opts[idx].value);
+                if (texto.length > 30) break;
+                console.log(`Capítulo sin texto: ${opts[idx].text}, saltando...`);
+                intentos++;
             }
+
+            if (intentos >= MAX_SKIP) { mostrarNotificacion('No se encontró capítulo con contenido'); return; }
+
+            // Actualizar selector y cargar — sin cambiar la música (eso ocurre al iniciar lectura)
+            sel.value = opts[idx].value;
+            detenerTTS();
+            actualizarIndiceKaraoke(); // refrescar ítem activo en el índice
+            await cargarCapitulo(opts[idx].value);
         }
+
+        function karaokeCapituloAnterior() { karaokeNavegar(-1); }
+        function karaokeCapituloSiguiente() { karaokeNavegar(1); }
+
+        // ═══════════════════════════════════════
+        // PANEL DE ÍNDICE DE CAPÍTULOS EN MODO VIDEO
+        // ═══════════════════════════════════════
+
+        function toggleKaraokeIndex() {
+            const panel = document.getElementById('karaoke-index-panel');
+            const btn = document.getElementById('btn-toggle-index');
+            panel.classList.toggle('open');
+            btn.style.color = panel.classList.contains('open') ? 'var(--accent)' : '';
+        }
+
+        function poblarIndiceKaraoke() {
+            const lista = document.getElementById('karaoke-index-list');
+            if (!lista) return;
+            const opts = _getChapterOptions();
+            lista.innerHTML = '';
+            opts.forEach((opt, i) => {
+                const item = document.createElement('div');
+                item.className = 'karaoke-index-item';
+                item.dataset.value = opt.value;
+                item.textContent = opt.text || `Capítulo ${i + 1}`;
+                item.title = opt.text;
+                item.onclick = () => {
+                    document.getElementById('chapters').value = opt.value;
+                    detenerTTS();
+                    actualizarIndiceKaraoke();
+                    cargarCapitulo(opt.value);
+                };
+                lista.appendChild(item);
+            });
+            actualizarIndiceKaraoke();
+        }
+
+        function actualizarIndiceKaraoke() {
+            const sel = document.getElementById('chapters');
+            if (!sel) return;
+            document.querySelectorAll('.karaoke-index-item').forEach(item => {
+                item.classList.toggle('active', item.dataset.value === sel.value);
+            });
+            // Scroll al item activo
+            const active = document.querySelector('.karaoke-index-item.active');
+            if (active) active.scrollIntoView({ block: 'nearest' });
+        }
+
+        function filtrarIndiceKaraoke(q) {
+            const lower = q.toLowerCase();
+            document.querySelectorAll('.karaoke-index-item').forEach(item => {
+                item.style.display = item.textContent.toLowerCase().includes(lower) ? '' : 'none';
+            });
+        }
+
+        // Poblar índice cuando se carguen los capítulos y al abrir el modo video
+        const _chaptersObserverIdx = new MutationObserver(() => poblarIndiceKaraoke());
+        _chaptersObserverIdx.observe(document.getElementById('chapters'), { childList: true });
+
+        // Hook: actualizar item activo cuando cambia el selector de capítulos
+        document.getElementById('chapters').addEventListener('change', () => actualizarIndiceKaraoke());
+
 
         // ═══════════════════════════════════════
         // CONTROLES DE MÚSICA DESDE MODO VIDEO
@@ -3262,6 +3474,118 @@
                 console.log('🎵 Auto-next enganchado al track actual');
             }
         }, 1000);
+
+    </script>
+
+    <script>
+        // ═══════════════════════════════════════════════════════
+        // BARRA DE PROGRESO TIPO YOUTUBE EN KARAOKE
+        // ═══════════════════════════════════════════════════════
+
+        // Actualizar barra de progreso del karaoke
+        function updateKaraokeProgress() {
+            if (typeof sentences === 'undefined' || sentences.length === 0) return;
+            const total = sentences.length;
+            const current = (typeof currentSentenceIndex !== 'undefined') ? currentSentenceIndex : 0;
+            const pct = ((current + 1) / total) * 100;
+
+            document.getElementById('karaoke-progress-fill').style.width = pct + '%';
+            document.getElementById('kp-current').textContent = `Frase ${current + 1} / ${total}`;
+        }
+
+        // Hover: mostrar/ocultar thumb
+        function karaokeProgressHover(entering) {
+            const track = document.getElementById('karaoke-progress-track');
+            if (!entering) {
+                document.getElementById('karaoke-seek-tooltip').classList.remove('visible');
+            }
+        }
+
+        // Mouse move: mostrar tooltip con preview del texto
+        function karaokeProgressMouseMove(e) {
+            if (typeof sentences === 'undefined' || sentences.length === 0) return;
+
+            const track = document.getElementById('karaoke-progress-track');
+            const tooltip = document.getElementById('karaoke-seek-tooltip');
+            const rect = track.getBoundingClientRect();
+            const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+            const idx = Math.floor(pct * sentences.length);
+            const clampedIdx = Math.min(idx, sentences.length - 1);
+
+            // Truncar texto del tooltip
+            let preview = sentences[clampedIdx] || '';
+            if (preview.length > 120) preview = preview.slice(0, 117) + '...';
+
+            tooltip.textContent = `[${clampedIdx + 1}/${sentences.length}]\n${preview}`;
+            tooltip.classList.add('visible');
+
+            // Posicionar el tooltip horizontalmente siguiendo el cursor
+            const trackRelX = e.clientX - rect.left;
+            const tooltipHalf = 110; // aproximado a la mitad del max-width
+            let left = trackRelX;
+            // Evitar que salga por los bordes
+            left = Math.max(tooltipHalf, Math.min(rect.width - tooltipHalf, left));
+            tooltip.style.left = left + 'px';
+        }
+
+        // Click en la barra: hacer seek a esa posición
+        function karaokeProgressSeek(e) {
+            if (typeof sentences === 'undefined' || sentences.length === 0) return;
+
+            const track = document.getElementById('karaoke-progress-track');
+            const rect = track.getBoundingClientRect();
+            const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+            const idx = Math.min(Math.floor(pct * sentences.length), sentences.length - 1);
+
+            document.getElementById('karaoke-seek-tooltip').classList.remove('visible');
+
+            // Llamar la función de seek existente del TTS
+            if (typeof detenerTTSSinEstado === 'function') {
+                detenerTTSSinEstado();
+            } else if (typeof window.speechSynthesis !== 'undefined') {
+                window.speechSynthesis.cancel();
+            }
+            if (typeof leerOracion === 'function') {
+                leerOracion(idx);
+            }
+        }
+
+        // Seek desde la barra de progreso del panel lateral (implementación)
+        function seekTTS(e) {
+            if (typeof sentences === 'undefined' || sentences.length === 0) return;
+            const track = e.currentTarget;
+            const rect = track.getBoundingClientRect();
+            const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+            const idx = Math.min(Math.floor(pct * sentences.length), sentences.length - 1);
+            if (typeof window.speechSynthesis !== 'undefined') window.speechSynthesis.cancel();
+            if (typeof leerOracion === 'function') leerOracion(idx);
+        }
+
+        // Hook: sobreescribir actualizarProgreso para también actualizar la barra del karaoke
+        const _origActualizarProgreso = typeof actualizarProgreso === 'function' ? actualizarProgreso : null;
+        window.actualizarProgreso = function () {
+            if (_origActualizarProgreso) _origActualizarProgreso();
+            updateKaraokeProgress();
+        };
+
+        // ═══════════════════════════════════════════════════════
+        // BARRA DE PROGRESO DE TRADUCCIÓN → solo en overlay karaoke
+        // ═══════════════════════════════════════════════════════
+
+        // Observar cambios en el texto-contenido para detectar el mensaje de "Traduciendo"
+        // y redirigir al overlay del karaoke (el reading-area ya no tiene barra propia)
+        const _tcObserver = new MutationObserver(() => {
+            const tc = document.getElementById('texto-contenido');
+            if (!tc) return;
+            const txt = tc.textContent.trim();
+            if (txt.includes('Traduciendo capítulo')) {
+                tc.innerHTML = '';
+                const kWrap = document.getElementById('karaoke-translation-progress');
+                if (kWrap) kWrap.style.display = 'flex';
+            }
+        });
+        const _tcEl = document.getElementById('texto-contenido');
+        if (_tcEl) _tcObserver.observe(_tcEl, { childList: true, subtree: true, characterData: true });
 
     </script>
 

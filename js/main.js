@@ -247,6 +247,12 @@ function actualizarProgreso() {
     if (sentences.length === 0) return;
     const progreso = ((currentSentenceIndex + 1) / sentences.length) * 100;
     document.getElementById('progress-fill').style.width = progreso + '%';
+
+    // Actualizar barra del karaoke
+    const kFill = document.getElementById('karaoke-progress-fill');
+    const kCurrent = document.getElementById('kp-current');
+    if (kFill) kFill.style.width = progreso + '%';
+    if (kCurrent) kCurrent.textContent = `Frase ${currentSentenceIndex + 1} / ${sentences.length}`;
 }
 
 function resaltarOracion(index) {
@@ -311,7 +317,7 @@ function iniciarTTS() {
     const texto = contenido.textContent.trim();
 
     if (!texto || texto === 'Aquí aparecerá el contenido del capítulo seleccionado...') {
-        alert('No hay texto para leer');
+        mostrarNotificacion('⚠ No hay texto para leer');
         return;
     }
 
@@ -329,7 +335,9 @@ function iniciarTTS() {
     actualizarEstadoTTS('reproduciendo');
 
     // Detectar género con IA y abrir Modo Video automáticamente
-    if (typeof detectarGeneroConIA === 'function') {
+    // Solo cambiar música si NO estamos ya en modo video (es decir, es un inicio manual, no navegación entre capítulos)
+    const yaEnModoVideo = typeof karaokeActive !== 'undefined' && karaokeActive;
+    if (!yaEnModoVideo && typeof detectarGeneroConIA === 'function') {
         detectarGeneroConIA();
     }
     if (typeof abrirKaraoke === 'function') {
@@ -453,6 +461,14 @@ function actualizarProgresoTraduccion(actual, total) {
     if (fill) fill.style.width = pct + '%';
     if (label) label.innerHTML = `<span style="color:var(--accent2)">⟳</span> Traduciendo...`;
     if (pctEl) { pctEl.textContent = pct + '%'; pctEl.style.display = 'inline'; }
+
+    // Mostrar progreso en el overlay del karaoke (siempre, ya que el reading-area fue eliminado)
+    const kWrap = document.getElementById('karaoke-translation-progress');
+    const kFill = document.getElementById('ktl-fill');
+    const kPct = document.getElementById('ktl-pct');
+    if (kWrap) kWrap.style.display = 'flex';
+    if (kFill) kFill.style.width = pct + '%';
+    if (kPct) kPct.textContent = pct + '%';
 }
 
 function finalizarProgresoTraduccion() {
@@ -462,6 +478,12 @@ function finalizarProgresoTraduccion() {
     if (fill) { fill.style.width = '100%'; setTimeout(() => { fill.style.width = '0%'; }, 1000); }
     if (label) label.textContent = '⏹ Sin reproducción';
     if (pctEl) { pctEl.textContent = '100%'; setTimeout(() => { pctEl.style.display = 'none'; }, 1200); }
+
+    // Ocultar overlay de karaoke
+    const kWrap = document.getElementById('karaoke-translation-progress');
+    const kFill = document.getElementById('ktl-fill');
+    if (kFill) kFill.style.width = '100%';
+    if (kWrap) setTimeout(() => { kWrap.style.display = 'none'; }, 1200);
 }
 
 function mostrarProgresoRevision(msg) {
@@ -727,7 +749,7 @@ async function traducirTextoActual() {
 
     if (!textoActual || textoActual.trim().length === 0 ||
         textoActual === 'Aquí aparecerá el contenido del capítulo seleccionado...') {
-        alert('No hay texto para traducir');
+        mostrarNotificacion('⚠ No hay texto para traducir');
         return;
     }
 
@@ -777,7 +799,7 @@ document.getElementById('epub-file').addEventListener('change', async function (
     if (!file) return;
 
     if (!file.name.endsWith('.epub')) {
-        alert('Por favor selecciona un archivo EPUB válido');
+        mostrarNotificacion('⚠ Selecciona un archivo EPUB válido');
         return;
     }
 
@@ -900,7 +922,7 @@ document.getElementById('epub-file').addEventListener('change', async function (
     } catch (error) {
         console.error('Error al cargar EPUB:', error);
         document.getElementById('file-name').textContent = 'Error al cargar';
-        alert('Error al cargar el archivo EPUB: ' + error.message);
+        mostrarNotificacion('⚠ Error al cargar EPUB: ' + error.message);
     }
 });
 
@@ -947,7 +969,14 @@ async function cargarCapitulo(ruta) {
 
         // Traducir automáticamente si está activado
         if (traduccionAutomatica) {
-            document.getElementById('texto-contenido').textContent = 'Traduciendo capítulo, por favor espera...';
+            document.getElementById('texto-contenido').innerHTML = '';
+            // Mostrar progreso siempre en el overlay del karaoke (el del reading-area fue eliminado)
+            const kWrap = document.getElementById('karaoke-translation-progress');
+            const kFill = document.getElementById('ktl-fill');
+            const kPct = document.getElementById('ktl-pct');
+            if (kWrap) kWrap.style.display = 'flex';
+            if (kFill) kFill.style.width = '0%';
+            if (kPct) kPct.textContent = '0%';
             document.getElementById('tts-status').textContent = 'Traduciendo...';
             textoCompleto = await traducirTexto(textoCompleto);
             document.getElementById('tts-status').textContent = 'Detenido';
@@ -968,7 +997,7 @@ async function cargarCapitulo(ruta) {
 
     } catch (error) {
         console.error('Error al cargar capítulo:', error);
-        alert('Error al cargar el capítulo: ' + error.message);
+        mostrarNotificacion('⚠ Error al cargar el capítulo: ' + error.message);
     }
 }
 
@@ -999,7 +1028,7 @@ function reemplazarPalabra() {
     const reemplazar = document.getElementById('palabra-reemplazar').value;
 
     if (!buscar) {
-        alert('Por favor ingresa una palabra para buscar');
+        mostrarNotificacion('⚠ Ingresa una palabra para buscar');
         return;
     }
 
