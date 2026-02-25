@@ -19,17 +19,11 @@ let servidorTTSDisponible = false;
 const TTS_API_URL = 'http://localhost:5000';
 let audioActual = null;
 
-// Diccionario de reemplazos automáticos
-const reemplazosAutomaticos = {
-    'Sunny': 'Solano',
-    'Nephis': 'Ardila',
-    'Cassie': 'Salvia',
-    'Jet': 'Yaz Azul',
-    'Rain': 'Lluvia',
-    'Orilla Olvidada': 'Costa Olvidada',
-    'Orilla olvidada': 'Costa Olvidada',
-    'orilla olvidada': 'costa olvidada'
-};
+// Token de sesión TTS: se incrementa en detenerTTS() para invalidar callbacks onended pendientes
+let _ttsSessionToken = 0;
+
+// Diccionario de reemplazos — cargado desde localStorage, sin valores predeterminados
+const reemplazosAutomaticos = JSON.parse(localStorage.getItem('reemplazos_custom') || '{}');
 
 // Variable para controlar traducción automática
 let traduccionAutomatica = false;
@@ -79,7 +73,9 @@ async function _preTradducirCapitulo(ruta) {
         });
 
         let texto = '';
-        body.querySelectorAll('p, h1, h2, h3, h4, h5, h6, div').forEach(el => {
+        const _BLOQUES_BG = new Set(['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'DIV', 'BLOCKQUOTE', 'LI']);
+        body.querySelectorAll('p, h1, h2, h3, h4, h5, h6, div, blockquote, li').forEach(el => {
+            if (Array.from(el.children).some(c => _BLOQUES_BG.has(c.tagName))) return;
             const t = (el.textContent || '').trim();
             if (t.length > 0) {
                 texto += (el.tagName.startsWith('H') ? '\n\n' + t + '\n\n' : t + '\n\n');
@@ -222,8 +218,13 @@ async function leerOracionLocal(index) {
     // Aplicar configuración de volumen
     audioActual.volume = parseFloat(document.getElementById('volume-control').value) / 100;
 
+    // Capturar el token de sesión actual: si detenerTTS() se llama antes de que este
+    // callback dispare, el token habrá cambiado y el onended no hará nada (evita race condition)
+    const miSesionTTS = _ttsSessionToken;
     audioActual.onended = function () {
         URL.revokeObjectURL(audioUrl);
+        // Verificar que la sesión TTS sigue siendo la misma (no se llamó detenerTTS() entretanto)
+        if (miSesionTTS !== _ttsSessionToken) return;
         if (isReading && !isPaused) {
             const next = index + 1;
             if (next >= sentences.length) {
@@ -310,12 +311,23 @@ document.getElementById('volume-control').addEventListener('input', function (e)
 });
 
 function dividirEnOraciones(texto) {
-    // Captura oraciones con puntuación Y el texto restante sin puntuación al final
-    const conPuntuacion = texto.match(/[^.!?]+[.!?]+/g) || [];
-    const ultimoCaracter = conPuntuacion.join('').length;
-    const resto = texto.slice(ultimoCaracter).trim();
-    if (resto.length > 0) conPuntuacion.push(resto);
-    return conPuntuacion.length > 0 ? conPuntuacion : [texto];
+    // Dividir primero por párrafos para nunca cruzar su límite con una oración
+    const parrafos = texto.split(/\n\n+/).filter(p => p.trim().length > 0);
+    const todasLasOraciones = [];
+
+    parrafos.forEach(parrafo => {
+        const conPuntuacion = parrafo.match(/[^.!?]+[.!?]+/g) || [];
+        const ultimoCaracter = conPuntuacion.join('').length;
+        const resto = parrafo.slice(ultimoCaracter).trim();
+        if (resto.length > 0) conPuntuacion.push(resto);
+        const oraciones = conPuntuacion.length > 0 ? conPuntuacion : [parrafo];
+        oraciones.forEach(o => todasLasOraciones.push(o));
+    });
+
+    // Limpiar: quitar espacios y comillas sueltas al inicio (preservar — de diálogo)
+    return todasLasOraciones
+        .map(o => o.trim().replace(/^[\s\u2018\u2019\u201C\u201D\u00AB\u00BB\'\u2013-]+/, '').trimStart())
+        .filter(o => o.length > 0);
 }
 
 function actualizarEstadoTTS(estado) {
@@ -372,8 +384,10 @@ function resaltarOracion(index) {
     const span = document.getElementById(`tts-s-${index}`);
     if (span) {
         span.classList.add('tts-active');
-        // Scroll suave para que siempre sea visible
-        span.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Scroll suave solo si el video overlay NO está activo (si lo está, el reading-area está oculto)
+        if (typeof videoActive === 'undefined' || !videoActive) {
+            span.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
     }
 }
 
@@ -400,7 +414,9 @@ function leerOracion(index) {
     utterance.pitch = parseFloat(document.getElementById('pitch-control').value);
     utterance.volume = parseFloat(document.getElementById('volume-control').value) / 100;
 
+    const miSesionBrowser = _ttsSessionToken;
     utterance.onend = function () {
+        if (miSesionBrowser !== _ttsSessionToken) return;
         if (!isReading || isPaused) return;
         const next = index + 1;
         if (next >= sentences.length) {
@@ -473,9 +489,9 @@ function iniciarTTS() {
     }
 }
 
-// Envuelve cada oración en un span usando indexOf (sin regex) para evitar errores con chars especiales
+// Envuelve cada oración en un <span> para resaltarla durante el TTS
 function envolverOracionesEnSpans(contenedor, oraciones) {
-    // Limpiar spans anteriores
+    // Limpiar spans anteriores preservando texto
     contenedor.querySelectorAll('.tts-sentence').forEach(span => {
         span.replaceWith(document.createTextNode(span.textContent));
     });
@@ -483,14 +499,14 @@ function envolverOracionesEnSpans(contenedor, oraciones) {
 
     let html = contenedor.innerHTML;
 
-    // Reemplazar cada oración usando indexOf en lugar de regex
     oraciones.forEach((oracion, i) => {
         const texto = oracion.trim();
         if (!texto) return;
         const idx = html.indexOf(texto);
         if (idx === -1) return;
-        const span = `<span class="tts-sentence" id="tts-s-${i}">${texto}</span>`;
-        html = html.slice(0, idx) + span + html.slice(idx + texto.length);
+        html = html.slice(0, idx)
+            + `<span class="tts-sentence" id="tts-s-${i}">${texto}</span>`
+            + html.slice(idx + texto.length);
     });
 
     contenedor.innerHTML = html;
@@ -538,6 +554,9 @@ function reanudarTTS() {
 }
 
 function detenerTTS() {
+    // Invalidar cualquier onended pendiente antes de detener
+    _ttsSessionToken++;
+
     // Detener audio local si existe
     if (audioActual) {
         audioActual.pause();
@@ -564,7 +583,10 @@ async function _avanzarSiguienteCapituloAuto() {
     if (!sel) { mostrarNotificacion('✓ Lectura finalizada'); return; }
 
     const opts = Array.from(sel.options).filter(o => !o.disabled && o.value);
-    const idx = opts.findIndex(o => o.value === sel.value);
+    // Capturar el valor ACTUAL del selector en este momento (antes de cualquier await)
+    // para evitar que una navegación paralela cambie sel.value y calcule el índice mal
+    const rutaCapituloActual = sel.value;
+    const idx = opts.findIndex(o => o.value === rutaCapituloActual);
     if (idx < 0 || idx >= opts.length - 1) {
         mostrarNotificacion('✓ Lectura completada');
         return;
@@ -904,14 +926,46 @@ async function naturalizarTextoParaTTS(texto, onProgreso) {
 }
 
 // Función para aplicar reemplazos automáticos
+// Limpieza silenciosa de referencias a URLs/dominios
+function limpiarURLs(texto) {
+    // Captura cualquier texto (sin espacios) seguido de ".com", ".net", ".org", etc.
+    // con o sin espacio/caracter antes del punto, y cualquier path o query que siga
+    return texto.replace(/\S*\s*\.\s*(?:com|net|org|io|co|ar|es|edu|gov|info|biz|tv|me|app)\b[^\s]*/gi, '').replace(/[ \t]{2,}/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+}
+
 function aplicarReemplazosAutomaticos(texto) {
     let textoModificado = texto;
     for (const [buscar, reemplazar] of Object.entries(reemplazosAutomaticos)) {
-        const regex = new RegExp(buscar, 'g');
-        textoModificado = textoModificado.replace(regex, reemplazar);
+        try {
+            // Usar 'gi' para que matchee independientemente de mayúsculas/minúsculas
+            const regex = new RegExp(buscar, 'gi');
+            textoModificado = textoModificado.replace(regex, (match) => {
+                // Preservar capitalización: si el match empieza con mayúscula, capitalizar el reemplazo
+                if (match.charAt(0) === match.charAt(0).toUpperCase() && match.charAt(0) !== match.charAt(0).toLowerCase()) {
+                    return reemplazar.charAt(0).toUpperCase() + reemplazar.slice(1);
+                }
+                // Si el match es todo mayúsculas, poner el reemplazo todo en mayúsculas
+                if (match === match.toUpperCase()) {
+                    return reemplazar.toUpperCase();
+                }
+                return reemplazar;
+            });
+        } catch (e) { /* regex inválida, saltar */ }
     }
     return textoModificado;
 }
+
+// Renderiza texto plano en el contenedor usando <p> por cada párrafo
+// Usa innerHTML en lugar de textContent para respetar los saltos de párrafo
+function renderizarTextoEnContenedor(el, texto) {
+    if (!el || !texto) return;
+    el.textContent = texto.trim();
+}
+
+function escapeHTML(str) {
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 
 // Barra de progreso para traducción
 // _traduccionEnBackground: si true, no actualizar UI (pre-traducción silenciosa)
@@ -1291,7 +1345,7 @@ async function traducirTextoActual() {
 
         if (textoTraducido && textoTraducido !== textoActual) {
             const textoFinal = aplicarReemplazosAutomaticos(textoTraducido);
-            document.getElementById('texto-contenido').textContent = textoFinal;
+            renderizarTextoEnContenedor(document.getElementById('texto-contenido'), textoFinal);
             actualizarEstadisticas();
             mostrarNotificacion('✓ Texto traducido al español');
         }
@@ -1460,7 +1514,8 @@ async function cargarCapitulo(ruta) {
         const entrada = _capCache[ruta];
         if (entrada && entrada.traducida === traduccionAutomatica && entrada.humanizada === estadoHumanizador) {
             console.log(`⚡ Cargando desde cache: ${ruta.split('/').pop()}`);
-            textoCompleto = entrada.texto;
+            // Re-aplicar reemplazos al cargar desde cache: pueden haber cambiado desde que se cacheó
+            textoCompleto = aplicarReemplazosAutomaticos(entrada.texto);
             delete _capCache[ruta];
         } else {
             // Cache inválido o no existe — procesar ahora
@@ -1481,9 +1536,13 @@ async function cargarCapitulo(ruta) {
                 if (parent && parent.tagName === 'P') parent.remove();
             });
 
-            const parrafos = body.querySelectorAll('p, h1, h2, h3, h4, h5, h6, div');
+            const BLOQUES = new Set(['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'DIV', 'BLOCKQUOTE', 'LI']);
+            const parrafos = body.querySelectorAll('p, h1, h2, h3, h4, h5, h6, div, blockquote, li');
             textoCompleto = '';
             parrafos.forEach(elemento => {
+                // Saltar si tiene hijos que también son elementos de bloque (evita duplicación)
+                const tieneHijoBloque = Array.from(elemento.children).some(c => BLOQUES.has(c.tagName));
+                if (tieneHijoBloque) return;
                 const texto = (elemento.textContent || '').trim();
                 if (texto.length > 0) {
                     textoCompleto += (elemento.tagName.startsWith('H') ? '\n\n' + texto + '\n\n' : texto + '\n\n');
@@ -1566,6 +1625,9 @@ async function cargarCapitulo(ruta) {
                 await new Promise(r => setTimeout(r, 200)); // pequeña pausa visual
             }
 
+            // Fase 2.5: Limpieza silenciosa de URLs (entre revisión y optimización)
+            textoCompleto = limpiarURLs(textoCompleto);
+
             // Fase 3: Optimización IA
             if (ttsHumanizerActivo && claudeApiKey) {
                 document.getElementById('tts-status').textContent = '✨ Optimizando...';
@@ -1594,7 +1656,7 @@ async function cargarCapitulo(ruta) {
             textoCompleto = aplicarReemplazosAutomaticos(textoCompleto);
         }
 
-        document.getElementById('texto-contenido').textContent = textoCompleto;
+        renderizarTextoEnContenedor(document.getElementById('texto-contenido'), textoCompleto);
         actualizarEstadisticas();
 
         // Actualizar título de capítulo en el visor modo video
@@ -1677,8 +1739,8 @@ function actualizarEstadisticas() {
 
 // Reemplazar palabra
 function reemplazarPalabra() {
-    const buscar = document.getElementById('palabra-buscar').value;
-    const reemplazar = document.getElementById('palabra-reemplazar').value;
+    const buscar = document.getElementById('palabra-buscar').value.trim();
+    const reemplazar = document.getElementById('palabra-reemplazar').value.trim();
 
     if (!buscar) {
         mostrarNotificacion('⚠ Ingresa una palabra para buscar');
@@ -1686,7 +1748,8 @@ function reemplazarPalabra() {
     }
 
     const elemento = document.getElementById('texto-contenido');
-    const regex = new RegExp(buscar, 'gi');
+    let regex;
+    try { regex = new RegExp(buscar, 'gi'); } catch (e) { regex = new RegExp(buscar.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'); }
     const textoOriginal = elemento.textContent;
     const ocurrencias = (textoOriginal.match(regex) || []).length;
 
@@ -1698,6 +1761,13 @@ function reemplazarPalabra() {
     elemento.textContent = textoOriginal.replace(regex, reemplazar);
     actualizarEstadisticas();
     mostrarNotificacion(`${ocurrencias} ocurrencia(s) reemplazada(s)`);
+
+    // Guardar en localStorage y en el diccionario activo
+    reemplazosAutomaticos[buscar] = reemplazar;
+    localStorage.setItem('reemplazos_custom', JSON.stringify(reemplazosAutomaticos));
+    if (typeof actualizarBotonLimpiarReemplazos === 'function') actualizarBotonLimpiarReemplazos();
+    // Invalidar cache BG: el texto cacheado no tiene este nuevo reemplazo aplicado
+    Object.keys(_capCache).forEach(k => delete _capCache[k]);
 
     document.getElementById('palabra-buscar').value = '';
     document.getElementById('palabra-reemplazar').value = '';
@@ -1716,7 +1786,7 @@ async function aplicarTexto() {
     // No traducir automáticamente
     textoFinal = aplicarReemplazosAutomaticos(textoFinal);
 
-    document.getElementById('texto-contenido').textContent = textoFinal;
+    renderizarTextoEnContenedor(document.getElementById('texto-contenido'), textoFinal);
 
     actualizarEstadisticas();
 

@@ -33,6 +33,8 @@
             height: 100vh;
             display: flex;
             overflow: hidden;
+            padding-bottom: max(0.5vh, 14px);
+            box-sizing: border-box;
         }
 
         /* ─── MAIN CONTENT (LEFT 80%) ─── */
@@ -119,6 +121,7 @@
             color: var(--text);
             max-width: 680px;
             margin: 0 auto;
+            white-space: pre-wrap;
         }
 
             #texto-contenido p {
@@ -128,24 +131,101 @@
         /* Progress bar at bottom of reading area */
         .progress-wrap {
             flex-shrink: 0;
-            padding: 0 28px 0;
+            padding: 0 28px;
             background: var(--surface);
             border-top: 1px solid var(--border);
+            transition: opacity 0.4s ease, max-height 0.4s ease;
+            overflow: visible;
+            max-height: 40px;
         }
 
+            .progress-wrap.processing-hidden {
+                opacity: 0;
+                max-height: 0;
+                pointer-events: none;
+            }
+
         .progress-track {
-            height: 2px;
+            height: 8px;
             background: var(--border);
+            border-radius: 4px;
             position: relative;
             cursor: pointer;
+            margin: 8px 0;
+            overflow: visible;
         }
 
         .progress-fill {
             height: 100%;
+            border-radius: 4px;
             background: linear-gradient(90deg, var(--accent), var(--accent2));
             width: 0%;
             transition: width 0.3s ease;
         }
+
+        /* Tooltip de preview en barra de progreso principal */
+        #main-progress-tooltip {
+            position: absolute;
+            bottom: calc(100% + 10px);
+            transform: translateX(-50%);
+            background: rgba(18, 16, 14, 0.96);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 7px 12px;
+            font-size: 0.65rem;
+            color: var(--text);
+            font-family: 'DM Mono', monospace;
+            max-width: 240px;
+            white-space: pre-wrap;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.15s;
+            z-index: 200;
+            text-align: center;
+            line-height: 1.45;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+        }
+
+            #main-progress-tooltip.visible {
+                opacity: 1;
+            }
+
+        /* Footer fijo */
+        .app-footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 0.5vh;
+            min-height: 14px;
+            background: var(--surface2);
+            border-top: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            font-family: 'DM Mono', monospace;
+            font-size: 0.55rem;
+            color: var(--text-dim);
+            z-index: 50;
+            padding: 0 20px;
+            white-space: nowrap;
+            overflow: hidden;
+        }
+
+            .app-footer a {
+                color: var(--accent);
+                text-decoration: none;
+                transition: color 0.2s;
+            }
+
+                .app-footer a:hover {
+                    color: var(--text);
+                }
+
+            .app-footer .footer-sep {
+                opacity: 0.3;
+            }
 
         .tts-status-bar {
             display: flex;
@@ -541,7 +621,129 @@
                 color: var(--text-dim);
             }
 
-        /* Notification */
+        /* Modal de reemplazos */
+        #modal-reemplazos {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 500;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(4px);
+        }
+
+            #modal-reemplazos.open {
+                display: flex;
+            }
+
+        .modal-box {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            width: min(480px, 90vw);
+            max-height: 70vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 24px 60px rgba(0,0,0,0.6);
+            overflow: hidden;
+        }
+
+        .modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+            font-family: 'DM Mono', monospace;
+            font-size: 0.78rem;
+            color: var(--text);
+        }
+
+            .modal-header button {
+                background: none;
+                border: none;
+                color: var(--text-dim);
+                cursor: pointer;
+                font-size: 1rem;
+                line-height: 1;
+                padding: 2px 6px;
+                border-radius: 4px;
+                transition: color 0.2s;
+            }
+
+                .modal-header button:hover {
+                    color: var(--text);
+                }
+
+        .modal-body {
+            overflow-y: auto;
+            padding: 14px 20px;
+            flex: 1;
+            scrollbar-width: thin;
+            scrollbar-color: var(--border) transparent;
+        }
+
+        .modal-empty {
+            color: var(--text-dim);
+            font-family: 'DM Mono', monospace;
+            font-size: 0.7rem;
+            font-style: italic;
+            text-align: center;
+            padding: 24px 0;
+        }
+
+        .modal-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            font-family: 'DM Mono', monospace;
+            font-size: 0.7rem;
+        }
+
+            .modal-row:last-child {
+                border-bottom: none;
+            }
+
+            .modal-row .from {
+                color: var(--text-muted);
+                flex: 1;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            .modal-row .arrow {
+                color: var(--text-dim);
+                flex-shrink: 0;
+            }
+
+            .modal-row .to {
+                color: var(--accent);
+                flex: 1;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            .modal-row .del-btn {
+                background: none;
+                border: none;
+                color: var(--text-dim);
+                cursor: pointer;
+                font-size: 0.8rem;
+                padding: 2px 5px;
+                border-radius: 3px;
+                flex-shrink: 0;
+                transition: color 0.2s;
+            }
+
+                .modal-row .del-btn:hover {
+                    color: #e05252;
+                }
+
         #notification {
             position: fixed;
             bottom: 24px;
@@ -562,28 +764,6 @@
             #notification.show {
                 transform: translateX(-50%) translateY(0);
                 opacity: 1;
-            }
-
-        /* Editor toggle button */
-        .editor-toggle-btn {
-            position: fixed;
-            bottom: 24px;
-            right: calc(var(--sidebar-w) + 24px);
-            background: var(--surface2);
-            border: 1px solid var(--border);
-            color: var(--text-muted);
-            font-family: 'DM Mono', monospace;
-            font-size: 0.65rem;
-            padding: 8px 14px;
-            border-radius: 20px;
-            cursor: pointer;
-            z-index: 50;
-            transition: all 0.2s;
-        }
-
-            .editor-toggle-btn:hover {
-                border-color: var(--accent);
-                color: var(--accent);
             }
 
         /* Scrollbar for reading area */
@@ -643,19 +823,33 @@
         /* ─── AMBIENT MUSIC PLAYER ─── */
         #ambient-player {
             position: fixed;
-            bottom: 20px;
-            left: 20px;
-            width: 260px;
-            /* No tapar el contenido: limitado al área de lectura */
-            max-width: calc(100vw - var(--sidebar-w) - 56px);
+            bottom: 36px; /* just above progress-wrap + footer */
+            left: 0;
+            width: 240px;
             background: var(--surface);
             border: 1px solid var(--border);
-            border-radius: 10px;
+            border-radius: 0 10px 0 0;
+            border-bottom: none;
+            border-left: none;
             z-index: 100;
             overflow: hidden;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-            transition: transform 0.3s ease, opacity 0.3s ease;
+            box-shadow: 4px -4px 20px rgba(0,0,0,0.4);
+            transition: transform 0.4s ease, opacity 0.5s ease, bottom 0.4s ease;
         }
+
+            /* Translúcido cuando está reproduciendo */
+            #ambient-player.ambient-playing {
+                opacity: 0.25;
+            }
+
+                /* Al pasar el mouse, vuelve completamente visible */
+                #ambient-player.ambient-playing:hover {
+                    opacity: 1;
+                }
+
+            #ambient-player.processing-raised {
+                bottom: 104px;
+            }
 
             #ambient-player.collapsed .ambient-body {
                 display: none;
@@ -914,6 +1108,8 @@
             align-items: center;
             justify-content: center;
             backdrop-filter: blur(8px);
+            padding-bottom: 6px;
+            overflow: hidden;
         }
 
             #video-overlay.active {
@@ -1031,37 +1227,59 @@
         }
 
         #video-progress-track {
-            height: 4px;
-            background: rgba(255,255,255,0.15);
+            height: 20px; /* área clickeable amplia, sin desplazar layout */
+            background: transparent;
             border-radius: 4px;
             position: relative;
             cursor: pointer;
-            transition: height 0.15s ease;
         }
 
-            #video-progress-track:hover {
-                height: 6px;
+            /* Riel visual: centrado verticalmente dentro del área clickeable */
+            #video-progress-track::before {
+                content: '';
+                position: absolute;
+                left: 0;
+                right: 0;
+                top: 50%;
+                transform: translateY(-50%);
+                height: 3px;
+                background: rgba(255,255,255,0.15);
+                border-radius: 4px;
+                transition: height 0.15s ease;
+                pointer-events: none;
             }
 
-                #video-progress-track:hover #video-progress-thumb {
-                    opacity: 1;
-                    transform: translateX(-50%) scale(1);
-                }
+            #video-progress-track:hover::before {
+                height: 5px;
+            }
+
+            #video-progress-track:hover #video-progress-thumb {
+                opacity: 1;
+                transform: translateY(-50%) scale(1);
+            }
 
         #video-progress-fill {
-            height: 100%;
+            position: absolute;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            height: 3px;
             width: 0%;
             background: linear-gradient(90deg, var(--accent), var(--accent2));
             border-radius: 4px;
             pointer-events: none;
-            position: relative;
+            transition: height 0.15s ease;
+        }
+
+        #video-progress-track:hover #video-progress-fill {
+            height: 5px;
         }
 
         #video-progress-thumb {
             position: absolute;
             right: -7px;
             top: 50%;
-            transform: translateX(-50%) scale(0);
+            transform: translateY(-50%) scale(0);
             width: 14px;
             height: 14px;
             border-radius: 50%;
@@ -1111,11 +1329,13 @@
             display: flex;
             align-items: center;
             gap: 16px;
-            margin-top: 8px;
+            margin-top: 6px;
+            margin-bottom: 4px;
             width: min(900px, 95vw);
             position: relative;
             opacity: 1;
             transition: opacity 0.5s ease;
+            flex-shrink: 0;
         }
 
         /* En pantalla completa, el overlay cubre toda la pantalla */
@@ -1183,11 +1403,10 @@
                     background: rgba(126,184,154,0.1);
                 }
 
-        /* Barra de controles de reproducción centrada */
         .video-playbar {
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 10px;
             position: absolute;
             left: 50%;
             transform: translateX(-50%);
@@ -1201,6 +1420,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
+            line-height: 1;
         }
 
         .kbtn-nav {
@@ -1208,9 +1428,11 @@
             border: 1px solid var(--border);
             border-radius: 8px;
             color: var(--text-muted);
-            font-size: 0.65rem;
-            padding: 8px 14px;
+            font-size: 0.6rem;
+            padding: 7px 10px;
             letter-spacing: 0.02em;
+            min-width: 0;
+            width: auto;
         }
 
             .kbtn-nav:hover {
@@ -1225,7 +1447,9 @@
             border-radius: 6px;
             color: var(--accent2);
             font-size: 0.55rem;
-            padding: 4px 8px;
+            padding: 4px 6px;
+            min-width: 0;
+            width: auto;
         }
 
             .kbtn-music:hover {
@@ -1234,23 +1458,24 @@
             }
 
         .kbtn-play {
-            width: 48px;
-            height: 48px;
+            width: 38px;
+            height: 38px;
             border-radius: 50%;
             background: var(--accent);
             color: var(--bg);
-            font-size: 1.1rem;
-            box-shadow: 0 0 20px rgba(200,169,110,0.3);
+            font-size: 0.95rem;
+            box-shadow: 0 0 16px rgba(200,169,110,0.3);
+            flex-shrink: 0;
         }
 
             .kbtn-play:hover {
                 transform: scale(1.08);
-                box-shadow: 0 0 28px rgba(200,169,110,0.5);
+                box-shadow: 0 0 24px rgba(200,169,110,0.5);
             }
 
             .kbtn-play.paused {
                 background: var(--accent2);
-                box-shadow: 0 0 20px rgba(126,184,154,0.3);
+                box-shadow: 0 0 16px rgba(126,184,154,0.3);
             }
     </style>
 </head>
@@ -1268,6 +1493,9 @@
             <button class="rec-btn" onclick="abrirvideo()" style="margin-bottom:0;">
                 🎬 Modo Video
             </button>
+            <button class="rec-btn" onclick="toggleEditor()" id="editor-toggle-btn" style="margin-bottom:0;">
+                ✏️ Editor
+            </button>
             <span class="subtitle" id="current-chapter-title">Ningún capítulo seleccionado</span>
         </div>
 
@@ -1279,11 +1507,11 @@
         </div>
 
         <div class="reading-area" style="position:relative;">
-            <div id="texto-contenido" style="font-family:'Lora',serif;font-size:1.1rem;line-height:1.85;color:var(--text);max-width:680px;margin:0 auto;">
+            <div id="texto-contenido" style="font-family:'Lora',serif;font-size:1.1rem;line-height:1.85;color:var(--text);max-width:680px;margin:0 auto;white-space:pre-wrap;">
                 <p style="color:var(--text-dim);font-style:italic;">Carga un archivo EPUB desde el panel lateral para comenzar a leer...</p>
             </div>
-        </div>
-
+            <!-- Música ambiental flotante anclada a esquina inferior izquierda del reading area -->
+        </div><!-- cierre reading-area -->
         <!-- Barra de procesamiento con fases — visible en el reading area al procesar -->
         <div id="main-processing-bar" style="display:none;flex-direction:column;align-items:stretch;gap:6px;padding:10px 28px 12px;background:var(--surface2);border-top:1px solid var(--border);border-bottom:1px solid var(--border);">
             <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
@@ -1320,13 +1548,15 @@
         <!--<span id="tts-percent" style="display:none;"></span>-->
 
         <div class="progress-wrap">
-            <div class="progress-track" onclick="seekTTS(event)">
+            <div class="progress-track" id="main-progress-track"
+                 onclick="seekTTS(event)"
+                 onmousemove="mainProgressMouseMove(event)"
+                 onmouseleave="mainProgressMouseLeave()">
                 <div class="progress-fill" id="progress-fill"></div>
+                <div id="main-progress-tooltip"></div>
             </div>
         </div>
     </div>
-
-    <button class="editor-toggle-btn" onclick="toggleEditor()" id="editor-toggle-btn">✏️ Editor</button>
 
     <!-- ─── SIDEBAR ─── -->
     <div class="sidebar">
@@ -1434,13 +1664,24 @@
 
         <!-- Reemplazar palabras -->
         <div class="sidebar-section">
-            <div class="section-label collapsible-label" onclick="toggleReemplazar()" style="cursor:pointer;user-select:none;">
-                Reemplazar <span id="reemplazar-arrow" style="margin-left:auto;font-size:0.7rem;color:var(--text-dim);">▶</span>
+            <div class="section-label collapsible-label" onclick="toggleReemplazar()" style="cursor:pointer;user-select:none;display:flex;align-items:center;">
+                Reemplazar
+                <span id="reemplazar-arrow" style="margin-left:auto;font-size:0.7rem;color:var(--text-dim);">▶</span>
+                <button onclick="event.stopPropagation();abrirModalReemplazos()" title="Ver reemplazos activos"
+                        style="margin-left:6px;background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-dim);font-size:0.58rem;padding:1px 5px;cursor:pointer;line-height:1.4;transition:color 0.2s,border-color 0.2s;"
+                        onmouseover="this.style.color='var(--accent)';this.style.borderColor='var(--accent)'"
+                        onmouseout="this.style.color='var(--text-dim)';this.style.borderColor='var(--border)'">
+                    📋
+                </button>
             </div>
             <div class="replace-pair" id="reemplazar-body" style="display:none;">
                 <input type="text" id="palabra-buscar" placeholder="Buscar...">
                 <input type="text" id="palabra-reemplazar" placeholder="Reemplazar con...">
-                <button class="btn btn-primary" onclick="reemplazarPalabra()">Reemplazar</button>
+                <div style="display:flex;gap:6px;">
+                    <button class="btn btn-secondary" id="btn-limpiar-reemplazos" onclick="limpiarReemplazosGuardados()" style="flex:1;font-size:0.62rem;" disabled>🗑 Limpiar</button>
+                    <button class="btn btn-primary" onclick="reemplazarPalabra()" style="flex:1;">Reemplazar</button>
+                </div>
+                <div id="reemplazos-guardados-lista" style="display:none;margin-top:6px;max-height:90px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--border) transparent;"></div>
             </div>
         </div>
 
@@ -1477,6 +1718,48 @@
 
     <script src="js/main.js"></script>
     <script>
+        // ─── REEMPLAZOS GUARDADOS EN LOCALSTORAGE ───
+        function actualizarBotonLimpiarReemplazos() {
+            const datos = JSON.parse(localStorage.getItem('reemplazos_custom') || '{}');
+            const btn = document.getElementById('btn-limpiar-reemplazos');
+            const lista = document.getElementById('reemplazos-guardados-lista');
+            const tiene = Object.keys(datos).length > 0;
+            if (btn) btn.disabled = !tiene;
+            if (lista) {
+                if (tiene) {
+                    lista.style.display = 'block';
+                    lista.innerHTML = Object.entries(datos).map(([k, v]) =>
+                        `<div style="font-size:0.58rem;color:var(--text-dim);padding:2px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;gap:4px;">
+                                            <span style="color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${k}</span>
+                                            <span style="color:var(--accent);flex-shrink:0;">→ ${v}</span>
+                                        </div>`
+                    ).join('');
+                } else {
+                    lista.style.display = 'none';
+                    lista.innerHTML = '';
+                }
+            }
+        }
+
+        function limpiarReemplazosGuardados() {
+            if (!confirm('¿Borrar todos los reemplazos guardados?')) return;
+            localStorage.removeItem('reemplazos_custom');
+            // Limpiar el objeto activo en main.js
+            if (typeof reemplazosAutomaticos !== 'undefined') {
+                Object.keys(reemplazosAutomaticos).forEach(k => delete reemplazosAutomaticos[k]);
+            }
+            actualizarBotonLimpiarReemplazos();
+            mostrarNotificacion('🗑 Reemplazos borrados');
+        }
+
+        // Inicializar estado del botón al cargar
+        window.addEventListener('DOMContentLoaded', () => {
+            actualizarBotonLimpiarReemplazos();
+        });
+
+        // Exponer para que main.js pueda llamarla
+        window.actualizarBotonLimpiarReemplazos = actualizarBotonLimpiarReemplazos;
+
         // Reemplazar toggle
         function toggleReemplazar() {
             const body = document.getElementById('reemplazar-body');
@@ -1484,6 +1767,7 @@
             const open = body.style.display === 'none';
             body.style.display = open ? 'flex' : 'none';
             arrow.textContent = open ? '▼' : '▶';
+            if (open) actualizarBotonLimpiarReemplazos();
         }
 
         // Editor toggle (UI only)
@@ -1515,7 +1799,7 @@
                 if (typeof detectarUniverso === 'function') detectarUniverso();
                 // Sincronizar botón play/pausa del visor
                 const btn = document.getElementById('kbtn-playpause');
-                if (btn) { btn.innerHTML = '&#9646;&#9646;'; btn.classList.remove('paused'); }
+                if (btn) { btn.innerHTML = '⏸'; btn.classList.remove('paused'); }
             }, 80);
         };
         iniciarTTS = window.iniciarTTS;
@@ -1601,7 +1885,7 @@
                 <span class="ambient-vol-val" id="ambient-vol-val">15%</span>
             </div>
         </div>
-    </div>
+    </div><!-- cierre ambient-player -->
 
     <script>
         // ─── AMBIENT MUSIC ENGINE — Web Audio API Procedural Generation ───
@@ -2033,6 +2317,7 @@
                         document.getElementById('ambient-eq').classList.add('playing');
                         document.getElementById('ambient-track-name').textContent = track.name;
                         document.getElementById('ambient-track-genre').textContent = '♪ Freesound CC0';
+                        document.getElementById('ambient-player').classList.add('ambient-playing');
                     }).catch(() => playAmbientLocal(g));
                     return;
                 }
@@ -2055,6 +2340,7 @@
             document.getElementById('ambient-eq').classList.add('playing');
             document.getElementById('ambient-track-name').textContent = GENRE_LABELS[genre];
             document.getElementById('ambient-track-genre').textContent = '♪ generado localmente';
+            document.getElementById('ambient-player').classList.add('ambient-playing');
         }
 
         function stopAmbient() {
@@ -2078,6 +2364,7 @@
             ambientPlaying = false;
             document.getElementById('ambient-play-btn').textContent = '▶';
             document.getElementById('ambient-eq').classList.remove('playing');
+            document.getElementById('ambient-player').classList.remove('ambient-playing');
         }
 
         function toggleAmbientPlay() {
@@ -2091,6 +2378,7 @@
                 ambientPlaying = false;
                 const playBtn = document.getElementById('ambient-play-btn');
                 if (playBtn) playBtn.textContent = '▶';
+                document.getElementById('ambient-player').classList.remove('ambient-playing');
             } else {
                 // Reanudar el audio existente; solo cargar uno nuevo si no hay nada
                 if (freesoundAudio && freesoundAudio.src) {
@@ -2098,6 +2386,7 @@
                     ambientPlaying = true;
                     const playBtn = document.getElementById('ambient-play-btn');
                     if (playBtn) playBtn.textContent = '⏸';
+                    document.getElementById('ambient-player').classList.add('ambient-playing');
                 } else {
                     playAmbient(ambientGenre);
                 }
@@ -2193,7 +2482,7 @@
     </script>
     <!-- ─── GRABACIÓN / VIDEO ─── -->
     <!-- video overlay -->
-    <div id="video-overlay" onmousemove="videoControlsShow()">
+    <div id="video-overlay">
         <button id="video-close" onclick="cerrarvideo()">✕</button>
         <!-- Fondo IA: dos divs para crossfade via CSS, detrás del canvas -->
         <!-- Contenedor compartido: imagen de fondo + canvas alineados -->
@@ -2292,15 +2581,15 @@
 
         <!-- Barra inferior principal -->
         <div class="video-bar">
-            <!-- Izquierda: controles de música + volumen música -->
+            <!-- Izquierda: controles de música reordenados -->
             <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
                 <button class="kbtn kbtn-music" onclick="videoMusicaPrev()" title="Pista anterior">&#9664;</button>
-                <button class="kbtn kbtn-music" id="kbtn-ambient-playpause" onclick="videoToggleAmbient()" title="Play/Pause música" style="font-size:0.7rem;padding:4px 6px;">&#9646;&#9646;</button>
-                <span id="video-music-label" style="font-size:0.58rem;color:var(--text-dim);font-family:'DM Mono',monospace;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">♪</span>
+                <button class="kbtn kbtn-music" id="kbtn-ambient-playpause" onclick="videoToggleAmbient()" title="Play/Pause música" style="font-size:0.7rem;padding:4px 6px;">&#9654;</button>
                 <button class="kbtn kbtn-music" onclick="videoMusicaSiguiente()" title="Pista siguiente">&#9654;</button>
-                <!-- Volumen música justo a la derecha -->
+                <span id="video-music-label" style="font-size:0.58rem;color:var(--text-dim);font-family:'DM Mono',monospace;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-left:4px;">♪</span>
+                <button class="kbtn kbtn-music" id="kbtn-ambient-mute" onclick="toggleAmbientMute()" title="Silenciar/Activar música" style="font-size:0.75rem;padding:3px 6px;margin-left:2px;">🔊</button>
                 <input type="range" id="kol-music-vol" min="0" max="100" value="15" step="5"
-                       style="width:55px;accent-color:var(--accent2);cursor:pointer;vertical-align:middle;margin-left:6px;"
+                       style="width:50px;accent-color:var(--accent2);cursor:pointer;vertical-align:middle;margin-left:4px;"
                        oninput="setAmbientVolume(this.value); document.getElementById('kol-music-pct').textContent=this.value+'%'">
                 <span id="kol-music-pct" style="font-size:0.6rem;color:var(--text-dim);min-width:26px;">15%</span>
             </div>
@@ -2314,7 +2603,6 @@
 
             <!-- Derecha: volumen TTS + IA + exportar + fullscreen -->
             <div class="video-controls">
-                <!-- 🗣 Volumen TTS -->
                 <div style="display:flex;align-items:center;gap:3px;" title="Volumen voz">
                     <span style="font-size:0.7rem;">🗣</span>
                     <input type="range" id="kol-tts-vol" min="0" max="100" value="100" step="5"
@@ -2451,6 +2739,9 @@
             videoCanvas = document.getElementById('video-canvas');
             videoCtx = videoCanvas.getContext('2d');
             videoActive = true;
+            // Ocultar el panel principal para que no se filtre detrás del overlay
+            const mainPanel = document.querySelector('.main-panel');
+            if (mainPanel) mainPanel.style.visibility = 'hidden';
 
             const capitulo = document.getElementById('current-chapter-title').textContent || 'Capítulo';
 
@@ -2484,6 +2775,9 @@
             document.getElementById('video-overlay').classList.remove('active');
             if (videoAnimFrame) cancelAnimationFrame(videoAnimFrame);
             if (videoRecorder && videoRecorder.state !== 'inactive') videoRecorder.stop();
+            // Restaurar visibilidad del panel principal
+            const mainPanel = document.querySelector('.main-panel');
+            if (mainPanel) mainPanel.style.visibility = '';
         }
 
         // Cerrar modo video con tecla Escape
@@ -3250,7 +3544,7 @@
                         freesoundAudio.play().catch(() => { });
                     }
                 }
-                btn.innerHTML = '&#9646;&#9646;'; // pausa
+                btn.innerHTML = '⏸'; // pausa
                 btn.classList.remove('paused');
             } else {
                 pausarTTS();
@@ -3443,7 +3737,7 @@
             if (!btn) return;
             // ambientPlaying viene del scope de audio ambiental
             const playing = typeof ambientPlaying !== 'undefined' ? ambientPlaying : true;
-            btn.innerHTML = playing ? '&#9646;&#9646;' : '&#9654;';
+            btn.innerHTML = playing ? '⏸' : '&#9654;';
             btn.title = playing ? 'Pausar música' : 'Reproducir música';
         }
 
@@ -3519,7 +3813,7 @@
             if (!document.fullscreenElement) {
                 // Fullscreen en documentElement para evitar congelamiento del navegador
                 document.documentElement.requestFullscreen().then(() => {
-                    btn.textContent = '✕FS';
+                    btn.innerHTML = '&#x29C9;';
                     btn.title = 'Salir de pantalla completa';
                 }).catch(e => console.warn('Fullscreen error:', e.message));
             } else {
@@ -3697,12 +3991,17 @@
 
         // Observar cambios en el texto-contenido para detectar el mensaje de "Traduciendo"
         // y redirigir al overlay del video (el reading-area ya no tiene barra propia)
+        let _tcObserverActivo = true;
         const _tcObserver = new MutationObserver(() => {
+            if (!_tcObserverActivo) return;
             const tc = document.getElementById('texto-contenido');
             if (!tc) return;
             const txt = tc.textContent.trim();
-            if (txt.includes('Traduciendo capítulo')) {
+            // Solo actuar si el texto es ÚNICAMENTE el mensaje de traducción (no el texto final)
+            if (txt === 'Traduciendo capítulo...' || (txt.startsWith('Traduciendo') && txt.length < 50)) {
+                _tcObserverActivo = false;
                 tc.innerHTML = '';
+                _tcObserverActivo = true;
                 const kWrap = document.getElementById('video-translation-progress');
                 if (kWrap) kWrap.style.display = 'flex';
             }
@@ -3713,42 +4012,187 @@
     </script>
 
     <script>
-        // AUTO-HIDE CONTROLES DE VIDEO
+        // ═══════════════════════════════════════════════════════
+        // SUBIR ELEMENTO DE MÚSICA CUANDO HAY BARRA DE PROCESAMIENTO
+        // ═══════════════════════════════════════════════════════
+        (function () {
+            const processingBar = document.getElementById('main-processing-bar');
+            const ambientPlayer = document.getElementById('ambient-player');
+            const progressWrap = document.querySelector('.progress-wrap');
+            if (!processingBar) return;
+
+            const observer = new MutationObserver(() => {
+                const visible = processingBar.style.display !== 'none' && processingBar.style.display !== '';
+                if (ambientPlayer) ambientPlayer.classList.toggle('processing-raised', visible);
+                if (progressWrap) progressWrap.classList.toggle('processing-hidden', visible);
+            });
+            observer.observe(processingBar, { attributes: true, attributeFilter: ['style'] });
+        })();
+
         (function () {
             var _t = null;
-            function _controls() {
-                return [
-                    document.getElementById('video-progress-wrap'),
-                    document.querySelector('.video-bar')
-                ].filter(Boolean);
+
+            function _overlayVisible() {
+                var o = document.getElementById('video-overlay');
+                return !!(o && o.classList.contains('active'));
             }
-            window.videoControlsShow = function () {
-                _controls().forEach(function (el) {
-                    el.style.opacity = '1';
-                    el.style.pointerEvents = '';
-                });
+
+            function hideControls() {
+                var bar = document.querySelector('.video-bar');
+                var wrap = document.getElementById('video-progress-wrap');
+                if (bar) { bar.style.opacity = '0'; bar.style.pointerEvents = 'none'; }
+                if (wrap) { wrap.style.opacity = '0.3'; wrap.style.pointerEvents = ''; }
+            }
+
+            function showControls() {
+                var bar = document.querySelector('.video-bar');
+                var wrap = document.getElementById('video-progress-wrap');
+                if (bar) { bar.style.opacity = '1'; bar.style.pointerEvents = ''; }
+                if (wrap) { wrap.style.opacity = '1'; wrap.style.pointerEvents = ''; }
                 if (_t) clearTimeout(_t);
+                // Siempre ocultar tras 3s si el overlay está activo — sin chequear si está reproduciendo
                 _t = setTimeout(function () {
-                    var btn = document.getElementById('kbtn-playpause');
-                    var playing = btn && (
-                        btn.innerHTML.indexOf('⏸') !== -1 ||
-                        btn.innerHTML.indexOf('&#9646;&#9646;') !== -1
-                    );
-                    if (playing) {
-                        _controls().forEach(function (el) {
-                            el.style.opacity = '0';
-                            el.style.pointerEvents = 'none';
-                        });
-                    }
+                    if (_overlayVisible()) hideControls();
                 }, 3000);
-            };
-            document.addEventListener('click', function (e) {
-                var btn = e.target && (e.target.id === 'kbtn-playpause'
-                    ? e.target
-                    : e.target.closest && e.target.closest('#kbtn-playpause'));
-                if (btn) setTimeout(window.videoControlsShow, 60);
+            }
+
+            window.videoControlsShow = showControls;
+
+            // Cualquier movimiento de mouse en el documento muestra los controles
+            document.addEventListener('mousemove', function () {
+                if (_overlayVisible()) showControls();
+            });
+
+            // Cualquier click también resetea el timer
+            document.addEventListener('click', function () {
+                if (_overlayVisible()) showControls();
             }, true);
         })();
+    </script>
+
+    <!-- ─── FOOTER ─── -->
+    <footer class="app-footer">
+        <span>© 2025 Lector EPUB</span>
+        <span class="footer-sep">·</span>
+        <span>Desarrollado por <strong style="color:var(--accent);">hpqode</strong></span>
+        <span class="footer-sep">·</span>
+        <a href="mailto:pitterbck@gmail.com" title="Contacto por email">pitterbck@gmail.com</a>
+        <span class="footer-sep">·</span>
+        <a href="https://wa.me/5493412282254" target="_blank" rel="noopener" title="WhatsApp">WhatsApp +54 341 228-2254</a>
+    </footer>
+
+    <script>
+        // ─── TOOLTIP BARRA DE PROGRESO PRINCIPAL ───
+        function mainProgressMouseMove(e) {
+            if (typeof sentences === 'undefined' || sentences.length === 0) return;
+            const track = document.getElementById('main-progress-track');
+            const tooltip = document.getElementById('main-progress-tooltip');
+            const rect = track.getBoundingClientRect();
+            const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+            const idx = Math.min(Math.floor(pct * sentences.length), sentences.length - 1);
+
+            let preview = sentences[idx] || '';
+            if (preview.length > 130) preview = preview.slice(0, 127) + '...';
+            tooltip.textContent = `[${idx + 1}/${sentences.length}]\n${preview}`;
+            tooltip.classList.add('visible');
+
+            // Posicionar horizontalmente siguiendo el cursor, evitando bordes
+            const relX = e.clientX - rect.left;
+            const half = 120;
+            const clamped = Math.max(half, Math.min(rect.width - half, relX));
+            tooltip.style.left = clamped + 'px';
+        }
+
+        function mainProgressMouseLeave() {
+            const tooltip = document.getElementById('main-progress-tooltip');
+            if (tooltip) tooltip.classList.remove('visible');
+        }
+    </script>
+
+    <!-- ─── MODAL REEMPLAZOS ─── -->
+    <div id="modal-reemplazos">
+        <div class="modal-box">
+            <div class="modal-header">
+                <span>📋 Reemplazos activos al cargar capítulo</span>
+                <button onclick="cerrarModalReemplazos()" title="Cerrar">✕</button>
+            </div>
+            <div class="modal-body" id="modal-reemplazos-body">
+                <div class="modal-empty">No hay reemplazos guardados.</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ─── MUTE MÚSICA AMBIENTAL ───
+        let _ambientMuted = false;
+        let _ambientVolBeforeMute = null;
+
+        function toggleAmbientMute() {
+            const btn = document.getElementById('kbtn-ambient-mute');
+            if (_ambientMuted) {
+                // Restaurar volumen
+                const vol = _ambientVolBeforeMute !== null ? _ambientVolBeforeMute : 15;
+                setAmbientVolume(vol);
+                const sliders = [document.getElementById('ambient-volume'), document.getElementById('kol-music-vol')];
+                sliders.forEach(s => { if (s) s.value = vol; });
+                const pct = document.getElementById('kol-music-pct');
+                const val = document.getElementById('ambient-vol-val');
+                if (pct) pct.textContent = vol + '%';
+                if (val) val.textContent = vol + '%';
+                _ambientMuted = false;
+                if (btn) btn.textContent = '🔊';
+            } else {
+                // Guardar volumen actual y silenciar
+                const slider = document.getElementById('kol-music-vol');
+                _ambientVolBeforeMute = slider ? parseInt(slider.value) : 15;
+                setAmbientVolume(0);
+                _ambientMuted = true;
+                if (btn) btn.textContent = '🔇';
+            }
+        }
+
+        // ─── MODAL DE REEMPLAZOS ───
+        function abrirModalReemplazos() {
+            const datos = JSON.parse(localStorage.getItem('reemplazos_custom') || '{}');
+            const body = document.getElementById('modal-reemplazos-body');
+            const modal = document.getElementById('modal-reemplazos');
+            if (Object.keys(datos).length === 0) {
+                body.innerHTML = '<div class="modal-empty">No hay reemplazos guardados.</div>';
+            } else {
+                body.innerHTML = Object.entries(datos).map(([k, v]) =>
+                    `<div class="modal-row">
+                                        <span class="from">${k}</span>
+                                        <span class="arrow">→</span>
+                                        <span class="to">${v}</span>
+                                        <button class="del-btn" onclick="eliminarReemplazo(${JSON.stringify(k)})" title="Eliminar">✕</button>
+                                    </div>`
+                ).join('');
+            }
+            modal.classList.add('open');
+        }
+
+        function cerrarModalReemplazos() {
+            document.getElementById('modal-reemplazos').classList.remove('open');
+        }
+
+        function eliminarReemplazo(clave) {
+            const datos = JSON.parse(localStorage.getItem('reemplazos_custom') || '{}');
+            delete datos[clave];
+            localStorage.setItem('reemplazos_custom', JSON.stringify(datos));
+            if (typeof reemplazosAutomaticos !== 'undefined') delete reemplazosAutomaticos[clave];
+            // Invalidar cache BG para que el próximo capítulo se re-procese sin este reemplazo
+            if (typeof _capCache !== 'undefined') Object.keys(_capCache).forEach(k => delete _capCache[k]);
+            actualizarBotonLimpiarReemplazos();
+            abrirModalReemplazos(); // refrescar
+        }
+
+        // Cerrar modal al hacer click fuera
+        document.getElementById('modal-reemplazos').addEventListener('click', function (e) {
+            if (e.target === this) cerrarModalReemplazos();
+        });
+
+        // Exponer para usar desde el sidebar
+        window.abrirModalReemplazos = abrirModalReemplazos;
     </script>
 </body>
 </html>
