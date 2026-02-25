@@ -3771,14 +3771,14 @@
             const sel = document.getElementById('chapters');
             const q = query.trim().toLowerCase();
 
-            // Si no hay snapshot aún, tomarlo ahora
+            // Si no hay snapshot aún, tomarlo ahora (antes de tocar el DOM)
             if (_todasLasOpciones.length === 0) {
                 _todasLasOpciones = _getChapterOptions().map(o => ({ value: o.value, text: o.textContent }));
             }
 
-            // Restaurar todas las opciones y luego ocultar las que no coinciden
-            // (los <option> no tienen display, así que se re-renderizan)
             const valorActual = sel.value;
+            // Desconectar observer ANTES de modificar el select para que no sobreescriba el snapshot
+            _chaptersObserver.disconnect();
             window._cargandoProgramaticamente = true;
             sel.innerHTML = '';
 
@@ -3791,18 +3791,19 @@
                 empty.disabled = true;
                 empty.textContent = '— sin resultados —';
                 sel.appendChild(empty);
-                window._cargandoProgramaticamente = false;
-                return;
+            } else {
+                filtradas.forEach(({ value, text }) => {
+                    const opt = document.createElement('option');
+                    opt.value = value;
+                    opt.textContent = text;
+                    if (value === valorActual) opt.selected = true;
+                    sel.appendChild(opt);
+                });
             }
 
-            filtradas.forEach(({ value, text }) => {
-                const opt = document.createElement('option');
-                opt.value = value;
-                opt.textContent = text;
-                if (value === valorActual) opt.selected = true;
-                sel.appendChild(opt);
-            });
             window._cargandoProgramaticamente = false;
+            // Reconectar observer después de reconstruir
+            _chaptersObserver.observe(document.getElementById('chapters'), { childList: true });
         }
 
         // ═══════════════════════════════════════
