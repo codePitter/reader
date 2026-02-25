@@ -157,7 +157,7 @@
             color: var(--text-dim);
         }
 
-        .tts-percent-badge {
+        /*.tts-percent-badge {
             background: var(--surface2);
             border: 1px solid var(--border);
             border-radius: 10px;
@@ -165,7 +165,7 @@
             font-size: 0.6rem;
             color: var(--accent);
             font-weight: 500;
-        }
+        }*/
 
         /* Editor panel (collapsible) */
         .editor-panel {
@@ -646,6 +646,8 @@
             bottom: 20px;
             left: 20px;
             width: 260px;
+            /* No tapar el contenido: limitado al área de lectura */
+            max-width: calc(100vw - var(--sidebar-w) - 56px);
             background: var(--surface);
             border: 1px solid var(--border);
             border-radius: 10px;
@@ -901,8 +903,8 @@
             }
         }
 
-        /* Spotify-style karaoke overlay */
-        #karaoke-overlay {
+        /* Spotify-style video overlay */
+        #video-overlay {
             position: fixed;
             inset: 0;
             background: rgba(10, 9, 8, 0.92);
@@ -914,16 +916,16 @@
             backdrop-filter: blur(8px);
         }
 
-            #karaoke-overlay.active {
+            #video-overlay.active {
                 display: flex;
             }
 
-        #karaoke-canvas {
+        #video-canvas {
             border-radius: 12px;
             background: transparent;
         }
 
-        #karaoke-close {
+        #video-close {
             position: absolute;
             top: 20px;
             right: 24px;
@@ -935,12 +937,12 @@
             transition: color 0.2s;
         }
 
-            #karaoke-close:hover {
+            #video-close:hover {
                 color: var(--text);
             }
 
         /* ── Panel de índice de capítulos en modo video ── */
-        #karaoke-index-panel {
+        #video-index-panel {
             display: none;
             position: absolute;
             top: 0;
@@ -956,11 +958,11 @@
             overflow: hidden;
         }
 
-            #karaoke-index-panel.open {
+            #video-index-panel.open {
                 display: flex;
             }
 
-        #karaoke-index-header {
+        #video-index-header {
             padding: 10px 14px 8px;
             font-size: 0.65rem;
             color: var(--text-dim);
@@ -970,7 +972,7 @@
             flex-shrink: 0;
         }
 
-        #karaoke-index-search {
+        #video-index-search {
             margin: 8px 10px;
             padding: 6px 10px;
             background: var(--surface2);
@@ -984,18 +986,18 @@
             flex-shrink: 0;
         }
 
-            #karaoke-index-search:focus {
+            #video-index-search:focus {
                 border-color: var(--accent);
             }
 
-        #karaoke-index-list {
+        #video-index-list {
             flex: 1;
             overflow-y: auto;
             scrollbar-width: thin;
             scrollbar-color: var(--border) transparent;
         }
 
-        .karaoke-index-item {
+        .video-index-item {
             padding: 8px 14px;
             font-size: 0.68rem;
             color: var(--text-muted);
@@ -1008,25 +1010,27 @@
             font-family: 'DM Mono', monospace;
         }
 
-            .karaoke-index-item:hover {
+            .video-index-item:hover {
                 background: var(--surface2);
                 color: var(--text);
             }
 
-            .karaoke-index-item.active {
+            .video-index-item.active {
                 color: var(--accent);
                 background: rgba(200,169,110,0.08);
             }
 
-        /* ── Barra de progreso tipo YouTube en karaoke ── */
-        #karaoke-progress-wrap {
+        /* ── Barra de progreso tipo YouTube en video ── */
+        #video-progress-wrap {
             width: min(900px, 95vw);
             margin-top: 12px;
             position: relative;
             user-select: none;
+            opacity: 1;
+            transition: opacity 0.5s ease;
         }
 
-        #karaoke-progress-track {
+        #video-progress-track {
             height: 4px;
             background: rgba(255,255,255,0.15);
             border-radius: 4px;
@@ -1035,16 +1039,16 @@
             transition: height 0.15s ease;
         }
 
-            #karaoke-progress-track:hover {
+            #video-progress-track:hover {
                 height: 6px;
             }
 
-                #karaoke-progress-track:hover #karaoke-progress-thumb {
+                #video-progress-track:hover #video-progress-thumb {
                     opacity: 1;
                     transform: translateX(-50%) scale(1);
                 }
 
-        #karaoke-progress-fill {
+        #video-progress-fill {
             height: 100%;
             width: 0%;
             background: linear-gradient(90deg, var(--accent), var(--accent2));
@@ -1053,7 +1057,7 @@
             position: relative;
         }
 
-        #karaoke-progress-thumb {
+        #video-progress-thumb {
             position: absolute;
             right: -7px;
             top: 50%;
@@ -1068,7 +1072,7 @@
         }
 
         /* Tooltip de preview */
-        #karaoke-seek-tooltip {
+        #video-seek-tooltip {
             position: absolute;
             bottom: 16px;
             transform: translateX(-50%);
@@ -1089,11 +1093,11 @@
             line-height: 1.4;
         }
 
-            #karaoke-seek-tooltip.visible {
+            #video-seek-tooltip.visible {
                 opacity: 1;
             }
 
-        #karaoke-progress-time {
+        #video-progress-time {
             display: flex;
             justify-content: space-between;
             font-size: 0.6rem;
@@ -1103,18 +1107,20 @@
             padding: 0 2px;
         }
 
-        .karaoke-bar {
+        .video-bar {
             display: flex;
             align-items: center;
             gap: 16px;
             margin-top: 8px;
             width: min(900px, 95vw);
             position: relative;
+            opacity: 1;
+            transition: opacity 0.5s ease;
         }
 
         /* En pantalla completa, el overlay cubre toda la pantalla */
-        :fullscreen #karaoke-overlay,
-        :-webkit-full-screen #karaoke-overlay {
+        :fullscreen #video-overlay,
+        :-webkit-full-screen #video-overlay {
             position: fixed !important;
             inset: 0 !important;
             width: 100vw !important;
@@ -1124,37 +1130,37 @@
             justify-content: center;
         }
 
-            :fullscreen #karaoke-overlay #ai-bg-wrap,
-            :-webkit-full-screen #karaoke-overlay #ai-bg-wrap {
+            :fullscreen #video-overlay #ai-bg-wrap,
+            :-webkit-full-screen #video-overlay #ai-bg-wrap {
                 width: 100vw !important;
                 height: calc(100vh - 80px) !important;
                 max-width: none !important;
                 border-radius: 0 !important;
             }
 
-        :fullscreen .karaoke-bar,
-        :-webkit-full-screen .karaoke-bar {
+        :fullscreen .video-bar,
+        :-webkit-full-screen .video-bar {
             width: 95vw !important;
         }
 
-        :fullscreen #karaoke-progress-wrap,
-        :-webkit-full-screen #karaoke-progress-wrap {
+        :fullscreen #video-progress-wrap,
+        :-webkit-full-screen #video-progress-wrap {
             width: 95vw !important;
         }
 
-        .karaoke-track {
+        .video-track {
             font-family: 'DM Mono', monospace;
             font-size: 0.65rem;
             color: var(--text-muted);
         }
 
-        .karaoke-controls {
+        .video-controls {
             display: flex;
             gap: 8px;
             margin-left: auto;
         }
 
-            .karaoke-controls button {
+            .video-controls button {
                 background: var(--surface2);
                 border: 1px solid var(--border);
                 border-radius: 6px;
@@ -1166,19 +1172,19 @@
                 transition: all 0.2s;
             }
 
-                .karaoke-controls button:hover {
+                .video-controls button:hover {
                     border-color: var(--accent);
                     color: var(--accent);
                 }
 
-                .karaoke-controls button.ai-active {
+                .video-controls button.ai-active {
                     border-color: var(--accent2);
                     color: var(--accent2);
                     background: rgba(126,184,154,0.1);
                 }
 
         /* Barra de controles de reproducción centrada */
-        .karaoke-playbar {
+        .video-playbar {
             display: flex;
             align-items: center;
             gap: 12px;
@@ -1259,7 +1265,7 @@
             <button class="rec-btn" id="btn-rec-audio" onclick="toggleGrabacion()" style="margin-left:16px;margin-bottom:0;">
                 <span id="rec-dot">⏺</span> Grabar audio
             </button>
-            <button class="rec-btn" onclick="abrirKaraoke()" style="margin-bottom:0;">
+            <button class="rec-btn" onclick="abrirvideo()" style="margin-bottom:0;">
                 🎬 Modo Video
             </button>
             <span class="subtitle" id="current-chapter-title">Ningún capítulo seleccionado</span>
@@ -1272,11 +1278,28 @@
             <div class="stat" id="tts-stat" style="margin-left:auto;">⏹️ <strong id="tts-status">Detenido</strong></div>
         </div>
 
-        <div class="reading-area">
+        <div class="reading-area" style="position:relative;">
             <div id="texto-contenido" style="font-family:'Lora',serif;font-size:1.1rem;line-height:1.85;color:var(--text);max-width:680px;margin:0 auto;">
                 <p style="color:var(--text-dim);font-style:italic;">Carga un archivo EPUB desde el panel lateral para comenzar a leer...</p>
             </div>
-            <!-- Barra de progreso de traducción → ahora solo en el overlay del modo video -->
+        </div>
+
+        <!-- Barra de procesamiento con fases — visible en el reading area al procesar -->
+        <div id="main-processing-bar" style="display:none;flex-direction:column;align-items:stretch;gap:6px;padding:10px 28px 12px;background:var(--surface2);border-top:1px solid var(--border);border-bottom:1px solid var(--border);">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                <span id="mpb-label" style="font-size:0.7rem;color:var(--accent2);font-family:'DM Mono',monospace;font-style:italic;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Procesando...</span>
+                <span id="mpb-pct" style="font-size:0.65rem;color:var(--text-dim);font-family:'DM Mono',monospace;flex-shrink:0;">0%</span>
+            </div>
+            <!-- Barra unificada -->
+            <div style="height:4px;background:var(--border);border-radius:4px;overflow:hidden;">
+                <div id="mpb-fill" style="height:100%;width:0%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:4px;transition:width 0.5s ease;"></div>
+            </div>
+            <!-- Indicadores de fase -->
+            <div style="display:flex;justify-content:space-between;font-family:'DM Mono',monospace;font-size:0.58rem;color:var(--text-dim);margin-top:1px;">
+                <span id="mpb-f1" style="transition:color 0.3s;">① Traducción</span>
+                <span id="mpb-f2" style="transition:color 0.3s;">② Revisión</span>
+                <span id="mpb-f3" style="transition:color 0.3s;">③ Optimización</span>
+            </div>
         </div>
 
         <div class="editor-panel" id="editor-panel">
@@ -1292,15 +1315,14 @@
             </div>
         </div>
 
+        <!-- tts-status-label y tts-percent se mantienen en el DOM pero ocultos (usados por JS) -->
+        <span id="tts-status-label" style="display:none;"></span>
+        <!--<span id="tts-percent" style="display:none;"></span>-->
+
         <div class="progress-wrap">
-            <div class="tts-status-bar">
-                <span id="tts-status-label">⏹ Sin reproducción</span>
-                <span class="tts-percent-badge" id="tts-percent" style="display:none;">0%</span>
-            </div>
             <div class="progress-track" onclick="seekTTS(event)">
                 <div class="progress-fill" id="progress-fill"></div>
             </div>
-            <div style="height:8px;"></div>
         </div>
     </div>
 
@@ -1338,17 +1360,75 @@
             <div class="toggle-row">
                 <span>Auto EN → ES</span>
                 <label class="toggle">
-                    <input type="checkbox" id="auto-translate" onchange="toggleAutoTranslate()">
+                    <input type="checkbox" id="auto-translate" onchange="marcarCambioPendiente()">
                     <span class="toggle-slider"></span>
                 </label>
             </div>
             <div id="translation-status">Traducción desactivada</div>
-            <div class="toggle-row" id="auto-play-row" style="margin-top:8px; display:none;">
-                <span style="font-size:0.85rem; color:var(--text-dim);">▶ Reproducir al terminar</span>
+
+            <!-- ✨ Naturalizar para TTS -->
+            <div class="toggle-row" style="margin-top:8px;">
+                <span style="display:flex;flex-direction:column;gap:2px;">
+                    <span>✨ Naturalizar para TTS</span>
+                    <span style="font-size:0.7rem;color:var(--text-dim);" id="humanizer-status">Desactivado</span>
+                </span>
                 <label class="toggle">
-                    <input type="checkbox" id="auto-play-after-translate">
+                    <input type="checkbox" id="tts-humanizer" onchange="toggleTTSHumanizer()">
                     <span class="toggle-slider"></span>
                 </label>
+            </div>
+            <div id="claude-key-panel" style="margin-top:6px;display:none;">
+                <!-- Selector de proveedor de IA -->
+                <select id="humanizer-provider" onchange="cambiarProveedorHumanizer(this.value)"
+                        style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:4px;
+                               color:var(--text);font-family:'DM Mono',monospace;font-size:0.62rem;
+                               padding:5px 8px;outline:none;cursor:pointer;margin-bottom:6px;">
+                    <option value="perplexity">Perplexity AI (sonar)</option>
+                    <option value="openai">OpenAI (gpt-4o-mini)</option>
+                    <option value="anthropic">Anthropic (claude-haiku)</option>
+                    <option value="gemini">Google Gemini (flash)</option>
+                    <option value="groq">Groq (llama-3.3-70b)</option>
+                    <option value="openrouter">OpenRouter (auto)</option>
+                </select>
+                <div style="font-size:0.58rem;color:var(--text-dim);margin-bottom:4px;">
+                    🔑 API Key <span style="color:var(--accent2)" id="claude-key-status"></span>
+                </div>
+                <div style="display:flex;gap:6px;">
+                    <input type="password" id="claude-api-key" placeholder="Pega tu API key..."
+                           style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:4px;
+                           color:var(--text);font-family:'DM Mono',monospace;font-size:0.62rem;padding:5px 8px;outline:none;">
+                    <button onclick="guardarClaudeApiKey()"
+                            style="background:var(--accent);border:none;border-radius:4px;color:var(--bg);
+                            font-family:'DM Mono',monospace;font-size:0.6rem;padding:5px 8px;cursor:pointer;">
+                        OK
+                    </button>
+                </div>
+                <div style="font-size:0.55rem;color:var(--text-dim);margin-top:3px;" id="humanizer-info">
+                    Procesa ~2500 chars por bloque · puede tardar unos segundos
+                </div>
+            </div>
+
+            <!-- ▶ Reproducir al terminar -->
+            <div class="toggle-row" id="auto-play-row" style="margin-top:8px;display:none;">
+                <span style="font-size:0.85rem;color:var(--text-dim);">▶ Reproducir al terminar</span>
+                <label class="toggle">
+                    <input type="checkbox" id="auto-play-after-translate" onchange="marcarCambioPendiente()">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+
+            <!-- Botón Aplicar — solo visible cuando hay cambios sin confirmar -->
+            <div id="aplicar-row" style="display:none;margin-top:10px;">
+                <button id="btn-aplicar" onclick="aplicarConfiguracion()"
+                        style="width:100%;background:var(--accent);border:none;border-radius:6px;
+                               color:var(--bg);font-family:'DM Mono',monospace;font-size:0.72rem;
+                               font-weight:700;padding:8px 0;cursor:pointer;letter-spacing:0.03em;
+                               transition:opacity 0.2s;">
+                    ✓ Aplicar
+                </button>
+                <div style="font-size:0.55rem;color:var(--text-dim);text-align:center;margin-top:3px;" id="aplicar-hint">
+                    Cambios pendientes — recarga el capítulo actual
+                </div>
             </div>
         </div>
 
@@ -1433,6 +1513,9 @@
             setTimeout(() => {
                 if (typeof buildAiSlotMap === 'function') buildAiSlotMap();
                 if (typeof detectarUniverso === 'function') detectarUniverso();
+                // Sincronizar botón play/pausa del visor
+                const btn = document.getElementById('kbtn-playpause');
+                if (btn) { btn.innerHTML = '&#9646;&#9646;'; btn.classList.remove('paused'); }
             }, 80);
         };
         iniciarTTS = window.iniciarTTS;
@@ -1514,8 +1597,8 @@
 
             <div class="ambient-vol-row">
                 <span class="ambient-vol-icon">🎵</span>
-                <input type="range" id="ambient-volume" min="0" max="100" value="20" oninput="setAmbientVolume(this.value)">
-                <span class="ambient-vol-val" id="ambient-vol-val">20%</span>
+                <input type="range" id="ambient-volume" min="0" max="100" value="15" oninput="setAmbientVolume(this.value)">
+                <span class="ambient-vol-val" id="ambient-vol-val">15%</span>
             </div>
         </div>
     </div>
@@ -1529,7 +1612,7 @@
         let ambientPlaying = false;
         let ambientGenre = null;
         let ambientGainNode = null;
-        let ambientVolume = 0.20;
+        let ambientVolume = 0.15;
 
         function getAudioCtx() {
             if (!ambientCtx) ambientCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -2002,7 +2085,23 @@
                 document.getElementById('ambient-track-name').textContent = '← Elige un género primero';
                 return;
             }
-            if (ambientPlaying) { stopAmbient(); } else { playAmbient(ambientGenre); }
+            if (ambientPlaying) {
+                // Pausar sin destruir el audio actual
+                if (freesoundAudio && !freesoundAudio.paused) freesoundAudio.pause();
+                ambientPlaying = false;
+                const playBtn = document.getElementById('ambient-play-btn');
+                if (playBtn) playBtn.textContent = '▶';
+            } else {
+                // Reanudar el audio existente; solo cargar uno nuevo si no hay nada
+                if (freesoundAudio && freesoundAudio.src) {
+                    freesoundAudio.play().catch(() => { });
+                    ambientPlaying = true;
+                    const playBtn = document.getElementById('ambient-play-btn');
+                    if (playBtn) playBtn.textContent = '⏸';
+                } else {
+                    playAmbient(ambientGenre);
+                }
+            }
         }
 
         async function siguienteTrack() {
@@ -2093,9 +2192,9 @@
         }
     </script>
     <!-- ─── GRABACIÓN / VIDEO ─── -->
-    <!-- Karaoke overlay -->
-    <div id="karaoke-overlay">
-        <button id="karaoke-close" onclick="cerrarKaraoke()">✕</button>
+    <!-- video overlay -->
+    <div id="video-overlay" onmousemove="videoControlsShow()">
+        <button id="video-close" onclick="cerrarvideo()">✕</button>
         <!-- Fondo IA: dos divs para crossfade via CSS, detrás del canvas -->
         <!-- Contenedor compartido: imagen de fondo + canvas alineados -->
         <div id="ai-bg-wrap" style="
@@ -2133,10 +2232,10 @@
                 transition:background 1s ease;
                 pointer-events:none;
             "></div>
-            <canvas id="karaoke-canvas" width="1280" height="720" style="position:absolute;inset:0;width:100%;height:100%;z-index:1;background:transparent;border-radius:12px;"></canvas>
+            <canvas id="video-canvas" width="1280" height="720" style="position:absolute;inset:0;width:100%;height:100%;z-index:1;background:transparent;border-radius:12px;"></canvas>
 
             <!-- Overlay de progreso de traducción: centrado sobre la pantalla del visor -->
-            <div id="karaoke-translation-progress" style="
+            <div id="video-translation-progress" style="
                 display:none;
                 position:absolute;
                 inset:0;
@@ -2144,69 +2243,77 @@
                 flex-direction:column;
                 align-items:center;
                 justify-content:center;
-                gap:14px;
+                gap:10px;
                 border-radius:12px;
-                background:rgba(8,7,6,0.72);
-                backdrop-filter:blur(2px);
+                background:rgba(8,7,6,0.78);
+                backdrop-filter:blur(3px);
             ">
-                <span style="font-family:'DM Mono',monospace;font-size:0.9rem;color:var(--accent2);font-style:italic;letter-spacing:0.04em;">
-                    Traduciendo capítulo, por favor espera...
+                <span id="ktl-label" style="font-family:'DM Mono',monospace;font-size:0.82rem;color:var(--accent2);font-style:italic;letter-spacing:0.04em;">
+                    Procesando capítulo...
                 </span>
-                <div style="width:60%;height:4px;background:var(--border);border-radius:4px;overflow:hidden;">
-                    <div id="ktl-fill" style="height:100%;width:0%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:4px;transition:width 0.4s ease;"></div>
+                <!-- Barra principal unificada -->
+                <div style="width:62%;height:5px;background:var(--border);border-radius:4px;overflow:hidden;position:relative;">
+                    <div id="ktl-fill" style="height:100%;width:0%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:4px;transition:width 0.5s ease;"></div>
                 </div>
-                <span id="ktl-pct" style="font-size:0.75rem;color:var(--text-dim);font-family:'DM Mono',monospace;">0%</span>
+                <!-- Indicadores de fases -->
+                <div style="width:62%;display:flex;justify-content:space-between;font-family:'DM Mono',monospace;font-size:0.6rem;color:var(--text-dim);margin-top:-4px;">
+                    <span id="ktl-f1" style="transition:color 0.3s;">① Traducción</span>
+                    <span id="ktl-f2" style="transition:color 0.3s;">② Revisión</span>
+                    <span id="ktl-f3" style="transition:color 0.3s;">③ Optimización</span>
+                </div>
+                <span id="ktl-pct" style="font-size:0.72rem;color:var(--text-muted);font-family:'DM Mono',monospace;">0%</span>
             </div>
 
             <!-- Panel lateral de índice de capítulos -->
-            <div id="karaoke-index-panel">
-                <div id="karaoke-index-header">📖 Capítulos</div>
-                <input id="karaoke-index-search" type="text" placeholder="Buscar capítulo..." oninput="filtrarIndiceKaraoke(this.value)">
-                <div id="karaoke-index-list"></div>
+            <div id="video-index-panel">
+                <div id="video-index-header">📖 Capítulos</div>
+                <input id="video-index-search" type="text" placeholder="Buscar capítulo..." oninput="filtrarIndicevideo(this.value)">
+                <div id="video-index-list"></div>
             </div>
         </div>
 
         <!-- Barra de progreso tipo YouTube -->
-        <div id="karaoke-progress-wrap">
-            <div id="karaoke-seek-tooltip">...</div>
-            <div id="karaoke-progress-track"
-                 onmouseenter="karaokeProgressHover(true)"
-                 onmouseleave="karaokeProgressHover(false)"
-                 onmousemove="karaokeProgressMouseMove(event)"
-                 onclick="karaokeProgressSeek(event)">
-                <div id="karaoke-progress-fill">
-                    <div id="karaoke-progress-thumb"></div>
+        <div id="video-progress-wrap">
+            <div id="video-seek-tooltip">...</div>
+            <div id="video-progress-track"
+                 onmouseenter="videoProgressHover(true)"
+                 onmouseleave="videoProgressHover(false)"
+                 onmousemove="videoProgressMouseMove(event)"
+                 onclick="videoProgressSeek(event)">
+                <div id="video-progress-fill">
+                    <div id="video-progress-thumb"></div>
                 </div>
             </div>
-            <div id="karaoke-progress-time">
+            <div id="video-progress-time">
+                <span id="kp-chapter" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:55%;opacity:0.7;">—</span>
                 <span id="kp-current">0 / 0</span>
-                <span id="kp-total"></span>
             </div>
         </div>
 
         <!-- Barra inferior principal -->
-        <div class="karaoke-bar">
+        <div class="video-bar">
             <!-- Izquierda: controles de música + volumen música -->
             <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
-                <button class="kbtn kbtn-music" onclick="karaokeMusicaPrev()" title="Pista anterior">&#9664;</button>
-                <span id="karaoke-music-label" style="font-size:0.58rem;color:var(--text-dim);font-family:'DM Mono',monospace;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">♪</span>
-                <button class="kbtn kbtn-music" onclick="karaokeMusicaSiguiente()" title="Pista siguiente">&#9654;</button>
+                <button class="kbtn kbtn-music" onclick="videoMusicaPrev()" title="Pista anterior">&#9664;</button>
+                <button class="kbtn kbtn-music" id="kbtn-ambient-playpause" onclick="videoToggleAmbient()" title="Play/Pause música" style="font-size:0.7rem;padding:4px 6px;">&#9646;&#9646;</button>
+                <span id="video-music-label" style="font-size:0.58rem;color:var(--text-dim);font-family:'DM Mono',monospace;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">♪</span>
+                <button class="kbtn kbtn-music" onclick="videoMusicaSiguiente()" title="Pista siguiente">&#9654;</button>
                 <!-- Volumen música justo a la derecha -->
-                <input type="range" id="kol-music-vol" min="0" max="100" value="20" step="5"
+                <input type="range" id="kol-music-vol" min="0" max="100" value="15" step="5"
                        style="width:55px;accent-color:var(--accent2);cursor:pointer;vertical-align:middle;margin-left:6px;"
                        oninput="setAmbientVolume(this.value); document.getElementById('kol-music-pct').textContent=this.value+'%'">
-                <span id="kol-music-pct" style="font-size:0.6rem;color:var(--text-dim);min-width:26px;">20%</span>
+                <span id="kol-music-pct" style="font-size:0.6rem;color:var(--text-dim);min-width:26px;">15%</span>
             </div>
 
             <!-- Centro: nav capítulos + play -->
-            <div class="karaoke-playbar">
-                <button class="kbtn kbtn-nav" id="kbtn-prev" onclick="karaokeCapituloAnterior()" title="Capítulo anterior">&#9664;&#9664;</button>
-                <button class="kbtn kbtn-play" id="kbtn-playpause" onclick="karaokeTogglePlay()" title="Play / Pausa">&#9654;</button>
-                <button class="kbtn kbtn-nav" id="kbtn-next" onclick="karaokeCapituloSiguiente()" title="Capítulo siguiente">&#9654;&#9654;</button>
+            <div class="video-playbar">
+                <button class="kbtn kbtn-nav" id="kbtn-prev" onclick="videoCapituloAnterior()" title="Capítulo anterior">&#9664;&#9664;</button>
+                <button class="kbtn kbtn-play" id="kbtn-playpause" onclick="videoTogglePlay()" title="Play / Pausa">&#9654;</button>
+                <button class="kbtn kbtn-nav" id="kbtn-next" onclick="videoCapituloSiguiente()" title="Capítulo siguiente">&#9654;&#9654;</button>
             </div>
 
             <!-- Derecha: volumen TTS + IA + exportar + fullscreen -->
-            <div class="karaoke-controls">
+            <div class="video-controls">
                 <!-- 🗣 Volumen TTS -->
                 <div style="display:flex;align-items:center;gap:3px;" title="Volumen voz">
                     <span style="font-size:0.7rem;">🗣</span>
@@ -2216,7 +2323,7 @@
                     <span id="kol-tts-pct" style="font-size:0.6rem;color:var(--text-dim);min-width:26px;">100%</span>
                 </div>
                 <button id="btn-toggle-ai-img" onclick="toggleAIImages()" title="Imágenes IA de fondo">🖼 IA</button>
-                <button id="btn-toggle-index" onclick="toggleKaraokeIndex()" title="Índice de capítulos">☰</button>
+                <button id="btn-toggle-index" onclick="togglevideoIndex()" title="Índice de capítulos">☰</button>
                 <button id="btn-export-video" onclick="exportarVideo()" title="Exportar video">⬇</button>
                 <button id="btn-cancel-export" onclick="cancelarExportacion()" style="display:none;" title="Cancelar exportación">✕</button>
                 <button id="btn-fullscreen" onclick="toggleFullscreen()" title="Pantalla completa">⛶</button>
@@ -2322,28 +2429,28 @@
         }
 
         // ═══════════════════════════════════════
-        // KARAOKE / VISTA SPOTIFY
+        // video / VISTA SPOTIFY
         // ═══════════════════════════════════════
 
-        let karaokeAnimFrame = null;
-        let karaokeCanvas = null;
-        let karaokeCtx = null;
-        let karaokeRecorder = null;
-        let karaokeChunks = [];
-        let karaokeActive = false;
+        let videoAnimFrame = null;
+        let videoCanvas = null;
+        let videoCtx = null;
+        let videoRecorder = null;
+        let videoChunks = [];
+        let videoActive = false;
 
-        const KARAOKE_BG = '#0a0908';
-        const KARAOKE_TEXT_DIM = '#5a5248';
-        const KARAOKE_TEXT = '#e8e0d0';
-        const KARAOKE_HIGHLIGHT = '#c8a96e';
-        const KARAOKE_SECONDARY = 'rgba(200,169,110,0.3)';
+        const video_BG = '#0a0908';
+        const video_TEXT_DIM = '#5a5248';
+        const video_TEXT = '#e8e0d0';
+        const video_HIGHLIGHT = '#c8a96e';
+        const video_SECONDARY = 'rgba(200,169,110,0.3)';
 
-        function abrirKaraoke() {
-            const overlay = document.getElementById('karaoke-overlay');
+        function abrirvideo() {
+            const overlay = document.getElementById('video-overlay');
             overlay.classList.add('active');
-            karaokeCanvas = document.getElementById('karaoke-canvas');
-            karaokeCtx = karaokeCanvas.getContext('2d');
-            karaokeActive = true;
+            videoCanvas = document.getElementById('video-canvas');
+            videoCtx = videoCanvas.getContext('2d');
+            videoActive = true;
 
             const capitulo = document.getElementById('current-chapter-title').textContent || 'Capítulo';
 
@@ -2362,24 +2469,27 @@
                 solicitarImagenParaSlot(1);
             }
 
-            renderKaraokeFrame();
-            // Poblar el índice de capítulos
-            poblarIndiceKaraoke();
+            rendervideoFrame();
+            // Poblar el índice de capítulos y el título junto al contador
+            poblarIndicevideo();
+            const capEl = document.getElementById('kp-chapter');
+            if (capEl) capEl.textContent = document.getElementById('current-chapter-title')?.textContent || '';
+            _syncAmbientBtn();
             // Sincronizar sliders de volumen con los valores actuales
-            setTimeout(() => document.dispatchEvent(new Event('karaokeOpened')), 100);
+            setTimeout(() => document.dispatchEvent(new Event('videoOpened')), 100);
         }
 
-        function cerrarKaraoke() {
-            karaokeActive = false;
-            document.getElementById('karaoke-overlay').classList.remove('active');
-            if (karaokeAnimFrame) cancelAnimationFrame(karaokeAnimFrame);
-            if (karaokeRecorder && karaokeRecorder.state !== 'inactive') karaokeRecorder.stop();
+        function cerrarvideo() {
+            videoActive = false;
+            document.getElementById('video-overlay').classList.remove('active');
+            if (videoAnimFrame) cancelAnimationFrame(videoAnimFrame);
+            if (videoRecorder && videoRecorder.state !== 'inactive') videoRecorder.stop();
         }
 
         // Cerrar modo video con tecla Escape
         document.addEventListener('keydown', function (e) {
-            if (e.key === 'Escape' && karaokeActive) {
-                cerrarKaraoke();
+            if (e.key === 'Escape' && videoActive) {
+                cerrarvideo();
             }
         });
 
@@ -2405,7 +2515,7 @@
             return wrapText(ctx, text, maxW).length * lineH;
         }
 
-        function drawKaraokeScene(ctx, W, H, current, total) {
+        function drawvideoScene(ctx, W, H, current, total) {
             // Background: sólido si no hay imágenes IA, transparente si las hay
             if (aiImagesEnabled && aiSlotActivo) {
                 ctx.clearRect(0, 0, W, H);
@@ -2413,7 +2523,7 @@
                 ctx.fillStyle = 'rgba(8,7,6,0.35)';
                 ctx.fillRect(0, 0, W, H);
             } else {
-                ctx.fillStyle = KARAOKE_BG;
+                ctx.fillStyle = video_BG;
                 ctx.fillRect(0, 0, W, H);
             }
 
@@ -2424,19 +2534,13 @@
             ctx.fillStyle = vignette;
             ctx.fillRect(0, 0, W, H);
 
-            // Header: chapter title + counter
-            ctx.font = '15px "Courier New", monospace';
-            ctx.fillStyle = KARAOKE_TEXT_DIM;
-            ctx.textAlign = 'left';
-            ctx.fillText(document.getElementById('current-chapter-title').textContent, W * 0.1, 36);
-            ctx.textAlign = 'right';
-            ctx.fillText(`${current + 1} / ${total}`, W * 0.9, 36);
+            // Header eliminado del canvas — título y contador se muestran bajo la barra de progreso exterior
 
             if (!sentences || total === 0) {
-                ctx.fillStyle = KARAOKE_TEXT_DIM;
+                ctx.fillStyle = video_TEXT_DIM;
                 ctx.font = 'italic 26px "Georgia", serif';
                 ctx.textAlign = 'center';
-                ctx.fillText('Inicia la reproducción para ver el karaoke', W / 2, H / 2);
+                ctx.fillText('Inicia la reproducción para ver el video', W / 2, H / 2);
                 return;
             }
 
@@ -2464,9 +2568,9 @@
             const nextLines = current < total - 1 ? wrapText(ctx, sentences[current + 1], MAX_W) : [];
             const nextBlockH = nextLines.length * NEXT_LH;
 
-            // Center the current block, then place prev above and next below
-            const USABLE_TOP = 60;
-            const USABLE_BOT = H - 60;
+            // Área usable: todo el canvas (sin header ni footer en canvas)
+            const USABLE_TOP = 28;
+            const USABLE_BOT = H - 28;
             const USABLE_H = USABLE_BOT - USABLE_TOP;
 
             const totalH = prevBlockH + (prevLines.length ? GAP : 0)
@@ -2483,7 +2587,7 @@
             // Draw previous (dim, above)
             if (prevLines.length) {
                 ctx.font = `${PREV_SIZE}px "Georgia", serif`;
-                ctx.fillStyle = KARAOKE_TEXT_DIM;
+                ctx.fillStyle = video_TEXT_DIM;
                 ctx.textAlign = 'center';
                 prevLines.forEach((l, i) => {
                     ctx.fillText(l, CX, drawY + i * PREV_LH);
@@ -2494,9 +2598,9 @@
             // Draw current (highlighted, glow)
             ctx.font = `italic ${CUR_SIZE}px "Georgia", serif`;
             ctx.textAlign = 'center';
-            ctx.shadowColor = KARAOKE_HIGHLIGHT;
+            ctx.shadowColor = video_HIGHLIGHT;
             ctx.shadowBlur = 18;
-            ctx.fillStyle = KARAOKE_HIGHLIGHT;
+            ctx.fillStyle = video_HIGHLIGHT;
             curLines.forEach((l, i) => {
                 ctx.fillText(l, CX, drawY + i * CUR_LH);
             });
@@ -2513,39 +2617,24 @@
                 });
             }
 
-            // Progress bar
-            const prog = total > 1 ? (current / (total - 1)) : 1;
-            ctx.fillStyle = 'rgba(255,255,255,0.07)';
-            ctx.beginPath(); ctx.roundRect(W * 0.1, H - 38, W * 0.8, 3, 2); ctx.fill();
-            ctx.fillStyle = KARAOKE_HIGHLIGHT;
-            ctx.beginPath(); ctx.roundRect(W * 0.1, H - 38, W * 0.8 * prog, 3, 2); ctx.fill();
-
-            // Music indicator
-            if (ambientPlaying) {
-                ctx.font = '16px monospace';
-                ctx.textAlign = 'left';
-                ctx.fillStyle = 'rgba(126,184,154,0.45)';
-                ctx.fillText('♪', W * 0.1, H - 16);
-            }
-
             // Indicador de carga de imagen IA
             if (aiImagesEnabled && aiLoadingSlot !== null) {
                 ctx.font = '11px "Courier New", monospace';
                 ctx.textAlign = 'right';
                 ctx.fillStyle = 'rgba(126,184,154,0.45)';
-                ctx.fillText('✦ generando imagen con IA...', W * 0.9, H - 16);
+                ctx.fillText('✦ generando imagen con IA...', W - 18, H - 16);
             }
         }
 
-        function renderKaraokeFrame() {
-            if (!karaokeActive) return;
-            drawKaraokeScene(karaokeCtx, karaokeCanvas.width, karaokeCanvas.height,
+        function rendervideoFrame() {
+            if (!videoActive) return;
+            drawvideoScene(videoCtx, videoCanvas.width, videoCanvas.height,
                 currentSentenceIndex, sentences.length);
-            karaokeAnimFrame = requestAnimationFrame(renderKaraokeFrame);
+            videoAnimFrame = requestAnimationFrame(rendervideoFrame);
         }
 
         // ── Generación de video en segundo plano (sin grabar en tiempo real) ──
-        // Dibuja cada frame del karaoke a velocidad acelerada y los codifica
+        // Dibuja cada frame del video a velocidad acelerada y los codifica
         let exportandoVideo = false;
 
         async function exportarVideo() {
@@ -2557,11 +2646,11 @@
 
             exportandoVideo = true;
 
-            // Asegurar que el karaoke esté abierto (necesitamos el canvas)
-            if (!karaokeActive) abrirKaraoke();
+            // Asegurar que el video esté abierto (necesitamos el canvas)
+            if (!videoActive) abrirvideo();
 
-            const W = karaokeCanvas.width;
-            const H = karaokeCanvas.height;
+            const W = videoCanvas.width;
+            const H = videoCanvas.height;
             const FPS = 24;
             // Estimar duración: promedio de 3.5 segundos por oración
             const SEC_PER_SENTENCE = 3.5;
@@ -2589,19 +2678,19 @@
                 } catch (e) { }
             }
 
-            karaokeChunks = [];
+            videoChunks = [];
             const mimeType = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm']
                 .find(m => MediaRecorder.isTypeSupported(m)) || 'video/webm';
 
-            karaokeRecorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 2500000 });
-            karaokeRecorder.ondataavailable = e => { if (e.data.size > 0) karaokeChunks.push(e.data); };
-            karaokeRecorder.onstop = () => {
-                const blob = new Blob(karaokeChunks, { type: 'video/webm' });
+            videoRecorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 2500000 });
+            videoRecorder.ondataavailable = e => { if (e.data.size > 0) videoChunks.push(e.data); };
+            videoRecorder.onstop = () => {
+                const blob = new Blob(videoChunks, { type: 'video/webm' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
                 const cap = (document.getElementById('current-chapter-title').textContent || 'lectura').trim();
-                a.download = `${cap.replace(/[^a-zA-Z0-9áéíóúñ ]/g, '_')}_karaoke.webm`;
+                a.download = `${cap.replace(/[^a-zA-Z0-9áéíóúñ ]/g, '_')}_video.webm`;
                 a.click();
                 URL.revokeObjectURL(url);
                 exportandoVideo = false;
@@ -2611,7 +2700,7 @@
 
             };
 
-            karaokeRecorder.start();
+            videoRecorder.start();
             document.getElementById('btn-export-video').style.display = 'none';
             document.getElementById('btn-cancel-export').style.display = 'inline';
 
@@ -2621,13 +2710,13 @@
             let frameIdx = 0;
 
             const renderNext = () => {
-                if (!exportandoVideo) { karaokeRecorder.stop(); return; }
+                if (!exportandoVideo) { videoRecorder.stop(); return; }
 
                 const sentenceIdx = Math.min(Math.floor(frameIdx / FRAMES_PER_SENTENCE), sentences.length - 1);
                 const frameInSentence = frameIdx % FRAMES_PER_SENTENCE;
                 const total = sentences.length;
 
-                drawKaraokeScene(offCtx, W, H, sentenceIdx, total);
+                drawvideoScene(offCtx, W, H, sentenceIdx, total);
 
                 // Transición suave: fade en los primeros/últimos frames de la oración
                 if (frameInSentence < 8) {
@@ -2650,7 +2739,7 @@
 
                 if (frameIdx >= totalFrames) {
                     // Último frame — pausa un momento y termina
-                    setTimeout(() => karaokeRecorder.stop(), 300);
+                    setTimeout(() => videoRecorder.stop(), 300);
                     return;
                 }
 
@@ -2663,7 +2752,7 @@
 
         function cancelarExportacion() {
             exportandoVideo = false;
-            if (karaokeRecorder && karaokeRecorder.state !== 'inactive') karaokeRecorder.stop();
+            if (videoRecorder && videoRecorder.state !== 'inactive') videoRecorder.stop();
             mostrarNotificacion('Exportación cancelada');
         }
 
@@ -2726,10 +2815,10 @@
         // Estilos base por universo detectado
         const AI_UNIVERSE_STYLES = {
             'Shadow Slave webnovel':
-                'dark fantasy concept art, Shadow Slave webnovel visual style, ruined ancient citadel consumed by eldritch darkness, nightmare realm with shattered obsidian sky, bioluminescent corruption spreading across crumbling stone, golden divine light cutting through ash and shadow, nightmare creatures with multiple eyes, Dark Souls meets Diablo aesthetic, high-detail atmospheric digital painting, no text no watermark',
+                'photorealistic dark fantasy, cinematic lighting, sharp focus, detailed stone and shadow environments, nightmarish eldritch corruption on physical surfaces, golden divine light cutting through darkness, realistic materials (worn stone, dark water, cracked obsidian), 8k render, no text no watermark',
         };
 
-        const AI_DEFAULT_STYLE = 'cinematic dark fantasy digital painting, dramatic chiaroscuro lighting, atmospheric depth, no text no watermark';
+        const AI_DEFAULT_STYLE = 'photorealistic cinematic scene, detailed environment, dramatic lighting, sharp focus, 8k, no text no watermark, no abstract art';
 
         function detectarUniverso() {
             const fuentes = [
@@ -2796,8 +2885,8 @@
                 ? `From webnovel "${aiDetectedUniverse}", match its visual style.`
                 : '';
 
-            // System prompt compacto
-            const systemPrompt = `You are an image prompt generator. ${universeHint} Given a fiction passage, output ONLY an English image generation prompt (max 60 words): describe the specific environment, mood, lighting, time of day; never name characters, describe by silhouette or role only; always end with: "${styleTag}". No preamble.`;
+            // System prompt mejorado: escenas concretas, no abstractas
+            const systemPrompt = `You are a cinematic scene prompt writer for AI image generation. ${universeHint} Given a fiction passage, write ONE English image generation prompt (max 70 words). Rules: describe a SPECIFIC concrete location with physical details (floor material, walls, sky, furniture, vegetation, etc.); include lighting direction and time of day; reference characters only as silhouettes or roles (e.g. "a lone figure in armor"); use PHOTOREALISTIC style, NOT abstract or symbolic; end with: "${styleTag}". Output ONLY the prompt, no preamble.`;
 
             // Texto del pasaje
             const pasaje = fragmento.slice(0, 350).replace(/"/g, "'");
@@ -2856,53 +2945,38 @@
             const t = fragmento.toLowerCase();
             const parts = [];
 
-            // — ESCENARIO —
-            if (/laboratorio|lab|experiment|científico|scientist/.test(t)) parts.push('underground science laboratory, flickering monitors, cables everywhere');
-            else if (/hospital|enfermería|nurse|médico|doctor|clínica/.test(t)) parts.push('abandoned hospital corridor, flickering fluorescent lights, sterile decay');
-            else if (/prisión|celda|prison|jail|dungeon|calabozo/.test(t)) parts.push('stone dungeon cell, iron bars, dripping walls');
-            else if (/mansión|manor|palacio|palace|salón|hall/.test(t)) parts.push('grand decaying mansion interior, ornate but crumbling');
-            else if (/bosque|selva|forest|jungle|árbol|tree/.test(t)) parts.push('ancient dark forest, gnarled roots, fog between trees');
-            else if (/ciudad|city|calle|street|edificio|building|urbano/.test(t)) parts.push('dystopian urban sprawl, neon reflections on wet asphalt, towering structures');
-            else if (/castillo|fortress|torre|tower|muralla|castle/.test(t)) parts.push('ancient stone fortress at dusk, crumbling battlements, ravens circling');
-            else if (/cueva|cave|cavern|túnel|tunnel|underground/.test(t)) parts.push('vast underground cavern, bioluminescent fungi, stalactites');
-            else if (/desierto|wasteland|arena|sand|desert/.test(t)) parts.push('scorched wasteland under blood-red sky, cracked earth, ruins in distance');
-            else if (/mar|ocean|sea|costa|coast|playa|beach|puerto/.test(t)) parts.push('storm-lashed ocean coast, massive waves, jagged cliffs');
-            else if (/montaña|mountain|cumbre|peak|cliff|acantilado/.test(t)) parts.push('treacherous mountain peaks shrouded in mist, sheer drop below');
-            else if (/templo|temple|shrine|sanctuario|altar/.test(t)) parts.push('ancient temple interior, moss-covered stone pillars, shafts of divine light');
-            else if (/mercado|market|plaza|tavern|taberna|inn/.test(t)) parts.push('crowded medieval marketplace, torchlit stalls, cobblestone streets');
-            else if (/nave|spaceship|space|cosmos|espacio|galaxy/.test(t)) parts.push('deep space void, distant nebula, derelict starship hull');
-            else parts.push('vast desolate realm, broken landscape, oppressive silence');
+            // — ESCENARIO concreto —
+            if (/laboratorio|lab|experiment|científico|scientist/.test(t)) parts.push('underground science laboratory with metal tables, blinking monitors, tangled cables, concrete walls, harsh fluorescent overhead light');
+            else if (/hospital|enfermería|nurse|médico|doctor|clínica/.test(t)) parts.push('hospital corridor with white tiled floor, rows of empty beds behind glass, sterile pale light from ceiling strips');
+            else if (/prisión|celda|prison|jail|dungeon|calabozo/.test(t)) parts.push('stone dungeon cell with iron-bar door, straw on the floor, single torch on damp wall, dripping water');
+            else if (/mansión|manor|palacio|palace|salón|hall/.test(t)) parts.push('grand manor hall with marble floor, high painted ceiling, dusty chandeliers, tall arched windows letting in grey light');
+            else if (/bosque|selva|forest|jungle|árbol|tree/.test(t)) parts.push('dense ancient forest floor covered in moss and roots, shafts of green light filtering through a high forest canopy');
+            else if (/ciudad|city|calle|street|edificio|building|urbano/.test(t)) parts.push('rain-soaked city street at night, puddles reflecting neon signs, towering concrete buildings with lit windows, narrow alley');
+            else if (/castillo|fortress|torre|tower|muralla|castle/.test(t)) parts.push('castle ramparts at dusk, crumbling stone battlements, iron gate, orange sky behind distant mountains');
+            else if (/cueva|cave|cavern|túnel|tunnel|underground/.test(t)) parts.push('vast underground cavern with stalactites, glowing blue fungi on wet stone walls, shallow dark water on the floor');
+            else if (/desierto|wasteland|arena|sand|desert/.test(t)) parts.push('cracked desert plain under a blood-orange sky, bleached ruins half-buried in sand, no vegetation');
+            else if (/mar|ocean|sea|costa|coast|playa|beach|puerto/.test(t)) parts.push('rocky ocean coastline during a storm, huge waves crashing on black cliffs, dark overcast sky, sea spray in the air');
+            else if (/montaña|mountain|cumbre|peak|cliff|acantilado/.test(t)) parts.push('high mountain ridge shrouded in cloud, jagged grey rock face, snow patches, sheer drop into fog below');
+            else if (/templo|temple|shrine|sanctuario|altar/.test(t)) parts.push('ancient stone temple interior, moss on carved columns, dusty sunlight beams through a collapsed ceiling, stone altar ahead');
+            else if (/mercado|market|plaza|tavern|taberna|inn/.test(t)) parts.push('medieval cobblestone market square with wooden stalls, torches on iron poles, people gathered in wool cloaks');
+            else if (/nave|spaceship|space|cosmos|espacio|galaxy/.test(t)) parts.push('interior of a derelict spaceship, exposed wiring on metal walls, emergency red lighting, stars visible through cracked viewport');
+            else if (/habitación|cuarto|room|bedroom|dormitorio|estudio/.test(t)) parts.push('small stone room with a wooden table, candlelight casting warm shadows, simple bed against the wall, low ceiling');
+            else parts.push('vast open landscape under dramatic sky, crumbled stone ruins in the middle distance, sparse dead trees, desolate');
 
-            // — ACCIÓN / TENSIÓN —
-            if (/batalla|combate|fight|battle|lucha|clash|guerra|war/.test(t)) parts.push('mid-battle chaos, dust and sparks');
-            else if (/huir|escape|chase|perseguir|run|correr/.test(t)) parts.push('desperate chase, motion blur, panic in the air');
-            else if (/ritual|ceremony|spell|hechizo|magia|magic/.test(t)) parts.push('arcane ritual in progress, glowing sigils, dark energy swirling');
-            else if (/muerte|death|dead|matar|kill|sangre|blood/.test(t)) parts.push('aftermath of violence, ominous stillness');
-            else if (/reunión|meeting|gather|consejo|council/.test(t)) parts.push('tense gathering of shadowed figures');
-            else if (/silencio|quiet|alone|soledad|lonely/.test(t)) parts.push('solitary figure in vast emptiness');
+            // — ACCIÓN / TENSIÓN concreta —
+            if (/batalla|combate|fight|battle|lucha|clash|guerra|war/.test(t)) parts.push('aftermath of a battle, broken weapons on the ground, smoke rising, torn banners');
+            else if (/huir|escape|chase|perseguir|run|correr/.test(t)) parts.push('someone fleeing through the scene, motion blur, urgent');
+            else if (/ritual|ceremony|spell|hechizo|magia|magic/.test(t)) parts.push('ritual circle on the floor glowing faintly, candles arranged in a pattern');
+            else if (/muerte|death|dead|matar|kill|sangre|blood/.test(t)) parts.push('ominous stillness, dark stain on the ground, scattered objects');
+            else if (/silencio|quiet|alone|soledad|lonely/.test(t)) parts.push('a lone figure standing still in the distance');
 
-            // — HORA Y LUZ —
-            if (/amanecer|dawn|sunrise|alba/.test(t)) parts.push('cold dawn light breaking through clouds');
-            else if (/atardecer|sunset|dusk|crepúsculo/.test(t)) parts.push('deep amber sunset casting long shadows');
-            else if (/noche|night|midnight|medianoche|oscuridad/.test(t)) parts.push('moonless night, only distant stars');
-            else if (/mediodía|noon|midday|sol|bright|sunlight/.test(t)) parts.push('harsh midday sun, deep shadows');
-            else if (/lluvia|rain|storm|tormenta|thunder|trueno/.test(t)) parts.push('driving rain, lightning illuminating the scene');
-            else if (/niebla|fog|mist|neblina/.test(t)) parts.push('thick fog, diffused ghostly light');
-            else if (/fuego|fire|llama|flame|antorcha|torch/.test(t)) parts.push('dramatic firelight, dancing orange shadows');
-            else parts.push('dim atmospheric light, deep chiaroscuro');
-
-            // — PERSONAJES (por rol, nunca por nombre) —
-            if (/guerrero|warrior|knight|caballero|soldier|soldado/.test(t)) parts.push('armored silhouette in foreground');
-            else if (/mago|wizard|sorcerer|brujo|mage/.test(t)) parts.push('robed figure wreathed in magical energy');
-            else if (/asesino|assassin|rogue|ladrón|thief/.test(t)) parts.push('cloaked figure in deep shadow');
-            else if (/monstruo|monster|beast|bestia|creature|criatura/.test(t)) parts.push('massive terrifying creature emerging from darkness');
-            else if (/rey|king|queen|reina|emperor|emperador/.test(t)) parts.push('commanding royal silhouette on throne');
-
-            // — MOOD —
-            if (/esperanza|hope|victory|victoria|triumph/.test(t)) parts.push('faint hopeful glimmer amid darkness');
-            else if (/terror|horror|miedo|dread|fear/.test(t)) parts.push('oppressive dread, wrongness in the air');
-            else if (/misterio|mystery|secret|secreto/.test(t)) parts.push('mysterious and unsettling atmosphere');
-            else parts.push('cinematic epic atmosphere');
+            // — HORA Y LUZ directa —
+            if (/amanecer|dawn|sunrise|alba/.test(t)) parts.push('early morning, cold pale blue and gold light on the horizon');
+            else if (/atardecer|sunset|dusk|crepúsculo/.test(t)) parts.push('late afternoon, deep amber and orange light, long shadows on the ground');
+            else if (/noche|night|midnight|medianoche|oscuridad/.test(t)) parts.push('night scene, moonlight casting silver shadows, deep dark sky');
+            else if (/lluvia|rain|storm|tormenta|thunder|trueno/.test(t)) parts.push('heavy rain, water running on surfaces, lightning flash in background');
+            else if (/fuego|fire|llama|flame|antorcha|torch/.test(t)) parts.push('warm firelight from below, orange and red flickering on walls');
+            else parts.push('overcast daylight, soft diffused shadows, cool grey tones');
 
             return parts.join(', ') + ', ' + styleTag;
         }
@@ -3163,7 +3237,7 @@
         // CONTROLES DE MODO VIDEO (play/pause + nav capítulos)
         // ═══════════════════════════════════════
 
-        function karaokeTogglePlay() {
+        function videoTogglePlay() {
             const btn = document.getElementById('kbtn-playpause');
             if (!isReading || isPaused) {
                 // Si nunca se inició o está pausado → iniciar/reanudar
@@ -3219,7 +3293,7 @@
             } catch { return ''; }
         }
 
-        async function karaokeNavegar(direccion) {
+        async function videoNavegar(direccion) {
             const sel = document.getElementById('chapters');
             const opts = _getChapterOptions();
             let idx = opts.findIndex(o => o.value === sel.value);
@@ -3241,73 +3315,98 @@
 
             if (intentos >= MAX_SKIP) { mostrarNotificacion('No se encontró capítulo con contenido'); return; }
 
-            // Actualizar selector y cargar — sin cambiar la música (eso ocurre al iniciar lectura)
+            // Actualizar selector
+            if (typeof _cargandoProgramaticamente !== 'undefined') window._cargandoProgramaticamente = true;
             sel.value = opts[idx].value;
+            window._cargandoProgramaticamente = false;
+
+            // Actualizar título en el visor inmediatamente
+            const optSel = opts[idx];
+            if (optSel) {
+                const titleEl = document.getElementById('current-chapter-title');
+                if (titleEl) titleEl.textContent = optSel.textContent;
+                const capEl = document.getElementById('kp-chapter');
+                if (capEl) capEl.textContent = optSel.textContent;
+            }
+
             detenerTTS();
-            actualizarIndiceKaraoke(); // refrescar ítem activo en el índice
+            actualizarIndicevideo();
+            window._navegacionIntencionada = true;
             await cargarCapitulo(opts[idx].value);
         }
 
-        function karaokeCapituloAnterior() { karaokeNavegar(-1); }
-        function karaokeCapituloSiguiente() { karaokeNavegar(1); }
+        function videoCapituloAnterior() { videoNavegar(-1); }
+        function videoCapituloSiguiente() { videoNavegar(1); }
 
         // ═══════════════════════════════════════
         // PANEL DE ÍNDICE DE CAPÍTULOS EN MODO VIDEO
         // ═══════════════════════════════════════
 
-        function toggleKaraokeIndex() {
-            const panel = document.getElementById('karaoke-index-panel');
+        function togglevideoIndex() {
+            const panel = document.getElementById('video-index-panel');
             const btn = document.getElementById('btn-toggle-index');
             panel.classList.toggle('open');
             btn.style.color = panel.classList.contains('open') ? 'var(--accent)' : '';
         }
 
-        function poblarIndiceKaraoke() {
-            const lista = document.getElementById('karaoke-index-list');
+        function poblarIndicevideo() {
+            const lista = document.getElementById('video-index-list');
             if (!lista) return;
             const opts = _getChapterOptions();
             lista.innerHTML = '';
             opts.forEach((opt, i) => {
                 const item = document.createElement('div');
-                item.className = 'karaoke-index-item';
+                item.className = 'video-index-item';
                 item.dataset.value = opt.value;
                 item.textContent = opt.text || `Capítulo ${i + 1}`;
                 item.title = opt.text;
                 item.onclick = () => {
+                    window._cargandoProgramaticamente = true;
                     document.getElementById('chapters').value = opt.value;
+                    window._cargandoProgramaticamente = false;
                     detenerTTS();
-                    actualizarIndiceKaraoke();
+                    actualizarIndicevideo();
+                    // Mostrar botón Aplicar si hay procesamiento configurado
+                    const hayProcesamiento = (typeof traduccionAutomatica !== 'undefined' && traduccionAutomatica)
+                        || (typeof ttsHumanizerActivo !== 'undefined' && ttsHumanizerActivo);
+                    if (hayProcesamiento) {
+                        const row = document.getElementById('aplicar-row');
+                        const hint = document.getElementById('aplicar-hint');
+                        if (row) row.style.display = 'block';
+                        if (hint) hint.textContent = 'Nuevo capítulo — presiona Aplicar para procesar';
+                        if (typeof _configPendiente !== 'undefined') window._configPendiente = true;
+                    }
                     cargarCapitulo(opt.value);
                 };
                 lista.appendChild(item);
             });
-            actualizarIndiceKaraoke();
+            actualizarIndicevideo();
         }
 
-        function actualizarIndiceKaraoke() {
+        function actualizarIndicevideo() {
             const sel = document.getElementById('chapters');
             if (!sel) return;
-            document.querySelectorAll('.karaoke-index-item').forEach(item => {
+            document.querySelectorAll('.video-index-item').forEach(item => {
                 item.classList.toggle('active', item.dataset.value === sel.value);
             });
             // Scroll al item activo
-            const active = document.querySelector('.karaoke-index-item.active');
+            const active = document.querySelector('.video-index-item.active');
             if (active) active.scrollIntoView({ block: 'nearest' });
         }
 
-        function filtrarIndiceKaraoke(q) {
+        function filtrarIndicevideo(q) {
             const lower = q.toLowerCase();
-            document.querySelectorAll('.karaoke-index-item').forEach(item => {
+            document.querySelectorAll('.video-index-item').forEach(item => {
                 item.style.display = item.textContent.toLowerCase().includes(lower) ? '' : 'none';
             });
         }
 
         // Poblar índice cuando se carguen los capítulos y al abrir el modo video
-        const _chaptersObserverIdx = new MutationObserver(() => poblarIndiceKaraoke());
+        const _chaptersObserverIdx = new MutationObserver(() => poblarIndicevideo());
         _chaptersObserverIdx.observe(document.getElementById('chapters'), { childList: true });
 
         // Hook: actualizar item activo cuando cambia el selector de capítulos
-        document.getElementById('chapters').addEventListener('change', () => actualizarIndiceKaraoke());
+        document.getElementById('chapters').addEventListener('change', () => actualizarIndicevideo());
 
 
         // ═══════════════════════════════════════
@@ -3320,25 +3419,40 @@
             return ambientGenre ? GENRE_ORDER.indexOf(ambientGenre) : -1;
         }
 
-        async function karaokeMusicaSiguiente() {
+        async function videoMusicaSiguiente() {
             const idx = _genreIdx();
             const next = GENRE_ORDER[(idx + 1) % GENRE_ORDER.length];
             await selectGenre(next);
             _actualizarMusicLabel();
         }
 
-        async function karaokeMusicaPrev() {
+        async function videoMusicaPrev() {
             const idx = _genreIdx();
             const prev = GENRE_ORDER[(idx - 1 + GENRE_ORDER.length) % GENRE_ORDER.length];
             await selectGenre(prev);
             _actualizarMusicLabel();
         }
 
+        function videoToggleAmbient() {
+            if (typeof toggleAmbientPlay === 'function') toggleAmbientPlay();
+            _syncAmbientBtn();
+        }
+
+        function _syncAmbientBtn() {
+            const btn = document.getElementById('kbtn-ambient-playpause');
+            if (!btn) return;
+            // ambientPlaying viene del scope de audio ambiental
+            const playing = typeof ambientPlaying !== 'undefined' ? ambientPlaying : true;
+            btn.innerHTML = playing ? '&#9646;&#9646;' : '&#9654;';
+            btn.title = playing ? 'Pausar música' : 'Reproducir música';
+        }
+
         function _actualizarMusicLabel() {
-            const lbl = document.getElementById('karaoke-music-label');
+            const lbl = document.getElementById('video-music-label');
             if (!lbl) return;
             const trackName = document.getElementById('ambient-track-name');
             lbl.textContent = trackName ? trackName.textContent : (ambientGenre || '♪');
+            _syncAmbientBtn(); // también sincronizar el botón
         }
 
         // Sincronizar label de música cuando cambia el track
@@ -3371,6 +3485,7 @@
             // Restaurar todas las opciones y luego ocultar las que no coinciden
             // (los <option> no tienen display, así que se re-renderizan)
             const valorActual = sel.value;
+            window._cargandoProgramaticamente = true;
             sel.innerHTML = '';
 
             const filtradas = q
@@ -3382,6 +3497,7 @@
                 empty.disabled = true;
                 empty.textContent = '— sin resultados —';
                 sel.appendChild(empty);
+                window._cargandoProgramaticamente = false;
                 return;
             }
 
@@ -3392,6 +3508,7 @@
                 if (value === valorActual) opt.selected = true;
                 sel.appendChild(opt);
             });
+            window._cargandoProgramaticamente = false;
         }
 
         // ═══════════════════════════════════════
@@ -3436,7 +3553,7 @@
             }
         }
         // Sincronizar sliders al abrir el modo video
-        document.addEventListener('karaokeOpened', () => {
+        document.addEventListener('videoOpened', () => {
             const vol = document.getElementById('volume-control');
             if (vol) {
                 const v = vol.value;
@@ -3479,34 +3596,40 @@
 
     <script>
         // ═══════════════════════════════════════════════════════
-        // BARRA DE PROGRESO TIPO YOUTUBE EN KARAOKE
+        // BARRA DE PROGRESO TIPO YOUTUBE EN video
         // ═══════════════════════════════════════════════════════
 
-        // Actualizar barra de progreso del karaoke
-        function updateKaraokeProgress() {
+        // Actualizar barra de progreso del video
+        function updatevideoProgress() {
             if (typeof sentences === 'undefined' || sentences.length === 0) return;
             const total = sentences.length;
             const current = (typeof currentSentenceIndex !== 'undefined') ? currentSentenceIndex : 0;
             const pct = ((current + 1) / total) * 100;
 
-            document.getElementById('karaoke-progress-fill').style.width = pct + '%';
+            document.getElementById('video-progress-fill').style.width = pct + '%';
             document.getElementById('kp-current').textContent = `Frase ${current + 1} / ${total}`;
+            // Actualizar título de capítulo junto al contador
+            const capEl = document.getElementById('kp-chapter');
+            if (capEl) {
+                const titulo = document.getElementById('current-chapter-title')?.textContent || '';
+                capEl.textContent = titulo;
+            }
         }
 
         // Hover: mostrar/ocultar thumb
-        function karaokeProgressHover(entering) {
-            const track = document.getElementById('karaoke-progress-track');
+        function videoProgressHover(entering) {
+            const track = document.getElementById('video-progress-track');
             if (!entering) {
-                document.getElementById('karaoke-seek-tooltip').classList.remove('visible');
+                document.getElementById('video-seek-tooltip').classList.remove('visible');
             }
         }
 
         // Mouse move: mostrar tooltip con preview del texto
-        function karaokeProgressMouseMove(e) {
+        function videoProgressMouseMove(e) {
             if (typeof sentences === 'undefined' || sentences.length === 0) return;
 
-            const track = document.getElementById('karaoke-progress-track');
-            const tooltip = document.getElementById('karaoke-seek-tooltip');
+            const track = document.getElementById('video-progress-track');
+            const tooltip = document.getElementById('video-seek-tooltip');
             const rect = track.getBoundingClientRect();
             const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
             const idx = Math.floor(pct * sentences.length);
@@ -3529,15 +3652,15 @@
         }
 
         // Click en la barra: hacer seek a esa posición
-        function karaokeProgressSeek(e) {
+        function videoProgressSeek(e) {
             if (typeof sentences === 'undefined' || sentences.length === 0) return;
 
-            const track = document.getElementById('karaoke-progress-track');
+            const track = document.getElementById('video-progress-track');
             const rect = track.getBoundingClientRect();
             const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
             const idx = Math.min(Math.floor(pct * sentences.length), sentences.length - 1);
 
-            document.getElementById('karaoke-seek-tooltip').classList.remove('visible');
+            document.getElementById('video-seek-tooltip').classList.remove('visible');
 
             // Llamar la función de seek existente del TTS
             if (typeof detenerTTSSinEstado === 'function') {
@@ -3561,26 +3684,26 @@
             if (typeof leerOracion === 'function') leerOracion(idx);
         }
 
-        // Hook: sobreescribir actualizarProgreso para también actualizar la barra del karaoke
+        // Hook: sobreescribir actualizarProgreso para también actualizar la barra del video
         const _origActualizarProgreso = typeof actualizarProgreso === 'function' ? actualizarProgreso : null;
         window.actualizarProgreso = function () {
             if (_origActualizarProgreso) _origActualizarProgreso();
-            updateKaraokeProgress();
+            updatevideoProgress();
         };
 
         // ═══════════════════════════════════════════════════════
-        // BARRA DE PROGRESO DE TRADUCCIÓN → solo en overlay karaoke
+        // BARRA DE PROGRESO DE TRADUCCIÓN → solo en overlay video
         // ═══════════════════════════════════════════════════════
 
         // Observar cambios en el texto-contenido para detectar el mensaje de "Traduciendo"
-        // y redirigir al overlay del karaoke (el reading-area ya no tiene barra propia)
+        // y redirigir al overlay del video (el reading-area ya no tiene barra propia)
         const _tcObserver = new MutationObserver(() => {
             const tc = document.getElementById('texto-contenido');
             if (!tc) return;
             const txt = tc.textContent.trim();
             if (txt.includes('Traduciendo capítulo')) {
                 tc.innerHTML = '';
-                const kWrap = document.getElementById('karaoke-translation-progress');
+                const kWrap = document.getElementById('video-translation-progress');
                 if (kWrap) kWrap.style.display = 'flex';
             }
         });
@@ -3589,5 +3712,43 @@
 
     </script>
 
+    <script>
+        // AUTO-HIDE CONTROLES DE VIDEO
+        (function () {
+            var _t = null;
+            function _controls() {
+                return [
+                    document.getElementById('video-progress-wrap'),
+                    document.querySelector('.video-bar')
+                ].filter(Boolean);
+            }
+            window.videoControlsShow = function () {
+                _controls().forEach(function (el) {
+                    el.style.opacity = '1';
+                    el.style.pointerEvents = '';
+                });
+                if (_t) clearTimeout(_t);
+                _t = setTimeout(function () {
+                    var btn = document.getElementById('kbtn-playpause');
+                    var playing = btn && (
+                        btn.innerHTML.indexOf('⏸') !== -1 ||
+                        btn.innerHTML.indexOf('&#9646;&#9646;') !== -1
+                    );
+                    if (playing) {
+                        _controls().forEach(function (el) {
+                            el.style.opacity = '0';
+                            el.style.pointerEvents = 'none';
+                        });
+                    }
+                }, 3000);
+            };
+            document.addEventListener('click', function (e) {
+                var btn = e.target && (e.target.id === 'kbtn-playpause'
+                    ? e.target
+                    : e.target.closest && e.target.closest('#kbtn-playpause'));
+                if (btn) setTimeout(window.videoControlsShow, 60);
+            }, true);
+        })();
+    </script>
 </body>
 </html>

@@ -34,6 +34,110 @@ const reemplazosAutomaticos = {
 // Variable para controlar traducción automática
 let traduccionAutomatica = false;
 
+// ═══════════════════════════════════════════════
+// CACHE DE PRE-TRADUCCIÓN DEL SIGUIENTE CAPÍTULO
+// Traduce en segundo plano mientras se lee el actual
+// ═══════════════════════════════════════════════
+const _capCache = {};          // ruta → texto traducido y procesado
+let _capCacheEnCurso = null;   // ruta que se está pre-traduciendo ahora
+
+// Token de cancelación para el BG: si cambia, el proceso activo se aborta
+let _bgCancelToken = 0;
+
+async function _preTradducirCapitulo(ruta) {
+    if (!ruta || !archivosHTML[ruta]) return;
+    if (_capCache[ruta]) return;                 // ya en cache, nada que hacer
+
+    // Cancelar cualquier BG anterior e iniciar uno nuevo
+    _bgCancelToken++;
+    const miToken = _bgCancelToken;
+    _capCacheEnCurso = ruta;
+
+    const nombre = ruta.split('/').pop();
+
+    // Capturar estado AL INICIO para validación posterior
+    const estadoTraduccion = traduccionAutomatica;
+    const estadoHumanizador = ttsHumanizerActivo && !!claudeApiKey;
+
+    // Si no hay nada que hacer en BG, salir
+    if (!estadoTraduccion && !estadoHumanizador) {
+        _capCacheEnCurso = null;
+        return;
+    }
+
+    console.log(`📦 [BG] Iniciando pre-proceso: ${nombre} (trad:${estadoTraduccion} opt:${estadoHumanizador})`);
+
+    try {
+        // Extraer texto del HTML
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(archivosHTML[ruta], 'text/html');
+        const body = doc.body.cloneNode(true);
+        body.querySelectorAll('script, style, nav, header, footer').forEach(el => el.remove());
+        body.querySelectorAll('a[href*="index_split"]').forEach(el => {
+            const parent = el.parentElement;
+            if (parent && parent.tagName === 'P') parent.remove();
+        });
+
+        let texto = '';
+        body.querySelectorAll('p, h1, h2, h3, h4, h5, h6, div').forEach(el => {
+            const t = (el.textContent || '').trim();
+            if (t.length > 0) {
+                texto += (el.tagName.startsWith('H') ? '\n\n' + t + '\n\n' : t + '\n\n');
+            }
+        });
+        texto = texto.replace(/\n\n\n+/g, '\n\n').trim();
+        if (texto.length < 50) return;
+
+        // Abortar si fue cancelado
+        if (miToken !== _bgCancelToken) { console.log(`[BG] Cancelado: ${nombre}`); return; }
+
+        _traduccionEnBackground = true;
+        try {
+            // Fase 1+2: Traducción y revisión
+            if (estadoTraduccion) {
+                console.log(`📦 [BG] Traduciendo: ${nombre}`);
+                texto = await traducirTexto(texto);
+                if (miToken !== _bgCancelToken) return;
+            }
+
+            // Fase 3: Optimización con IA
+            if (estadoHumanizador) {
+                console.log(`✨ [BG] Optimizando: ${nombre}`);
+                texto = await naturalizarTextoParaTTS(texto);
+                if (miToken !== _bgCancelToken) return;
+            }
+        } finally {
+            _traduccionEnBackground = false;
+        }
+
+        texto = aplicarReemplazosAutomaticos(texto);
+        _capCache[ruta] = { texto, traducida: estadoTraduccion, humanizada: estadoHumanizador };
+        console.log(`✅ [BG] Cache listo: ${nombre} (trad:${estadoTraduccion} opt:${estadoHumanizador})`);
+
+    } catch (e) {
+        console.warn(`[BG] Pre-procesamiento falló para ${nombre}:`, e);
+    } finally {
+        if (miToken === _bgCancelToken) _capCacheEnCurso = null;
+    }
+}
+
+function _getSiguienteRuta(rutaActual) {
+    const sel = document.getElementById('chapters');
+    if (!sel) return null;
+    const opts = Array.from(sel.options).filter(o => !o.disabled && o.value);
+    const idx = opts.findIndex(o => o.value === rutaActual);
+    return idx >= 0 && idx < opts.length - 1 ? opts[idx + 1].value : null;
+}
+
+// Limpiar entradas viejas del cache (mantener solo los 3 más recientes)
+function _limpiarCache(rutaActual) {
+    const keys = Object.keys(_capCache);
+    if (keys.length > 3) {
+        keys.filter(k => k !== rutaActual).slice(0, keys.length - 3)
+            .forEach(k => delete _capCache[k]);
+    }
+}
+
 // ======================
 // FUNCIONES TTS
 // ======================
@@ -121,7 +225,13 @@ async function leerOracionLocal(index) {
     audioActual.onended = function () {
         URL.revokeObjectURL(audioUrl);
         if (isReading && !isPaused) {
-            leerOracionLocal(index + 1);
+            const next = index + 1;
+            if (next >= sentences.length) {
+                detenerTTS();
+                _avanzarSiguienteCapituloAuto();
+            } else {
+                leerOracionLocal(next);
+            }
         }
     };
 
@@ -248,8 +358,8 @@ function actualizarProgreso() {
     const progreso = ((currentSentenceIndex + 1) / sentences.length) * 100;
     document.getElementById('progress-fill').style.width = progreso + '%';
 
-    // Actualizar barra del karaoke
-    const kFill = document.getElementById('karaoke-progress-fill');
+    // Actualizar barra del video
+    const kFill = document.getElementById('video-progress-fill');
     const kCurrent = document.getElementById('kp-current');
     if (kFill) kFill.style.width = progreso + '%';
     if (kCurrent) kCurrent.textContent = `Frase ${currentSentenceIndex + 1} / ${sentences.length}`;
@@ -294,9 +404,9 @@ function leerOracion(index) {
         if (!isReading || isPaused) return;
         const next = index + 1;
         if (next >= sentences.length) {
-            // Fin del texto — detener limpiamente
+            // Fin del capítulo — intentar avanzar automáticamente al siguiente
             detenerTTS();
-            mostrarNotificacion('✓ Lectura finalizada');
+            _avanzarSiguienteCapituloAuto();
         } else {
             leerOracion(next);
         }
@@ -334,14 +444,23 @@ function iniciarTTS() {
 
     actualizarEstadoTTS('reproduciendo');
 
-    // Detectar género con IA y abrir Modo Video automáticamente
-    // Solo cambiar música si NO estamos ya en modo video (es decir, es un inicio manual, no navegación entre capítulos)
-    const yaEnModoVideo = typeof karaokeActive !== 'undefined' && karaokeActive;
-    if (!yaEnModoVideo && typeof detectarGeneroConIA === 'function') {
-        detectarGeneroConIA();
+    // Detectar género con IA — cancelar cualquier análisis pendiente anterior
+    if (typeof detectarGeneroConIA === 'function') {
+        // Cancelar timer previo si existe
+        if (window._genreDetectTimer) { clearTimeout(window._genreDetectTimer); window._genreDetectTimer = null; }
+        const yaEnModoVideo = typeof videoActive !== 'undefined' && videoActive;
+        if (yaEnModoVideo) {
+            // Delay suave: la música actual sigue sonando unos segundos, luego cambia
+            window._genreDetectTimer = setTimeout(() => {
+                window._genreDetectTimer = null;
+                detectarGeneroConIA();
+            }, 3000);
+        } else {
+            detectarGeneroConIA();
+        }
     }
-    if (typeof abrirKaraoke === 'function') {
-        abrirKaraoke();
+    if (typeof abrirvideo === 'function') {
+        abrirvideo();
     }
 
     // Usar API local si está disponible
@@ -438,9 +557,351 @@ function detenerTTS() {
     document.querySelectorAll('.tts-sentence').forEach(el => el.classList.remove('tts-active'));
 }
 
+// Avanza automáticamente al siguiente capítulo al terminar el actual
+// Solo actúa si estamos en modo video (videoActive) y hay capítulo siguiente en cache o disponible
+async function _avanzarSiguienteCapituloAuto() {
+    const sel = document.getElementById('chapters');
+    if (!sel) { mostrarNotificacion('✓ Lectura finalizada'); return; }
+
+    const opts = Array.from(sel.options).filter(o => !o.disabled && o.value);
+    const idx = opts.findIndex(o => o.value === sel.value);
+    if (idx < 0 || idx >= opts.length - 1) {
+        mostrarNotificacion('✓ Lectura completada');
+        return;
+    }
+
+    const siguienteRuta = opts[idx + 1].value;
+
+    // Solo avanzar automáticamente si estamos en modo video
+    const enModoVideo = typeof videoActive !== 'undefined' && videoActive;
+    if (!enModoVideo) {
+        mostrarNotificacion('✓ Capítulo finalizado');
+        return;
+    }
+
+    mostrarNotificacion('▶ Cargando siguiente capítulo...');
+
+    // Actualizar el selector
+    window._cargandoProgramaticamente = true;
+    sel.value = siguienteRuta;
+    window._cargandoProgramaticamente = false;
+
+    // Actualizar título e índice en el visor
+    const optSig = opts[idx + 1];
+    if (optSig) {
+        const titleEl = document.getElementById('current-chapter-title');
+        if (titleEl) titleEl.textContent = optSig.textContent;
+        const capEl = document.getElementById('kp-chapter');
+        if (capEl) capEl.textContent = optSig.textContent;
+    }
+    if (typeof actualizarIndicevideo === 'function') actualizarIndicevideo();
+
+    // Cargar y reproducir — marcar como navegación intencional para auto-play
+    window._navegacionIntencionada = true;
+    await cargarCapitulo(siguienteRuta);
+}
+
 // ======================
 // FUNCIONES GENERALES
 // ======================
+
+// ======================
+// HUMANIZADOR TTS CON CLAUDE
+// Post-procesa el texto traducido para que suene más natural al ser leído por TTS
+// Soporta múltiples proveedores de IA con su propia API key
+// ======================
+
+let ttsHumanizerActivo = false;
+let claudeApiKey = localStorage.getItem('claude_api_key') || '';  // clave del proveedor activo
+
+// Configuración de proveedores de IA
+const HUMANIZER_PROVIDERS = {
+    perplexity: {
+        name: 'Perplexity AI',
+        url: 'https://api.perplexity.ai/chat/completions',
+        model: 'sonar',
+        keyPrefix: 'pplx-',
+        keyHint: 'pplx-...',
+        headers: (key) => ({
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${key}`
+        }),
+        body: (prompt) => ({
+            model: 'sonar',
+            messages: [{ role: 'user', content: prompt }],
+            max_tokens: 4096
+        }),
+        extract: (data) => data.choices?.[0]?.message?.content?.trim()
+    },
+    openai: {
+        name: 'OpenAI',
+        url: 'https://api.openai.com/v1/chat/completions',
+        model: 'gpt-4o-mini',
+        keyPrefix: 'sk-',
+        keyHint: 'sk-...',
+        headers: (key) => ({
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${key}`
+        }),
+        body: (prompt) => ({
+            model: 'gpt-4o-mini',
+            messages: [{ role: 'user', content: prompt }],
+            max_tokens: 4096
+        }),
+        extract: (data) => data.choices?.[0]?.message?.content?.trim()
+    },
+    anthropic: {
+        name: 'Anthropic (Claude)',
+        url: 'https://api.anthropic.com/v1/messages',
+        model: 'claude-haiku-4-5-20251001',
+        keyPrefix: 'sk-ant-',
+        keyHint: 'sk-ant-...',
+        headers: (key) => ({
+            'Content-Type': 'application/json',
+            'x-api-key': key,
+            'anthropic-version': '2023-06-01',
+            'anthropic-dangerous-direct-browser-access': 'true'
+        }),
+        body: (prompt) => ({
+            model: 'claude-haiku-4-5-20251001',
+            max_tokens: 4096,
+            messages: [{ role: 'user', content: prompt }]
+        }),
+        extract: (data) => data.content?.[0]?.text?.trim()
+    },
+    gemini: {
+        name: 'Google Gemini',
+        url: (key) => `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,
+        model: 'gemini-2.0-flash',
+        keyPrefix: 'AIza',
+        keyHint: 'AIza...',
+        headers: () => ({ 'Content-Type': 'application/json' }),
+        body: (prompt) => ({
+            contents: [{ parts: [{ text: prompt }] }]
+        }),
+        extract: (data) => data.candidates?.[0]?.content?.parts?.[0]?.text?.trim()
+    },
+    groq: {
+        name: 'Groq',
+        url: 'https://api.groq.com/openai/v1/chat/completions',
+        model: 'llama-3.3-70b-versatile',
+        keyPrefix: 'gsk_',
+        keyHint: 'gsk_...',
+        headers: (key) => ({
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${key}`
+        }),
+        body: (prompt) => ({
+            model: 'llama-3.3-70b-versatile',
+            messages: [{ role: 'user', content: prompt }],
+            max_tokens: 4096
+        }),
+        extract: (data) => data.choices?.[0]?.message?.content?.trim()
+    },
+    openrouter: {
+        name: 'OpenRouter',
+        url: 'https://openrouter.ai/api/v1/chat/completions',
+        model: 'auto',
+        keyPrefix: 'sk-or-',
+        keyHint: 'sk-or-...',
+        headers: (key) => ({
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${key}`,
+            'HTTP-Referer': window.location.origin,
+            'X-Title': 'EPUB Reader TTS'
+        }),
+        body: (prompt) => ({
+            model: 'mistralai/mistral-small',
+            messages: [{ role: 'user', content: prompt }],
+            max_tokens: 4096
+        }),
+        extract: (data) => data.choices?.[0]?.message?.content?.trim()
+    }
+};
+
+let humanizerProvider = localStorage.getItem('humanizer_provider') || 'perplexity';
+
+function cambiarProveedorHumanizer(provId) {
+    humanizerProvider = provId;
+    localStorage.setItem('humanizer_provider', provId);
+    // Cargar la key guardada para este proveedor
+    const savedKey = localStorage.getItem(`humanizer_key_${provId}`) || '';
+    claudeApiKey = savedKey;
+    const statusEl = document.getElementById('claude-key-status');
+    const infoEl = document.getElementById('humanizer-info');
+    const prov = HUMANIZER_PROVIDERS[provId];
+    if (statusEl) statusEl.textContent = savedKey ? '✓ guardada' : '';
+    if (infoEl) infoEl.textContent = savedKey
+        ? `${prov.name} · ${prov.model} · listo`
+        : `Necesita API key de ${prov.name} · ${prov.keyHint}`;
+}
+
+function guardarClaudeApiKey() {
+    const key = document.getElementById('claude-api-key').value.trim();
+    if (!key) { document.getElementById('claude-key-status').textContent = '⚠ vacía'; return; }
+    claudeApiKey = key;
+    localStorage.setItem('claude_api_key', key);  // compatibilidad
+    localStorage.setItem(`humanizer_key_${humanizerProvider}`, key);
+    document.getElementById('claude-api-key').value = '';
+    document.getElementById('claude-key-status').textContent = '✓ guardada';
+    const prov = HUMANIZER_PROVIDERS[humanizerProvider];
+    document.getElementById('humanizer-info').textContent = `${prov.name} · ${prov.model} · listo`;
+    if (ttsHumanizerActivo) {
+        document.getElementById('humanizer-status').textContent = `✓ activo · ${prov.name}`;
+    }
+    setTimeout(() => { document.getElementById('claude-key-status').textContent = ''; }, 2000);
+}
+
+function toggleTTSHumanizer() {
+    ttsHumanizerActivo = document.getElementById('tts-humanizer').checked;
+    const panel = document.getElementById('claude-key-panel');
+    const status = document.getElementById('humanizer-status');
+    panel.style.display = ttsHumanizerActivo ? 'block' : 'none';
+    const prov = HUMANIZER_PROVIDERS[humanizerProvider];
+    if (ttsHumanizerActivo) {
+        claudeApiKey = localStorage.getItem(`humanizer_key_${humanizerProvider}`) || claudeApiKey;
+        status.textContent = claudeApiKey ? `⏳ activo · ${prov.name} (pendiente)` : `⚠ necesita API key`;
+        if (claudeApiKey) document.getElementById('claude-key-status').textContent = '✓ guardada';
+        const sel = document.getElementById('humanizer-provider');
+        if (sel) sel.value = humanizerProvider;
+    } else {
+        status.textContent = 'Desactivado';
+    }
+    // Marcar como pendiente para que requiera Aplicar
+    marcarCambioPendiente();
+}
+
+// Inicializar al cargar
+(function initHumanizer() {
+    humanizerProvider = localStorage.getItem('humanizer_provider') || 'perplexity';
+    claudeApiKey = localStorage.getItem(`humanizer_key_${humanizerProvider}`)
+        || localStorage.getItem('claude_api_key') || '';
+    setTimeout(() => {
+        const sel = document.getElementById('humanizer-provider');
+        if (sel) sel.value = humanizerProvider;
+        if (claudeApiKey) {
+            const el = document.getElementById('claude-key-status');
+            if (el) el.textContent = '✓ guardada';
+        }
+    }, 500);
+})();
+
+// Divide texto en bloques de ~2500 chars cortando en párrafos
+function _dividirEnBloques(texto, maxChars = 2500) {
+    const parrafos = texto.split(/\n\n+/);
+    const bloques = [];
+    let actual = '';
+    for (const p of parrafos) {
+        if ((actual + '\n\n' + p).length > maxChars && actual.length > 0) {
+            bloques.push(actual.trim());
+            actual = p;
+        } else {
+            actual += (actual ? '\n\n' : '') + p;
+        }
+    }
+    if (actual.trim()) bloques.push(actual.trim());
+    return bloques;
+}
+
+const HUMANIZER_PROMPT_TEMPLATE = (bloque) =>
+    `SOLO devuelve la versión TTS optimizada del texto. NADA más: sin introducciones, sin "Cambios realizados", sin listas, sin explicaciones, sin citas [1], sin resúmenes. Mantén 100% el contenido original exacto (palabras, trama, diálogos). Solo ajusta puntuación/gramática para TTS natural:
+- Puntos (.) para pausas cortas; comas (,) respiraciones; guiones (—) diálogos/incisos.
+- Elimina *, #, /, [], (), ... excesivos. Números a palabras (ej: [1579/6000] → mil quinientos setenta y nueve de seis mil).
+- Divide oraciones largas; usa contracciones; varía ritmos.
+- Diálogos con — sin comillas.
+Texto:
+${bloque}`;
+
+// Limpieza local de símbolos problemáticos para TTS — se aplica SIEMPRE,
+// independientemente del naturalizado IA, como primera y última línea de defensa
+function _sanitizarParaTTS(texto) {
+    return texto
+        // Títulos markdown: **texto** → texto (sin asteriscos)
+        .replace(/\*\*([^*]+)\*\*/g, '$1')
+        .replace(/\*([^*]+)\*/g, '$1')
+        // Almohadillas de encabezado
+        .replace(/^#{1,6}\s+/gm, '')
+        // Comillas dobles en diálogos → guión largo
+        .replace(/"([^"]+)"/g, '—$1')
+        // Comillas tipográficas dobles → guión largo
+        .replace(/\u201C([^\u201D]+)\u201D/g, '—$1')
+        // Comillas simples tipográficas que abren frase → coma o nada
+        .replace(/\u2018([^\u2019]+)\u2019/g, '$1')
+        // Barras y pipes sueltos problemáticos
+        .replace(/ \| /g, ', ')
+        // Guiones bajos (énfasis markdown)
+        .replace(/_([^_]+)_/g, '$1')
+        // Múltiples asteriscos sueltos
+        .replace(/\*+/g, '')
+        // Espacios dobles
+        .replace(/  +/g, ' ')
+        // Líneas vacías múltiples → doble salto
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+}
+
+// Llama al proveedor de IA seleccionado para naturalizar un bloque
+async function _naturalizarBloque(bloque) {
+    // Siempre sanitizar localmente primero (quita asteriscos, comillas, etc.)
+    const bloqueClean = _sanitizarParaTTS(bloque);
+    if (!claudeApiKey) return bloqueClean;  // sin key: al menos devolver sanitizado
+
+    const prov = HUMANIZER_PROVIDERS[humanizerProvider];
+    if (!prov) return bloqueClean;
+
+    try {
+        const prompt = HUMANIZER_PROMPT_TEMPLATE(bloqueClean);
+        const urlFn = typeof prov.url === 'function' ? prov.url(claudeApiKey) : prov.url;
+
+        const res = await fetch(urlFn, {
+            method: 'POST',
+            headers: prov.headers(claudeApiKey),
+            body: JSON.stringify(prov.body(prompt))
+        });
+
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            console.warn(`${prov.name} error:`, err?.error?.message || res.status);
+            return bloqueClean;  // fallback: al menos devolver sanitizado
+        }
+        const data = await res.json();
+        const resultado = prov.extract(data) || bloqueClean;
+        // Sanitizar también el resultado por si la IA introdujo markdown
+        return _sanitizarParaTTS(resultado);
+    } catch (e) {
+        console.warn('Humanizador falló:', e.message);
+        return bloqueClean;
+    }
+}
+
+// Humaniza el texto completo dividiendo en bloques y procesando en paralelo (máx 3 a la vez)
+async function naturalizarTextoParaTTS(texto, onProgreso) {
+    if (!ttsHumanizerActivo || !claudeApiKey || !texto) return texto;
+
+    const bloques = _dividirEnBloques(texto);
+    const total = bloques.length;
+    const resultados = new Array(total);
+    let procesados = 0;
+
+    const prov = HUMANIZER_PROVIDERS[humanizerProvider];
+    console.log(`✨ Naturalizando ${total} bloque(s) con ${claudeApiKey ? (prov?.name || humanizerProvider) : 'sanitizador local'}...`);
+
+    // Procesar en lotes de 3 para no saturar la API
+    const LOTE = 3;
+    for (let i = 0; i < total; i += LOTE) {
+        const lote = bloques.slice(i, i + LOTE);
+        const promesas = lote.map((b, j) =>
+            _naturalizarBloque(b).then(r => {
+                resultados[i + j] = r;
+                procesados++;
+                if (onProgreso) onProgreso(procesados, total);
+            })
+        );
+        await Promise.all(promesas);
+    }
+
+    return resultados.join('\n\n');
+}
 
 // Función para aplicar reemplazos automáticos
 function aplicarReemplazosAutomaticos(texto) {
@@ -453,7 +914,18 @@ function aplicarReemplazosAutomaticos(texto) {
 }
 
 // Barra de progreso para traducción
+// _traduccionEnBackground: si true, no actualizar UI (pre-traducción silenciosa)
+let _traduccionEnBackground = false;
+
 function actualizarProgresoTraduccion(actual, total) {
+    if (_traduccionEnBackground) return; // silencioso en background
+
+    // Si cargarCapitulo sobrescribió la función para controlar la escala, usar esa
+    if (typeof window._overrideActualizarProgreso === 'function') {
+        window._overrideActualizarProgreso(actual, total);
+        return;
+    }
+
     const pct = Math.round((actual / total) * 100);
     const fill = document.getElementById('progress-fill');
     const label = document.getElementById('tts-status-label');
@@ -462,8 +934,8 @@ function actualizarProgresoTraduccion(actual, total) {
     if (label) label.innerHTML = `<span style="color:var(--accent2)">⟳</span> Traduciendo...`;
     if (pctEl) { pctEl.textContent = pct + '%'; pctEl.style.display = 'inline'; }
 
-    // Mostrar progreso en el overlay del karaoke (siempre, ya que el reading-area fue eliminado)
-    const kWrap = document.getElementById('karaoke-translation-progress');
+    // Mostrar progreso en el overlay del video
+    const kWrap = document.getElementById('video-translation-progress');
     const kFill = document.getElementById('ktl-fill');
     const kPct = document.getElementById('ktl-pct');
     if (kWrap) kWrap.style.display = 'flex';
@@ -479,8 +951,8 @@ function finalizarProgresoTraduccion() {
     if (label) label.textContent = '⏹ Sin reproducción';
     if (pctEl) { pctEl.textContent = '100%'; setTimeout(() => { pctEl.style.display = 'none'; }, 1200); }
 
-    // Ocultar overlay de karaoke
-    const kWrap = document.getElementById('karaoke-translation-progress');
+    // Ocultar overlay de video
+    const kWrap = document.getElementById('video-translation-progress');
     const kFill = document.getElementById('ktl-fill');
     if (kFill) kFill.style.width = '100%';
     if (kWrap) setTimeout(() => { kWrap.style.display = 'none'; }, 1200);
@@ -505,7 +977,7 @@ function esParrafoEnIngles(texto) {
 }
 
 async function revisarYRetraducirTexto(texto) {
-    mostrarProgresoRevision('Revisando traducci\u00f3n...');
+    if (!_traduccionEnBackground) mostrarProgresoRevision('Revisando traducción...');
     var parrafos = texto.split(/\n\n+/);
     var sinTraducir = 0;
     for (var i = 0; i < parrafos.length; i++) {
@@ -513,7 +985,7 @@ async function revisarYRetraducirTexto(texto) {
         if (!p) continue;
         if (esParrafoEnIngles(p)) {
             sinTraducir++;
-            mostrarProgresoRevision('Corrigiendo ' + sinTraducir + ' fragmento(s) sin traducir...');
+            if (!_traduccionEnBackground) mostrarProgresoRevision('Corrigiendo ' + sinTraducir + ' fragmento(s) sin traducir...');
             try {
                 var ret = await traducirFragmento(p);
                 if (ret && ret !== p && !esParrafoEnIngles(ret)) parrafos[i] = ret;
@@ -522,10 +994,12 @@ async function revisarYRetraducirTexto(texto) {
         }
     }
     var msg = sinTraducir === 0
-        ? 'Revisi\u00f3n completa \u2713'
-        : 'Revisi\u00f3n completa \u2713 \u2014 ' + sinTraducir + ' fragmento(s) corregido(s)';
-    mostrarProgresoRevision(msg);
-    await new Promise(function (r) { setTimeout(r, 1500); });
+        ? 'Revisión completa ✓'
+        : 'Revisión completa ✓ — ' + sinTraducir + ' fragmento(s) corregido(s)';
+    if (!_traduccionEnBackground) {
+        mostrarProgresoRevision(msg);
+        await new Promise(function (r) { setTimeout(r, 1500); });
+    }
     return parrafos.join('\n\n');
 }
 
@@ -576,19 +1050,14 @@ async function traducirTexto(texto) {
     var textoFinal = traducidos.join('\n\n');
 
     // Paso de revisión: retraducir fragmentos que quedaron en inglés
+    // En background esta revisión es silenciosa (no actualiza UI)
     textoFinal = await revisarYRetraducirTexto(textoFinal);
 
-    mostrarNotificacion('✓ Traducción completada');
+    // En background: retornar sin notificaciones ni auto-play
+    if (_traduccionEnBackground) return textoFinal;
 
-    // Auto-reproducir si la opción está activa
-    var autoPlay = document.getElementById('auto-play-after-translate');
-    if (autoPlay && autoPlay.checked) {
-        setTimeout(function () {
-            var contenido = document.getElementById('texto-contenido');
-            if (contenido) contenido.textContent = textoFinal;
-            if (typeof iniciarTTS === 'function') iniciarTTS();
-        }, 600);
-    }
+    mostrarNotificacion('✓ Traducción completada');
+    // El auto-play y la continuación los gestiona cargarCapitulo() centralmente
 
     return textoFinal;
 }
@@ -716,31 +1185,76 @@ async function traducirFragmento(fragmento, intentos = 3) {
 }
 
 // Toggle de traducción automática
-function toggleAutoTranslate() {
-    traduccionAutomatica = document.getElementById('auto-translate').checked;
-    const statusElement = document.getElementById('translation-status');
+// ── CONFIG PENDIENTE — los toggles NO aplican inmediatamente ──
+// Los cambios se acumulan y solo se ejecutan al presionar "Aplicar"
+let _configPendiente = false;
 
-    if (traduccionAutomatica) {
-        statusElement.textContent = '✓ Traducción automática activada (EN → ES)';
-        statusElement.className = 'translation-status active';
-        var apOn = document.getElementById('auto-play-row'); if (apOn) apOn.style.display = 'flex';
+function marcarCambioPendiente() {
+    _configPendiente = true;
+    const row = document.getElementById('aplicar-row');
+    if (row) row.style.display = 'block';
 
-        // Recargar el capítulo actual con traducción
-        const selector = document.getElementById('chapters');
-        if (selector.value) {
-            cargarCapitulo(selector.value);
-        }
-    } else {
-        statusElement.textContent = 'Traducción desactivada';
-        statusElement.className = 'translation-status';
-        var apOff = document.getElementById('auto-play-row'); if (apOff) apOff.style.display = 'none';
+    // Mostrar/ocultar auto-play-row según estado del checkbox de traducción
+    const traducChecked = document.getElementById('auto-translate').checked;
+    const apRow = document.getElementById('auto-play-row');
+    if (apRow) apRow.style.display = traducChecked ? 'flex' : 'none';
 
-        // Recargar el capítulo actual sin traducción
-        const selector = document.getElementById('chapters');
-        if (selector.value) {
-            cargarCapitulo(selector.value);
-        }
+    // Actualizar translation-status con estado "pendiente"
+    const statusEl = document.getElementById('translation-status');
+    if (statusEl) {
+        statusEl.textContent = traducChecked
+            ? '⏳ Traducción activada (pendiente de aplicar)'
+            : '⏳ Traducción desactivada (pendiente de aplicar)';
+        statusEl.className = 'translation-status';
     }
+}
+
+async function aplicarConfiguracion() {
+    const btn = document.getElementById('btn-aplicar');
+    const hint = document.getElementById('aplicar-hint');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Aplicando...'; }
+
+    // Leer estado real de los checkboxes
+    const nuevoTraducir = document.getElementById('auto-translate').checked;
+
+    // Aplicar traducción
+    traduccionAutomatica = nuevoTraducir;
+    const statusEl = document.getElementById('translation-status');
+    if (statusEl) {
+        statusEl.textContent = nuevoTraducir
+            ? '✓ Traducción automática activada (EN → ES)'
+            : 'Traducción desactivada';
+        statusEl.className = nuevoTraducir ? 'translation-status active' : 'translation-status';
+    }
+
+    // Actualizar status del humanizador
+    const humStatus = document.getElementById('humanizer-status');
+    if (humStatus) {
+        const prov = HUMANIZER_PROVIDERS[humanizerProvider];
+        humStatus.textContent = ttsHumanizerActivo
+            ? (claudeApiKey ? `✓ activo · ${prov?.name}` : '⚠ necesita API key')
+            : 'Desactivado';
+    }
+
+    // Invalidar cache para que recargue con la nueva configuración
+    const selector = document.getElementById('chapters');
+    if (selector && selector.value) {
+        // Limpiar cache del capítulo actual para forzar reprocesado
+        if (typeof _capCache !== 'undefined') delete _capCache[selector.value];
+        await cargarCapitulo(selector.value);
+    }
+
+    // Ocultar botón
+    _configPendiente = false;
+    const row = document.getElementById('aplicar-row');
+    if (row) row.style.display = 'none';
+    if (btn) { btn.disabled = false; btn.textContent = '✓ Aplicar'; }
+    if (hint) hint.textContent = 'Cambios pendientes — recarga el capítulo actual';
+}
+
+function toggleAutoTranslate() {
+    // Solo marca como pendiente — NO recarga inmediatamente
+    marcarCambioPendiente();
 }
 
 // Traducir texto actual
@@ -909,7 +1423,9 @@ document.getElementById('epub-file').addEventListener('change', async function (
             selector.appendChild(option);
         });
 
+        window._cargandoProgramaticamente = true;
         selector.selectedIndex = 0;
+        window._cargandoProgramaticamente = false;
 
         document.getElementById('chapter-selector').style.display = 'block';
         document.getElementById('file-name').textContent = `${file.name} (${archivosOrdenados.length} capítulos)`;
@@ -933,66 +1449,187 @@ async function cargarCapitulo(ruta) {
     // Detener TTS si está activo
     detenerTTS();
 
+    // Cancelar cualquier BG en curso (el nuevo capítulo necesita su propio BG luego)
+    _bgCancelToken++;
+
     try {
-        const contenidoHTML = archivosHTML[ruta];
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(contenidoHTML, 'text/html');
+        let textoCompleto;
 
-        const body = doc.body.cloneNode(true);
-
-        body.querySelectorAll('script, style, nav, header, footer').forEach(el => el.remove());
-
-        body.querySelectorAll('a[href*="index_split"]').forEach(el => {
-            const parent = el.parentElement;
-            if (parent && parent.tagName === 'P') {
-                parent.remove();
+        // ── Usar cache si está disponible y el estado coincide ──
+        const estadoHumanizador = ttsHumanizerActivo && !!claudeApiKey;
+        const entrada = _capCache[ruta];
+        if (entrada && entrada.traducida === traduccionAutomatica && entrada.humanizada === estadoHumanizador) {
+            console.log(`⚡ Cargando desde cache: ${ruta.split('/').pop()}`);
+            textoCompleto = entrada.texto;
+            delete _capCache[ruta];
+        } else {
+            // Cache inválido o no existe — procesar ahora
+            if (entrada) {
+                console.log(`♻ Cache invalidado: ${ruta.split('/').pop()}`);
+                delete _capCache[ruta];
             }
-        });
 
-        const parrafos = body.querySelectorAll('p, h1, h2, h3, h4, h5, h6, div');
-        let textoCompleto = '';
+            // Extraer texto del HTML
+            const contenidoHTML = archivosHTML[ruta];
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(contenidoHTML, 'text/html');
+            const body = doc.body.cloneNode(true);
 
-        parrafos.forEach(elemento => {
-            const texto = elemento.innerText.trim();
-            if (texto.length > 0) {
-                if (elemento.tagName.startsWith('H')) {
-                    textoCompleto += '\n\n' + texto + '\n\n';
-                } else {
-                    textoCompleto += texto + '\n\n';
+            body.querySelectorAll('script, style, nav, header, footer').forEach(el => el.remove());
+            body.querySelectorAll('a[href*="index_split"]').forEach(el => {
+                const parent = el.parentElement;
+                if (parent && parent.tagName === 'P') parent.remove();
+            });
+
+            const parrafos = body.querySelectorAll('p, h1, h2, h3, h4, h5, h6, div');
+            textoCompleto = '';
+            parrafos.forEach(elemento => {
+                const texto = (elemento.textContent || '').trim();
+                if (texto.length > 0) {
+                    textoCompleto += (elemento.tagName.startsWith('H') ? '\n\n' + texto + '\n\n' : texto + '\n\n');
                 }
+            });
+            textoCompleto = textoCompleto.replace(/\n\n\n+/g, '\n\n').trim();
+
+            // ─── Barra de progreso unificada: 3 fases ───
+            // Fase 1 (0-60%): Traducción párrafo a párrafo
+            // Fase 2 (60-75%): Revisión
+            // Fase 3 (75-100%): Optimización IA
+            const _mostrarBarraFase = (fase, pctFase, label) => {
+                if (_traduccionEnBackground) return;
+                let pctGlobal;
+                if (fase === 1) pctGlobal = Math.round(pctFase * 0.60);          // 0-60%
+                else if (fase === 2) pctGlobal = Math.round(60 + pctFase * 0.15); // 60-75%
+                else pctGlobal = Math.round(75 + pctFase * 0.25);                 // 75-100%
+
+                const labelTexto = label.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+
+                // ── Barra del reading area (main) ──
+                const mpbWrap = document.getElementById('main-processing-bar');
+                const mpbFill = document.getElementById('mpb-fill');
+                const mpbPct = document.getElementById('mpb-pct');
+                const mpbLabel = document.getElementById('mpb-label');
+                const mpbF1 = document.getElementById('mpb-f1');
+                const mpbF2 = document.getElementById('mpb-f2');
+                const mpbF3 = document.getElementById('mpb-f3');
+                if (mpbWrap) mpbWrap.style.display = 'flex';
+                if (mpbFill) mpbFill.style.width = pctGlobal + '%';
+                if (mpbPct) mpbPct.textContent = pctGlobal + '%';
+                if (mpbLabel) mpbLabel.textContent = labelTexto;
+                if (mpbF1) mpbF1.style.color = fase >= 2 ? 'var(--text-muted)' : 'var(--accent2)';
+                if (mpbF2) mpbF2.style.color = fase === 2 ? 'var(--accent2)' : (fase > 2 ? 'var(--text-muted)' : 'var(--text-dim)');
+                if (mpbF3) mpbF3.style.color = fase === 3 ? 'var(--accent2)' : 'var(--text-dim)';
+
+                // ── Barra antigua (progress-fill + tts-status-label) ──
+                const fill = document.getElementById('progress-fill');
+                const label2 = document.getElementById('tts-status-label');
+                const pctEl = document.getElementById('tts-percent');
+                if (fill) fill.style.width = pctGlobal + '%';
+                if (pctEl) { pctEl.textContent = pctGlobal + '%'; pctEl.style.display = 'inline'; }
+                if (label2) label2.innerHTML = label;
+
+                // ── Overlay del modo video (video) ──
+                const kWrap = document.getElementById('video-translation-progress');
+                const kFill = document.getElementById('ktl-fill');
+                const kPct = document.getElementById('ktl-pct');
+                const kLabel = document.getElementById('ktl-label');
+                const kF1 = document.getElementById('ktl-f1');
+                const kF2 = document.getElementById('ktl-f2');
+                const kF3 = document.getElementById('ktl-f3');
+                if (kWrap) kWrap.style.display = 'flex';
+                if (kFill) kFill.style.width = pctGlobal + '%';
+                if (kPct) kPct.textContent = pctGlobal + '%';
+                if (kLabel) kLabel.textContent = labelTexto;
+                if (kF1) kF1.style.color = fase >= 2 ? 'var(--text-muted)' : 'var(--accent2)';
+                if (kF2) kF2.style.color = fase === 2 ? 'var(--accent2)' : (fase > 2 ? 'var(--text-muted)' : 'var(--text-dim)');
+                if (kF3) kF3.style.color = fase === 3 ? 'var(--accent2)' : 'var(--text-dim)';
+            };
+
+            if (traduccionAutomatica) {
+                document.getElementById('texto-contenido').innerHTML = '';
+                document.getElementById('tts-status').textContent = 'Traduciendo...';
+
+                // Sobrescribir actualizarProgresoTraduccion para usar escala de fase 1
+                const _origActualizar = window._overrideActualizarProgreso;
+                window._overrideActualizarProgreso = (actual, total) => {
+                    _mostrarBarraFase(1, (actual / total) * 100, `<span style="color:var(--accent2)">⟳</span> Traduciendo... ${actual}/${total}`);
+                };
+
+                textoCompleto = await traducirTexto(textoCompleto);
+
+                window._overrideActualizarProgreso = null;
+                document.getElementById('tts-status').textContent = 'Detenido';
+
+                // Fase 2: Revisión (ya ocurre dentro de traducirTexto → revisarYRetraducirTexto)
+                // Actualizar barra a zona de revisión
+                _mostrarBarraFase(2, 50, `<span style="color:var(--accent)">🔍</span> Revisando traducción...`);
+                await new Promise(r => setTimeout(r, 200)); // pequeña pausa visual
             }
-        });
 
-        textoCompleto = textoCompleto
-            .replace(/\n\n\n+/g, '\n\n')
-            .trim();
+            // Fase 3: Optimización IA
+            if (ttsHumanizerActivo && claudeApiKey) {
+                document.getElementById('tts-status').textContent = '✨ Optimizando...';
+                textoCompleto = await naturalizarTextoParaTTS(textoCompleto, (hecho, total) => {
+                    _mostrarBarraFase(3, (hecho / total) * 100, `<span style="color:var(--accent)">✨</span> Optimizando con IA... ${hecho}/${total}`);
+                });
+                document.getElementById('tts-status').textContent = 'Detenido';
+            }
 
-        // Traducir automáticamente si está activado
-        if (traduccionAutomatica) {
-            document.getElementById('texto-contenido').innerHTML = '';
-            // Mostrar progreso siempre en el overlay del karaoke (el del reading-area fue eliminado)
-            const kWrap = document.getElementById('karaoke-translation-progress');
-            const kFill = document.getElementById('ktl-fill');
-            const kPct = document.getElementById('ktl-pct');
-            if (kWrap) kWrap.style.display = 'flex';
-            if (kFill) kFill.style.width = '0%';
-            if (kPct) kPct.textContent = '0%';
-            document.getElementById('tts-status').textContent = 'Traduciendo...';
-            textoCompleto = await traducirTexto(textoCompleto);
-            document.getElementById('tts-status').textContent = 'Detenido';
+            // Completar barra y ocultarla
+            _mostrarBarraFase(3, 100, '✓ Listo');
+            setTimeout(() => {
+                // Ocultar barra del video
+                const kWrap = document.getElementById('video-translation-progress');
+                if (kWrap) kWrap.style.display = 'none';
+                // Ocultar barra del main
+                const mpbWrap = document.getElementById('main-processing-bar');
+                if (mpbWrap) mpbWrap.style.display = 'none';
+                // Resetear progress-fill antiguo
+                const fill = document.getElementById('progress-fill');
+                const pctEl = document.getElementById('tts-percent');
+                if (fill) setTimeout(() => { fill.style.width = '0%'; }, 400);
+                if (pctEl) setTimeout(() => { pctEl.style.display = 'none'; }, 400);
+            }, 800);
+
+            textoCompleto = aplicarReemplazosAutomaticos(textoCompleto);
         }
 
-        textoCompleto = aplicarReemplazosAutomaticos(textoCompleto);
-
         document.getElementById('texto-contenido').textContent = textoCompleto;
-
         actualizarEstadisticas();
 
-        mostrarNotificacion(traduccionAutomatica ? '✓ Capítulo cargado y traducido' : 'Capítulo cargado correctamente');
+        // Actualizar título de capítulo en el visor modo video
+        const capEl = document.getElementById('kp-chapter');
+        const tituloActual = document.getElementById('current-chapter-title')?.textContent || '';
+        if (capEl) capEl.textContent = tituloActual;
 
-        // Si el modo video está abierto, iniciar reproducción automáticamente al terminar de cargar/traducir
-        if (typeof karaokeActive !== 'undefined' && karaokeActive) {
+        mostrarNotificacion(traduccionAutomatica ? '✓ Capítulo listo' : '✓ Capítulo cargado');
+
+        // ── Determinar si iniciar TTS automáticamente ──
+        const eraNavegacionIntencionada = !!window._navegacionIntencionada;
+        window._navegacionIntencionada = false;
+
+        const autoPlayCheckbox = document.getElementById('auto-play-after-translate');
+        const debeAutoPlay = autoPlayCheckbox && autoPlayCheckbox.checked
+            && (traduccionAutomatica || (ttsHumanizerActivo && claudeApiKey));
+
+        if (eraNavegacionIntencionada && typeof videoActive !== 'undefined' && videoActive) {
             setTimeout(() => { iniciarTTS(); }, 200);
+        } else if (debeAutoPlay && !eraNavegacionIntencionada) {
+            setTimeout(() => { iniciarTTS(); }, 400);
+        }
+
+        // ── Pre-procesar el siguiente capítulo en background ──
+        // Capturar el token actual: si el usuario navega antes de los 5s, el callback no hará nada
+        _limpiarCache(ruta);
+        const siguiente = _getSiguienteRuta(ruta);
+        if (siguiente) {
+            const tokenAlProgramar = _bgCancelToken;
+            setTimeout(() => {
+                // Solo arrancar el BG si el usuario no navegó desde que programamos esto
+                if (_bgCancelToken === tokenAlProgramar) {
+                    _preTradducirCapitulo(siguiente);
+                }
+            }, 5000);
         }
 
     } catch (error) {
@@ -1002,7 +1639,23 @@ async function cargarCapitulo(ruta) {
 }
 
 // Evento de cambio en el selector de capítulos
+// Solo responde a cambios hechos por el usuario (no navegación programática)
+window._cargandoProgramaticamente = false;
 document.getElementById('chapters').addEventListener('change', function (e) {
+    if (window._cargandoProgramaticamente) return;
+    // Al cambiar de capítulo manualmente, siempre mostrar botón Aplicar
+    // para que el usuario pueda re-procesar con la configuración actual
+    if (typeof traduccionAutomatica !== 'undefined' || typeof ttsHumanizerActivo !== 'undefined') {
+        const hayProcesamiento = (typeof traduccionAutomatica !== 'undefined' && traduccionAutomatica)
+            || (typeof ttsHumanizerActivo !== 'undefined' && ttsHumanizerActivo);
+        if (hayProcesamiento) {
+            const row = document.getElementById('aplicar-row');
+            const hint = document.getElementById('aplicar-hint');
+            if (row) row.style.display = 'block';
+            if (hint) hint.textContent = 'Nuevo capítulo — presiona Aplicar para procesar';
+            _configPendiente = true;
+        }
+    }
     cargarCapitulo(e.target.value);
 });
 
