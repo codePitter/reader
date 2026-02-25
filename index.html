@@ -1714,6 +1714,76 @@
             </div>
         </div>
 
+        <!-- Imágenes IA en Modo Video -->
+        <div class="sidebar-section">
+            <div class="section-label collapsible-label" onclick="toggleImagenIAPanel()" style="cursor:pointer;user-select:none;display:flex;align-items:center;">
+                🖼 Imágenes IA <span id="img-ia-arrow" style="margin-left:auto;font-size:0.7rem;color:var(--text-dim);">▶</span>
+            </div>
+            <div id="imagen-ia-body" style="display:none;margin-top:8px;">
+                <!-- Selector de proveedor -->
+                <div style="font-size:0.65rem;color:var(--text-dim);margin-bottom:6px;">Proveedor de imágenes</div>
+                <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:10px;">
+                    <label style="display:flex;align-items:center;gap:6px;font-size:0.72rem;cursor:pointer;">
+                        <input type="radio" name="img-provider" value="stability" id="prov-stability" onchange="setImageProvider('stability')" style="accent-color:var(--accent);">
+                        <span>Stability AI <span style="color:var(--accent2);font-size:0.65rem;">(requiere key)</span></span>
+                    </label>
+                    <label style="display:flex;align-items:center;gap:6px;font-size:0.72rem;cursor:pointer;">
+                        <input type="radio" name="img-provider" value="pollinations" id="prov-pollinations" onchange="setImageProvider('pollinations')" style="accent-color:var(--accent);" checked>
+                        <span>Pollinations.AI <span style="color:var(--accent2);font-size:0.65rem;">(gratis)</span></span>
+                    </label>
+                    <label style="display:flex;align-items:center;gap:6px;font-size:0.72rem;cursor:pointer;">
+                        <input type="radio" name="img-provider" value="procedural" id="prov-procedural" onchange="setImageProvider('procedural')" style="accent-color:var(--accent);">
+                        <span>Procedural <span style="color:var(--accent2);font-size:0.65rem;">(sin internet)</span></span>
+                    </label>
+                </div>
+
+                <!-- Panel Stability AI -->
+                <div id="stability-panel" style="display:none;">
+                    <div style="font-size:0.58rem;color:var(--text-dim);margin-bottom:4px;">
+                        🔑 Stability AI API Key <span style="color:var(--accent2)" id="stability-key-status"></span>
+                    </div>
+                    <div style="display:flex;gap:6px;margin-bottom:6px;">
+                        <input type="password" id="stability-api-key" placeholder="sk-..."
+                               style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:4px;
+                               color:var(--text);font-family:'DM Mono',monospace;font-size:0.62rem;padding:5px 8px;outline:none;">
+                        <button onclick="guardarStabilityKey()"
+                                style="background:var(--accent);border:none;border-radius:4px;color:var(--bg);
+                                font-family:'DM Mono',monospace;font-size:0.6rem;padding:5px 8px;cursor:pointer;">
+                            OK
+                        </button>
+                    </div>
+                    <!-- Modelo -->
+                    <div style="font-size:0.58rem;color:var(--text-dim);margin-bottom:4px;">Modelo</div>
+                    <select id="stability-model" onchange="stabilityModel=this.value; localStorage.setItem('stability_model', this.value);"
+                            style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:4px;
+                            color:var(--text);font-family:'DM Mono',monospace;font-size:0.62rem;padding:4px 6px;margin-bottom:6px;">
+                        <option value="sd3.5-large">SD3.5 Large (mejor calidad · 6.5 créditos)</option>
+                        <option value="sd3.5-large-turbo">SD3.5 Large Turbo (rápido · 4 créditos)</option>
+                        <option value="sd3.5-medium" selected>SD3.5 Medium (equilibrado · 3.5 créditos)</option>
+                        <option value="core">Stable Image Core (económico · 3 créditos)</option>
+                        <option value="ultra">Stable Image Ultra (premium · 8 créditos)</option>
+                    </select>
+                    <div style="font-size:0.55rem;color:var(--text-dim);">
+                        Obtener key gratis en <a href="https://platform.stability.ai" target="_blank" style="color:var(--accent2);">platform.stability.ai</a>
+                    </div>
+                </div>
+
+                <!-- Panel Pollinations info -->
+                <div id="pollinations-panel" style="font-size:0.6rem;color:var(--text-dim);padding:6px;background:rgba(255,255,255,0.03);border-radius:4px;">
+                    Usa Flux via Pollinations.AI — sin key, sin límite, imagen en ~5-10s
+                </div>
+
+                <!-- Panel Procedural info -->
+                <div id="procedural-panel" style="display:none;font-size:0.6rem;color:var(--text-dim);padding:6px;background:rgba(255,255,255,0.03);border-radius:4px;">
+                    Fondo generado localmente con Canvas 2D — instantáneo, sin internet
+                </div>
+
+                <div style="font-size:0.6rem;color:var(--text-dim);margin-top:8px;" id="img-ia-status-txt">
+                    Activa el visor y presiona 🖼 IA
+                </div>
+            </div>
+        </div>
+
     </div>
 
     <script src="js/main.js"></script>
@@ -3275,11 +3345,7 @@
             return parts.join(', ') + ', ' + styleTag;
         }
 
-        // URL de Pollinations — model=flux, parámetros documentados
-        function pollinationsUrl(prompt, seed) {
-            const encoded = encodeURIComponent(prompt);
-            return `https://image.pollinations.ai/prompt/${encoded}?model=flux&width=1280&height=720&seed=${seed}&nologo=true&enhance=true&private=true`;
-        }
+        // URL de Pollinations — movida al bloque de proveedores de imágenes arriba
 
         // ═══════════════════════════════════════
         // GENERADOR DE FONDOS PROCEDURAL (Canvas 2D)
@@ -3475,9 +3541,169 @@
             console.log(`🎨 Fondo procedural generado — slot ${slot} (${tipo})`);
         }
 
+        // ═══════════════════════════════════════
+        // PROVEEDORES DE IMÁGENES IA
+        // ═══════════════════════════════════════
+        let imageProvider = localStorage.getItem('img_provider') || 'pollinations';
+        let stabilityApiKey = localStorage.getItem('stability_api_key') || '';
+        let stabilityModel = localStorage.getItem('stability_model') || 'sd3.5-medium';
+
+        // Inicializar UI al cargar
+        (function initImageProviderUI() {
+            const radio = document.getElementById('prov-' + imageProvider);
+            if (radio) radio.checked = true;
+            const modelSel = document.getElementById('stability-model');
+            if (modelSel) modelSel.value = stabilityModel;
+            if (stabilityApiKey) {
+                const st = document.getElementById('stability-key-status');
+                if (st) st.textContent = '✓ guardada';
+            }
+            _updateProviderPanels(imageProvider);
+        })();
+
+        function toggleImagenIAPanel() {
+            const body = document.getElementById('imagen-ia-body');
+            const arrow = document.getElementById('img-ia-arrow');
+            const open = body.style.display === 'none';
+            body.style.display = open ? 'block' : 'none';
+            if (arrow) arrow.textContent = open ? '▼' : '▶';
+        }
+
+        function _updateProviderPanels(prov) {
+            document.getElementById('stability-panel').style.display = prov === 'stability' ? 'block' : 'none';
+            document.getElementById('pollinations-panel').style.display = prov === 'pollinations' ? 'block' : 'none';
+            document.getElementById('procedural-panel').style.display = prov === 'procedural' ? 'block' : 'none';
+        }
+
+        function setImageProvider(prov) {
+            imageProvider = prov;
+            localStorage.setItem('img_provider', prov);
+            _updateProviderPanels(prov);
+            // Invalidar slots cargados para que se regeneren con el nuevo proveedor
+            if (aiImagesEnabled) {
+                aiSlotSolicitado = {};
+                aiCurrentSlot = -1;
+                const slot = getSlotForSentence(typeof currentSentenceIndex !== 'undefined' ? currentSentenceIndex : 0);
+                solicitarImagenParaSlot(slot);
+            }
+            mostrarNotificacion(`🖼 Proveedor: ${prov}`);
+        }
+
+        function guardarStabilityKey() {
+            const key = document.getElementById('stability-api-key').value.trim();
+            if (!key) { document.getElementById('stability-key-status').textContent = '⚠ vacía'; return; }
+            stabilityApiKey = key;
+            localStorage.setItem('stability_api_key', key);
+            document.getElementById('stability-api-key').value = '';
+            document.getElementById('stability-key-status').textContent = '✓ guardada';
+            setTimeout(() => { document.getElementById('stability-key-status').textContent = ''; }, 2000);
+        }
+
+        // Genera imagen con Stability AI SD3 API
+        async function generarImagenStability(prompt, seed) {
+            if (!stabilityApiKey) return null;
+            const modelo = stabilityModel || 'sd3.5-medium';
+
+            // Elegir endpoint según modelo
+            let endpoint;
+            if (modelo === 'core') {
+                endpoint = 'https://api.stability.ai/v2beta/stable-image/generate/core';
+            } else if (modelo === 'ultra') {
+                endpoint = 'https://api.stability.ai/v2beta/stable-image/generate/ultra';
+            } else {
+                endpoint = 'https://api.stability.ai/v2beta/stable-image/generate/sd3';
+            }
+
+            const body = new FormData();
+            body.append('prompt', prompt.slice(0, 10000));
+            body.append('output_format', 'jpeg');
+            body.append('seed', String(seed % 4294967295));
+            body.append('aspect_ratio', '16:9'); // formato correcto con ":"
+            // Para SD3/SD3.5 hay que especificar el modelo y el modo
+            if (modelo !== 'core' && modelo !== 'ultra') {
+                body.append('model', modelo);
+                body.append('mode', 'text-to-image');
+            }
+
+            try {
+                const res = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {
+                        'authorization': `Bearer ${stabilityApiKey}`,
+                        'accept': 'image/*'
+                    },
+                    body
+                });
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    const errMsg = JSON.stringify(err?.errors || err?.message || err?.name || res.statusText);
+                    console.warn(`Stability AI error ${res.status}:`, errMsg);
+                    return null;
+                }
+                const blob = await res.blob();
+                return URL.createObjectURL(blob);
+            } catch (e) {
+                console.warn('Stability AI falló:', e.message);
+                return null;
+            }
+        }
+
+        // Genera imagen con Pollinations.AI (Flux) — gratis, sin key
+        function pollinationsUrl(prompt, seed) {
+            const encoded = encodeURIComponent(prompt);
+            return `https://image.pollinations.ai/prompt/${encoded}?model=flux&width=1280&height=720&seed=${seed}&nologo=true&enhance=true&private=true`;
+        }
+
         async function cargarImagenConFallback(prompt, seed, slot) {
-            // Generación local instantánea — sin APIs externas, sin CORS, sin queue
-            dibujarFondoProcedural(slot, prompt);
+            const statusTxt = document.getElementById('img-ia-status-txt');
+
+            if (imageProvider === 'procedural') {
+                dibujarFondoProcedural(slot, prompt);
+                return;
+            }
+
+            if (imageProvider === 'stability' && stabilityApiKey) {
+                if (statusTxt) statusTxt.textContent = `🔄 Stability AI generando slot ${slot}...`;
+                if (aiLoadingSlot === null) aiLoadingSlot = slot;
+                const url = await generarImagenStability(prompt, seed);
+                if (url) {
+                    mostrarImagenEnPanel(slot, url);
+                    aiLoadingSlot = null;
+                    if (statusTxt) statusTxt.textContent = `✓ Stability AI · slot ${slot}`;
+                    return;
+                }
+                // Fallback a Pollinations si Stability falla
+                console.warn('Stability falló → usando Pollinations como fallback');
+                if (statusTxt) statusTxt.textContent = `⚠ Stability falló → Pollinations slot ${slot}`;
+            }
+
+            // Pollinations — cargar imagen como <img> y esperar onload
+            if (statusTxt) statusTxt.textContent = `⏳ Pollinations slot ${slot}...`;
+            if (aiLoadingSlot === null) aiLoadingSlot = slot;
+            const url = pollinationsUrl(prompt, seed);
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            const timeoutId = setTimeout(() => {
+                // Si tarda más de 20s, usar procedural como fallback
+                console.warn(`Pollinations timeout slot ${slot} → procedural`);
+                dibujarFondoProcedural(slot, prompt);
+                if (aiLoadingSlot === slot) aiLoadingSlot = null;
+                if (statusTxt) statusTxt.textContent = `⏱ Timeout → procedural slot ${slot}`;
+            }, 20000);
+            img.onload = () => {
+                clearTimeout(timeoutId);
+                mostrarImagenEnPanel(slot, url);
+                if (aiLoadingSlot === slot) aiLoadingSlot = null;
+                if (statusTxt) statusTxt.textContent = `✓ Pollinations · slot ${slot}`;
+            };
+            img.onerror = () => {
+                clearTimeout(timeoutId);
+                console.warn(`Pollinations error slot ${slot} → procedural`);
+                dibujarFondoProcedural(slot, prompt);
+                if (aiLoadingSlot === slot) aiLoadingSlot = null;
+                if (statusTxt) statusTxt.textContent = `⚠ Error → procedural slot ${slot}`;
+            };
+            img.src = url;
         }
 
         async function solicitarImagenParaSlot(slot) {
