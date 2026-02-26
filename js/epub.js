@@ -26,6 +26,10 @@ document.getElementById('epub-file').addEventListener('change', async function (
         archivosHTML = {};
         const promesas = [];
 
+        // ── También capturar TOC/NCX/NAV para extraer títulos reales ──
+        let _tocMap = {};
+        let _ncxText = null, _navText = null, _opfBase = '';
+
         zip.forEach((rutaRelativa, archivo) => {
             if (rutaRelativa.match(/\.(html|xhtml)$/i) && !rutaRelativa.includes('nav.xhtml')) {
                 promesas.push(
@@ -34,9 +38,50 @@ document.getElementById('epub-file').addEventListener('change', async function (
                     })
                 );
             }
+            if (rutaRelativa.match(/toc\.ncx$/i)) {
+                promesas.push(archivo.async('text').then(t => { _ncxText = t; }));
+            }
+            if (rutaRelativa.match(/nav\.xhtml$/i)) {
+                promesas.push(archivo.async('text').then(t => { _navText = t; }));
+            }
+            if (rutaRelativa.match(/\.opf$/i)) {
+                _opfBase = rutaRelativa.split('/').slice(0, -1).join('/');
+            }
         });
 
         await Promise.all(promesas);
+
+        // Construir mapa ruta → título desde NCX (EPUB2)
+        if (_ncxText) {
+            try {
+                const _ncxDoc = new DOMParser().parseFromString(_ncxText, 'application/xml');
+                _ncxDoc.querySelectorAll('navPoint').forEach(np => {
+                    const src = np.querySelector('content')?.getAttribute('src');
+                    const label = np.querySelector('navLabel text')?.textContent?.trim();
+                    if (src && label) {
+                        const clean = src.split('#')[0];
+                        _tocMap[clean] = label;
+                        if (_opfBase) _tocMap[_opfBase + '/' + clean] = label;
+                    }
+                });
+            } catch (e) { console.warn('NCX parse error', e); }
+        }
+
+        // Construir mapa ruta → título desde nav.xhtml (EPUB3)
+        if (_navText) {
+            try {
+                const _navDoc = new DOMParser().parseFromString(_navText, 'text/html');
+                _navDoc.querySelectorAll('nav a, ol a').forEach(a => {
+                    const href = a.getAttribute('href');
+                    const label = a.textContent.trim();
+                    if (href && label) {
+                        const clean = href.split('#')[0];
+                        _tocMap[clean] = label;
+                        if (_opfBase) _tocMap[_opfBase + '/' + clean] = label;
+                    }
+                });
+            } catch (e) { console.warn('NAV parse error', e); }
+        }
 
         // Ordenar numéricamente extrayendo todos los números del nombre de archivo
         const archivosOrdenados = Object.keys(archivosHTML).sort((a, b) => {
@@ -71,10 +116,20 @@ document.getElementById('epub-file').addEventListener('change', async function (
             // Método mejorado para extraer el título del capítulo
             let titulo = null;
 
-            // 1. Intentar obtener de <title>
-            const titleElement = doc.querySelector('title');
-            if (titleElement && titleElement.textContent.trim()) {
-                titulo = titleElement.textContent.trim();
+            // 0. PRIORIDAD: buscar en el TOC/NCX del EPUB (fuente más confiable)
+            // Intentar con ruta completa, luego solo el nombre de archivo
+            const rutaCorta = ruta.split('/').pop();
+            if (_tocMap[ruta]) {
+                titulo = _tocMap[ruta];
+            } else if (_tocMap[rutaCorta]) {
+                titulo = _tocMap[rutaCorta];
+            }
+
+            // 1. Si no está en TOC, intentar <title> (solo si no dice "Unknown")
+            if (!titulo) {
+                const titleElement = doc.querySelector('title');
+                const t = titleElement?.textContent?.trim();
+                if (t && !/^unknown$/i.test(t)) titulo = t;
             }
 
             // 2. Intentar obtener del primer h1, h2 o h3
@@ -320,6 +375,14 @@ async function cargarCapitulo(ruta) {
 
         renderizarTextoEnContenedor(document.getElementById('texto-contenido'), textoCompleto);
         actualizarEstadisticas();
+
+        // ── Actualizar título de capítulo en el header (junto al botón Editor) ──
+        const selector = document.getElementById('chapters');
+        const tituloSeleccionado = selector?.options[selector.selectedIndex]?.textContent || '';
+        const headerTitleEl = document.getElementById('current-chapter-title');
+        if (headerTitleEl && tituloSeleccionado) {
+            headerTitleEl.textContent = tituloSeleccionado;
+        }
 
         // Actualizar título de capítulo en el visor modo video
         const capEl = document.getElementById('kp-chapter');
