@@ -18,19 +18,19 @@ let _expFileName = '';       // nombre de archivo congelado al iniciar — no ca
 let _expEffects = {
     grayscale: false,
     vignette: true,
-    vigIntensity: 0.65,   // 0–1
-    vigSize: 0.85,    // radio exterior (0.5–1.2)
-    imgOpacity: 0.58,    // 0.05–1
-    brightness: 1.0,     // 0.5–2
-    contrast: 1.0,     // 0.5–2
-    zoom: 1.0,     // 1–2
+    vigIntensity: 0.65,
+    vigSize: 0.85,
+    imgOpacity: 0.58,
+    brightness: 1.0,
+    contrast: 1.0,
+    zoom: 1.0,
     textColor: '#c8a96e',
     textOpacity: 1.0,
-    fontFamily: 'Georgia,serif',  // tipografía del texto
-    strokeType: 'solid',          // 'none' | 'solid' | 'gradient'
-    strokeWidth: 1,               // px
-    strokeColor1: '#000000',      // color sólido / inicio degradado
-    strokeColor2: '#1a0a00',      // fin degradado
+    fontFamily: 'Georgia,serif',
+    strokeType: 'solid',
+    strokeWidth: 1,
+    strokeColor1: '#000000',
+    strokeColor2: '#1a0a00',
 };
 let _expImagenes = [];   // [{ img: HTMLImageElement|null, url: string, grupo: int }]
 
@@ -399,6 +399,15 @@ function _renderModalImagenes() {
                                color:#555;font-size:.57rem;padding:6px 12px;cursor:pointer;">
                     Cancelar
                 </button>
+                <button onclick="_expAbrirCarpetaLocal()"
+                        title="Cargar una carpeta local con imágenes y distribuirlas aleatoriamente"
+                        style="background:rgba(200,169,110,.1);border:1px solid rgba(200,169,110,.3);border-radius:5px;
+                               color:#c8a96e;font-size:.57rem;padding:6px 12px;cursor:pointer;white-space:nowrap;">
+                    📂 Carpeta local
+                </button>
+                <input id="exp-folder-input" type="file" accept="image/*" multiple webkitdirectory
+                       style="display:none;"
+                       onchange="_expCargarCarpetaLocal(this)">
                 <button onclick="_abrirPreviewEfectos()"
                         id="exp-btn-start"
                         style="background:#c8a96e;border:none;border-radius:5px;
@@ -492,6 +501,44 @@ function _expCargarArchivoLocal(g, inputEl) {
 }
 
 // ───────────────────────────────────────────────────────────────────
+// ───────────────────────────────────────────────────────────────────
+// CARPETA LOCAL — distribuir imágenes aleatoriamente
+// ───────────────────────────────────────────────────────────────────
+
+function _expAbrirCarpetaLocal() {
+    const input = document.getElementById('exp-folder-input');
+    if (input) input.click();
+}
+
+function _expCargarCarpetaLocal(inputEl) {
+    const files = Array.from(inputEl.files || []).filter(f => f.type.startsWith('image/'));
+    if (!files.length) { mostrarNotificacion('⚠ No se encontraron imágenes en la selección'); return; }
+
+    const grupos = _expImagenes.length;
+    mostrarNotificacion(`✓ ${files.length} imágenes cargadas — distribuyendo en ${grupos} grupos`);
+
+    // Mezclar con Fisher-Yates
+    const shuffled = [...files];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+
+    for (let g = 0; g < grupos; g++) {
+        const file = shuffled[g % shuffled.length];
+        const objectUrl = URL.createObjectURL(file);
+        const wrap = document.getElementById(`exp-thumb-wrap-${g}`);
+        if (wrap) wrap.style.backgroundImage = `url('${objectUrl}')`;
+        const urlInput = document.getElementById(`exp-url-${g}`);
+        if (urlInput) urlInput.value = `[local] ${file.name}`;
+        const img = new Image();
+        const _g = g;
+        img.onload = () => { _expImagenes[_g].img = img; _expImagenes[_g].url = objectUrl; _expImagenes[_g].localBlob = true; };
+        img.src = objectUrl;
+    }
+    inputEl.value = '';
+}
+
 // HELPERS MODAL
 // ───────────────────────────────────────────────────────────────────
 function _quitarModal() {
@@ -925,7 +972,7 @@ function _abrirPreviewEfectos() {
                     <div style="display:flex;gap:5px;margin-bottom:7px;">
                         <button id="exp-stroke-none" onclick="_expSetStrokeType('none')"
                             style="flex:1;padding:5px 0;font-size:.52rem;background:${_expEffects.strokeType === 'none' ? 'rgba(200,169,110,.18)' : 'rgba(255,255,255,.04)'};border:1px solid ${_expEffects.strokeType === 'none' ? 'rgba(200,169,110,.5)' : '#2a2a2a'};border-radius:4px;color:${_expEffects.strokeType === 'none' ? '#c8a96e' : '#888'};cursor:pointer;font-family:'DM Mono',monospace;">
-                            ✕ Sin borde
+                            ✕ Sin
                         </button>
                         <button id="exp-stroke-solid" onclick="_expSetStrokeType('solid')"
                             style="flex:1;padding:5px 0;font-size:.52rem;background:${_expEffects.strokeType === 'solid' ? 'rgba(200,169,110,.18)' : 'rgba(255,255,255,.04)'};border:1px solid ${_expEffects.strokeType === 'solid' ? 'rgba(200,169,110,.5)' : '#2a2a2a'};border-radius:4px;color:${_expEffects.strokeType === 'solid' ? '#c8a96e' : '#888'};cursor:pointer;font-family:'DM Mono',monospace;">
@@ -1025,7 +1072,6 @@ function _abrirPreviewEfectos() {
 
 function _expSetStrokeType(type) {
     _expEffects.strokeType = type;
-    // Update button styles
     ['none', 'solid', 'gradient'].forEach(t => {
         const btn = document.getElementById(`exp-stroke-${t}`);
         if (!btn) return;
