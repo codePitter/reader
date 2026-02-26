@@ -18,19 +18,15 @@ let _expFileName = '';       // nombre de archivo congelado al iniciar — no ca
 let _expEffects = {
     grayscale: false,
     vignette: true,
-    vigIntensity: 0.65,
-    vigSize: 0.85,
-    imgOpacity: 0.58,
-    brightness: 1.0,
-    contrast: 1.0,
-    zoom: 1.0,
+    vigIntensity: 0.65,   // 0–1
+    vigSize: 0.85,    // radio exterior (0.5–1.2)
+    imgOpacity: 0.58,    // 0.05–1
+    brightness: 1.0,     // 0.5–2
+    contrast: 1.0,     // 0.5–2
+    zoom: 1.0,     // 1–2
     textColor: '#c8a96e',
     textOpacity: 1.0,
-    fontFamily: 'Georgia,serif',
-    strokeType: 'solid',
-    strokeWidth: 1,
-    strokeColor1: '#000000',
-    strokeColor2: '#1a0a00',
+    fontFamily: 'Georgia,serif',  // tipografía del texto
 };
 let _expImagenes = [];   // [{ img: HTMLImageElement|null, url: string, grupo: int }]
 
@@ -399,15 +395,6 @@ function _renderModalImagenes() {
                                color:#555;font-size:.57rem;padding:6px 12px;cursor:pointer;">
                     Cancelar
                 </button>
-                <button onclick="_expAbrirCarpetaLocal()"
-                        title="Cargar una carpeta local con imágenes y distribuirlas aleatoriamente"
-                        style="background:rgba(200,169,110,.1);border:1px solid rgba(200,169,110,.3);border-radius:5px;
-                               color:#c8a96e;font-size:.57rem;padding:6px 12px;cursor:pointer;white-space:nowrap;">
-                    📂 Carpeta local
-                </button>
-                <input id="exp-folder-input" type="file" accept="image/*" multiple webkitdirectory
-                       style="display:none;"
-                       onchange="_expCargarCarpetaLocal(this)">
                 <button onclick="_abrirPreviewEfectos()"
                         id="exp-btn-start"
                         style="background:#c8a96e;border:none;border-radius:5px;
@@ -501,44 +488,6 @@ function _expCargarArchivoLocal(g, inputEl) {
 }
 
 // ───────────────────────────────────────────────────────────────────
-// ───────────────────────────────────────────────────────────────────
-// CARPETA LOCAL — distribuir imágenes aleatoriamente
-// ───────────────────────────────────────────────────────────────────
-
-function _expAbrirCarpetaLocal() {
-    const input = document.getElementById('exp-folder-input');
-    if (input) input.click();
-}
-
-function _expCargarCarpetaLocal(inputEl) {
-    const files = Array.from(inputEl.files || []).filter(f => f.type.startsWith('image/'));
-    if (!files.length) { mostrarNotificacion('⚠ No se encontraron imágenes en la selección'); return; }
-
-    const grupos = _expImagenes.length;
-    mostrarNotificacion(`✓ ${files.length} imágenes cargadas — distribuyendo en ${grupos} grupos`);
-
-    // Mezclar con Fisher-Yates
-    const shuffled = [...files];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-
-    for (let g = 0; g < grupos; g++) {
-        const file = shuffled[g % shuffled.length];
-        const objectUrl = URL.createObjectURL(file);
-        const wrap = document.getElementById(`exp-thumb-wrap-${g}`);
-        if (wrap) wrap.style.backgroundImage = `url('${objectUrl}')`;
-        const urlInput = document.getElementById(`exp-url-${g}`);
-        if (urlInput) urlInput.value = `[local] ${file.name}`;
-        const img = new Image();
-        const _g = g;
-        img.onload = () => { _expImagenes[_g].img = img; _expImagenes[_g].url = objectUrl; _expImagenes[_g].localBlob = true; };
-        img.src = objectUrl;
-    }
-    inputEl.value = '';
-}
-
 // HELPERS MODAL
 // ───────────────────────────────────────────────────────────────────
 function _quitarModal() {
@@ -965,38 +914,6 @@ function _abrirPreviewEfectos() {
                     <input type="color" id="exp-fx-color" value="${_expEffects.textColor}"
                            oninput="_expFxChange()" style="width:100%;height:28px;border:1px solid #2a2a2a;border-radius:4px;background:#0d0d0d;cursor:pointer;">
                 </div>
-
-                <!-- Borde de texto -->
-                <div style="margin-top:10px;">
-                    <div style="font-size:.52rem;color:#888;margin-bottom:6px;">Borde texto</div>
-                    <div style="display:flex;gap:5px;margin-bottom:7px;">
-                        <button id="exp-stroke-none" onclick="_expSetStrokeType('none')"
-                            style="flex:1;padding:5px 0;font-size:.52rem;background:${_expEffects.strokeType === 'none' ? 'rgba(200,169,110,.18)' : 'rgba(255,255,255,.04)'};border:1px solid ${_expEffects.strokeType === 'none' ? 'rgba(200,169,110,.5)' : '#2a2a2a'};border-radius:4px;color:${_expEffects.strokeType === 'none' ? '#c8a96e' : '#888'};cursor:pointer;font-family:'DM Mono',monospace;">
-                            ✕ Sin
-                        </button>
-                        <button id="exp-stroke-solid" onclick="_expSetStrokeType('solid')"
-                            style="flex:1;padding:5px 0;font-size:.52rem;background:${_expEffects.strokeType === 'solid' ? 'rgba(200,169,110,.18)' : 'rgba(255,255,255,.04)'};border:1px solid ${_expEffects.strokeType === 'solid' ? 'rgba(200,169,110,.5)' : '#2a2a2a'};border-radius:4px;color:${_expEffects.strokeType === 'solid' ? '#c8a96e' : '#888'};cursor:pointer;font-family:'DM Mono',monospace;">
-                            ▣ Sólido
-                        </button>
-                        <button id="exp-stroke-gradient" onclick="_expSetStrokeType('gradient')"
-                            style="flex:1;padding:5px 0;font-size:.52rem;background:${_expEffects.strokeType === 'gradient' ? 'rgba(200,169,110,.18)' : 'rgba(255,255,255,.04)'};border:1px solid ${_expEffects.strokeType === 'gradient' ? 'rgba(200,169,110,.5)' : '#2a2a2a'};border-radius:4px;color:${_expEffects.strokeType === 'gradient' ? '#c8a96e' : '#888'};cursor:pointer;font-family:'DM Mono',monospace;">
-                            ▦ Degrado
-                        </button>
-                    </div>
-                    <div id="exp-stroke-color-row" style="display:flex;align-items:center;gap:8px;margin-bottom:7px;${_expEffects.strokeType === 'none' ? 'opacity:.35;pointer-events:none;' : ''}">
-                        <input type="color" id="exp-fx-stroke-c1" value="${_expEffects.strokeColor1}"
-                               oninput="_expFxChange()" style="width:36px;height:24px;border:1px solid #2a2a2a;border-radius:4px;background:#0d0d0d;cursor:pointer;padding:0;flex-shrink:0;">
-                        <div id="exp-stroke-grad-c2" style="display:${_expEffects.strokeType === 'gradient' ? 'flex' : 'none'};align-items:center;gap:6px;">
-                            <span style="font-size:.5rem;color:#555;">→</span>
-                            <input type="color" id="exp-fx-stroke-c2" value="${_expEffects.strokeColor2}"
-                                   oninput="_expFxChange()" style="width:36px;height:24px;border:1px solid #2a2a2a;border-radius:4px;background:#0d0d0d;cursor:pointer;padding:0;">
-                        </div>
-                        <span style="font-size:.5rem;color:#666;margin-left:auto;">Ancho</span>
-                        <input type="range" id="exp-fx-stroke-w" min="0" max="6" step="0.5" value="${_expEffects.strokeWidth}"
-                               oninput="_expFxChange()" style="width:70px;accent-color:#c8a96e;">
-                        <span id="exp-fx-stroke-w-val" style="font-size:.52rem;color:#c8a96e;min-width:22px;text-align:right;">${_expEffects.strokeWidth}px</span>
-                    </div>
-                </div>
             </div>
 
             <!-- Zoom -->
@@ -1070,23 +987,6 @@ function _abrirPreviewEfectos() {
     _expPreviewRender();
 }
 
-function _expSetStrokeType(type) {
-    _expEffects.strokeType = type;
-    ['none', 'solid', 'gradient'].forEach(t => {
-        const btn = document.getElementById(`exp-stroke-${t}`);
-        if (!btn) return;
-        const active = t === type;
-        btn.style.background = active ? 'rgba(200,169,110,.18)' : 'rgba(255,255,255,.04)';
-        btn.style.borderColor = active ? 'rgba(200,169,110,.5)' : '#2a2a2a';
-        btn.style.color = active ? '#c8a96e' : '#888';
-    });
-    const colorRow = document.getElementById('exp-stroke-color-row');
-    if (colorRow) { colorRow.style.opacity = type === 'none' ? '0.35' : '1'; colorRow.style.pointerEvents = type === 'none' ? 'none' : ''; }
-    const gradC2 = document.getElementById('exp-stroke-grad-c2');
-    if (gradC2) gradC2.style.display = type === 'gradient' ? 'flex' : 'none';
-    _expPreviewRender();
-}
-
 function _expFxChange() {
     const bw = document.getElementById('exp-fx-bw')?.checked ?? false;
     const vig = document.getElementById('exp-fx-vignette')?.checked ?? true;
@@ -1099,10 +999,6 @@ function _expFxChange() {
     const textColor = document.getElementById('exp-fx-color')?.value ?? '#c8a96e';
     const zoom = (document.getElementById('exp-fx-zoom')?.value ?? 100) / 100;
     const fontFamily = document.getElementById('exp-fx-font')?.value ?? 'Georgia,serif';
-    const strokeType = _expEffects.strokeType ?? 'solid';
-    const strokeWidth = parseFloat(document.getElementById('exp-fx-stroke-w')?.value ?? 1);
-    const strokeColor1 = document.getElementById('exp-fx-stroke-c1')?.value ?? '#000000';
-    const strokeColor2 = document.getElementById('exp-fx-stroke-c2')?.value ?? '#1a0a00';
 
     // Actualizar preview de tipografía
     const fontPrev = document.getElementById('exp-font-preview');
@@ -1110,8 +1006,7 @@ function _expFxChange() {
 
     _expEffects = {
         grayscale: bw, vignette: vig, imgOpacity: opacity, brightness, contrast,
-        vigIntensity: vigInt, vigSize, textColor, textOpacity: textOp, zoom, fontFamily,
-        strokeType, strokeWidth, strokeColor1, strokeColor2
+        vigIntensity: vigInt, vigSize, textColor, textOpacity: textOp, zoom, fontFamily
     };
 
     // Actualizar labels
@@ -1124,7 +1019,6 @@ function _expFxChange() {
     set('exp-fx-textopacity-val', Math.round(textOp * 100) + '%');
     set('exp-fx-color-val', textColor);
     set('exp-fx-zoom-val', zoom.toFixed(2) + 'x');
-    set('exp-fx-stroke-w-val', strokeWidth + 'px');
 
     _expPreviewRender();
 }
@@ -1317,20 +1211,26 @@ async function _expRenderizar(audioBuffers, updateFn) {
         return;
     }
 
-    // ── Descarga ──
+    // ── Descarga / Conversión ──
     updateFn(100, '✓ Preparando descarga…');
     const blob = new Blob(chunks, { type: mimeType });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${_expFileName}.webm`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 8000);
-
-    mostrarNotificacion('✓ Video exportado correctamente');
     document.getElementById('exp-float-widget')?.remove();
+
+    // Si convert_mp4.js está cargado → mostrar diálogo WebM vs MP4
+    if (typeof _ofrecerDescargaOConversion === 'function') {
+        _ofrecerDescargaOConversion(blob, _expFileName);
+    } else {
+        // Fallback: descarga directa WebM
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${_expFileName}.webm`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 8000);
+        mostrarNotificacion('✓ Video exportado correctamente');
+    }
 }
 
 // ───────────────────────────────────────────────────────────────────
@@ -1397,10 +1297,6 @@ function _expDibujarFrame(ctx, W, H, img, current, total, _sentencesSnap, imgIte
     const textColor = fx.textColor ?? (typeof _videoTextColor !== 'undefined' ? _videoTextColor : '#c8a96e');
     const textOpacity = fx.textOpacity ?? (typeof _videoTextOpacity !== 'undefined' ? _videoTextOpacity : 1);
     const fontFamily = fx.fontFamily ?? 'Georgia,serif';
-    const strokeType = fx.strokeType ?? (typeof _textStrokeType !== 'undefined' ? _textStrokeType : 'solid');
-    const strokeWidth = fx.strokeWidth ?? (typeof _textStrokeWidth !== 'undefined' ? _textStrokeWidth : 1);
-    const strokeColor1 = fx.strokeColor1 ?? (typeof _textStrokeColor1 !== 'undefined' ? _textStrokeColor1 : '#000000');
-    const strokeColor2 = fx.strokeColor2 ?? (typeof _textStrokeColor2 !== 'undefined' ? _textStrokeColor2 : '#1a0a00');
     const offX = imgItem?.offsetX ?? 0;  // % de offset para centrado
     const offY = imgItem?.offsetY ?? 0;
 
@@ -1471,19 +1367,6 @@ function _expDibujarFrame(ctx, W, H, img, current, total, _sentencesSnap, imgIte
     }
     ctx.font = `italic ${CUR_SZ}px ${fontFamily}`;
     ctx.fillStyle = textColor;
-    if (strokeType !== 'none' && strokeWidth > 0) {
-        ctx.lineWidth = strokeWidth * 2;
-        ctx.lineJoin = 'round';
-        if (strokeType === 'gradient') {
-            const grd = ctx.createLinearGradient(CX - MAX_W / 2, 0, CX + MAX_W / 2, 0);
-            grd.addColorStop(0, strokeColor1);
-            grd.addColorStop(1, strokeColor2);
-            ctx.strokeStyle = grd;
-        } else {
-            ctx.strokeStyle = strokeColor1;
-        }
-        curL.forEach((l, i) => ctx.strokeText(l, CX, y + i * CUR_LH));
-    }
     curL.forEach((l, i) => ctx.fillText(l, CX, y + i * CUR_LH));
     y += curL.length * CUR_LH + GAP;
 
