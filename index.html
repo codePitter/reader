@@ -1,69 +1,72 @@
 ﻿<!DOCTYPE html>
-﻿
-<!DOCTYPE html>
-
 <html lang="es">
 <head>
-    <meta charset="utf-8" />
-    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Lector EPUB con TTS</title>
-    <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&amp;family=DM+Mono:wght@400;500&amp;display=swap" rel="stylesheet" />
-    <link href="style.css" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📚</text></svg>">
 </head>
 <body>
-    <div class="notification" id="notification"></div>
+
+    <div id="notification" class="notification"></div>
+
     <!-- ─── MAIN PANEL ─── -->
     <div class="main-panel">
         <div class="top-bar">
             <h1>📚 Lector EPUB</h1>
-            <button class="rec-btn" id="btn-rec-audio" onclick="toggleGrabacion()" type="button">
+            <button type="button" class="rec-btn" id="btn-rec-audio" onclick="toggleGrabacion()" style="margin-left:16px;margin-bottom:0;">
                 <span id="rec-dot">⏺</span> Grabar audio
             </button>
-            <button class="rec-btn s1" onclick="abrirvideo()" type="button">
+            <button type="button" class="rec-btn" onclick="abrirvideo()" style="margin-bottom:0;">
                 🎬 Modo Video
             </button>
-            <button class="rec-btn" id="editor-toggle-btn" onclick="toggleEditor()" type="button">
+            <button type="button" class="rec-btn" onclick="toggleEditor()" id="editor-toggle-btn" style="margin-bottom:0;">
                 ✏️ Editor
             </button>
             <span class="subtitle" id="current-chapter-title">Ningún capítulo seleccionado</span>
         </div>
+
         <div class="stats-bar">
             <div class="stat">📝 Palabras: <strong id="contador-palabras">0</strong></div>
             <div class="stat">🔤 Chars: <strong id="contador-caracteres">0</strong></div>
             <div class="stat">📄 Párrafos: <strong id="contador-parrafos">0</strong></div>
-            <div class="stat" id="tts-stat">⏹️ <strong id="tts-status">Detenido</strong></div>
+            <div class="stat" id="tts-stat" style="margin-left:auto;">⏹️ <strong id="tts-status">Detenido</strong></div>
         </div>
+
         <!-- ─── BARRA DE CONTROLES TTS ─── -->
         <div class="tts-control-bar">
             <div class="tts-bar-title">Ajustes del lector</div>
-            <button class="btn-tts btn btn-tts-unified" id="btn-play" onclick="togglePlayPause()" type="button">▶</button>
-            <button class="btn-tts btn" disabled="" id="btn-stop" onclick="detenerTTS()" type="button">⏹</button>
-            <button disabled="" id="btn-pause" style="display:none;"></button>
-            <button disabled="" id="btn-resume" style="display:none;"></button>
+            <button type="button" class="btn-tts btn btn-tts-unified" id="btn-play" onclick="togglePlayPause()">▶</button>
+            <button type="button" class="btn-tts btn" onclick="detenerTTS()" id="btn-stop" disabled>⏹</button>
+            <button id="btn-pause" style="display:none;" disabled></button>
+            <button id="btn-resume" style="display:none;" disabled></button>
             <div class="tts-control-bar-sliders">
                 <div class="tts-bar-slider">
                     <label>Velocidad <span id="rate-value">1.0</span>x</label>
-                    <input id="rate-control" max="2.0" min="0.5" step="0.1" type="range" value="1.0" />
+                    <input type="range" id="rate-control" min="0.5" max="2.0" step="0.1" value="1.0">
                 </div>
                 <div class="tts-bar-slider">
                     <label>Tono <span id="pitch-value">1.0</span></label>
-                    <input id="pitch-control" max="2.0" min="0.5" step="0.1" type="range" value="1.0" />
+                    <input type="range" id="pitch-control" min="0.5" max="2.0" step="0.1" value="1.0">
                 </div>
                 <div class="tts-bar-slider">
                     <label>Volumen <span id="volume-value">100</span>%</label>
-                    <input id="volume-control" max="100" min="0" step="5" type="range" value="100" />
+                    <input type="range" id="volume-control" min="0" max="100" step="5" value="100">
                 </div>
             </div>
-            <select class="tts-bar-voice" id="voice-select"></select>
+            <select id="voice-select" class="tts-bar-voice"></select>
         </div>
-        <div class="reading-area s2">
-            <div id="texto-contenido">
-                <p class="s3">Carga un archivo EPUB desde el panel lateral para comenzar a leer...</p>
+
+        <div class="reading-area" style="position:relative;">
+            <div id="texto-contenido" style="font-family:'Lora',serif;font-size:1.1rem;line-height:1.85;color:var(--text);max-width:680px;margin:0 auto;white-space:pre-wrap;">
+                <p style="color:var(--text-dim);font-style:italic;">Carga un archivo EPUB desde el panel lateral para comenzar a leer...</p>
             </div>
             <!-- Música ambiental flotante anclada a esquina inferior izquierda del reading area -->
         </div><!-- cierre reading-area -->
         <!-- ─── AMBIENT MUSIC PLAYER ─── -->
-        <div class="collapsed" id="ambient-player">
+        <div id="ambient-player" class="collapsed">
             <div class="ambient-header" onclick="toggleAmbientPanel()">
                 <div class="ambient-header-left">
                     <div class="ambient-eq" id="ambient-eq">
@@ -71,275 +74,244 @@
                     </div>
                     Música Ambiental
                 </div>
-                <button class="ambient-collapse-btn" id="ambient-arrow" type="button">▲</button>
+                <button type="button" class="ambient-collapse-btn" id="ambient-arrow">▲</button>
             </div>
             <div class="ambient-body">
+
                 <!-- API Key panel -->
-                <div id="freesound-key-panel">
-                    <div class="s4">
-                        🎵 Freesound API Key <span id="key-status"></span>
+                <div id="freesound-key-panel" style="margin-bottom:10px;">
+                    <div style="font-size:0.58rem;color:var(--text-dim);margin-bottom:4px;">
+                        🎵 Freesound API Key <span style="color:var(--accent2)" id="key-status"></span>
                     </div>
-                    <div class="s5" style="display:flex">
-                        <input id="freesound-api-key" placeholder="Pegar API key..." type="password" />
-                        <button class="s6" onclick="guardarApiKey()" type="button">
+                    <div style="display:flex;gap:6px;">
+                        <input type="password" id="freesound-api-key" placeholder="Pegar API key..."
+                               style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:4px;
+                    color:var(--text);font-family:'DM Mono',monospace;font-size:0.62rem;padding:5px 8px;outline:none;">
+                        <button type="button" onclick="guardarApiKey()"
+                                style="background:var(--accent2);border:none;border-radius:4px;color:var(--bg);
+                    font-family:'DM Mono',monospace;font-size:0.6rem;padding:5px 8px;cursor:pointer;">
                             OK
                         </button>
                     </div>
-                    <div class="s7">
+                    <div style="font-size:0.55rem;color:var(--text-dim);margin-top:3px;">
                         Sin key → generador procedural local
                     </div>
                 </div>
+
                 <div class="ambient-genres">
-                    <button class="genre-btn" id="genre-mystery" onclick="selectGenre('mystery')" type="button">
+                    <button type="button" class="genre-btn" onclick="selectGenre('mystery')" id="genre-mystery">
                         <span class="genre-icon">🔍</span>Misterio
                     </button>
-                    <button class="genre-btn" id="genre-suspense" onclick="selectGenre('suspense')" type="button">
+                    <button type="button" class="genre-btn" onclick="selectGenre('suspense')" id="genre-suspense">
                         <span class="genre-icon">😰</span>Suspenso
                     </button>
-                    <button class="genre-btn" id="genre-drama" onclick="selectGenre('drama')" type="button">
+                    <button type="button" class="genre-btn" onclick="selectGenre('drama')" id="genre-drama">
                         <span class="genre-icon">🎭</span>Drama
                     </button>
-                    <button class="genre-btn" id="genre-action" onclick="selectGenre('action')" type="button">
+                    <button type="button" class="genre-btn" onclick="selectGenre('action')" id="genre-action">
                         <span class="genre-icon">⚡</span>Acción
                     </button>
-                    <button class="genre-btn" id="genre-fantasy" onclick="selectGenre('fantasy')" type="button">
+                    <button type="button" class="genre-btn" onclick="selectGenre('fantasy')" id="genre-fantasy">
                         <span class="genre-icon">🧙</span>Fantasía
                     </button>
-                    <button class="genre-btn" id="genre-romance" onclick="selectGenre('romance')" type="button">
+                    <button type="button" class="genre-btn" onclick="selectGenre('romance')" id="genre-romance">
                         <span class="genre-icon">💫</span>Romance
                     </button>
-                    <button class="genre-btn" id="genre-lofi" onclick="selectGenre('lofi')" type="button">
+                    <button type="button" class="genre-btn" onclick="selectGenre('lofi')" id="genre-lofi">
                         <span class="genre-icon">📚</span>Lo-Fi
                     </button>
-                    <button class="genre-btn" id="genre-nature" onclick="selectGenre('nature')" type="button">
+                    <button type="button" class="genre-btn" onclick="selectGenre('nature')" id="genre-nature">
                         <span class="genre-icon">🌿</span>Naturaleza
                     </button>
                 </div>
-                <button class="btn btn-secondary" id="btn-detect-genre" onclick="detectarGeneroConIA()" type="button">
+
+                <button type="button" class="btn btn-secondary" onclick="detectarGeneroConIA()" id="btn-detect-genre"
+                        style="width:100%;margin-bottom:10px;font-size:0.62rem;gap:6px;">
                     ✨ Detectar género del texto
                 </button>
+
                 <div class="ambient-controls">
-                    <button class="ambient-play-btn" id="ambient-play-btn" onclick="toggleAmbientPlay()" type="button">▶</button>
+                    <button type="button" class="ambient-play-btn" id="ambient-play-btn" onclick="toggleAmbientPlay()">▶</button>
                     <div class="ambient-track-info">
                         <div class="ambient-track-name" id="ambient-track-name">Selecciona un género</div>
                         <div class="ambient-track-genre" id="ambient-track-genre">─</div>
                     </div>
-                    <button class="s8" onclick="siguienteTrack()" onmouseout="this.style.color='var(--text-dim)'" onmouseover="this.style.color='var(--accent)'" title="Siguiente track" type="button">
+                    <button type="button" onclick="siguienteTrack()" title="Siguiente track"
+                            style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:0.9rem;padding:4px;transition:color 0.2s;"
+                            onmouseover="this.style.color='var(--accent)'"
+                            onmouseout="this.style.color='var(--text-dim)'">
                         ⏭
                     </button>
                 </div>
+
                 <div class="ambient-vol-row">
                     <span class="ambient-vol-icon">🎵</span>
-                    <input id="ambient-volume" max="100" min="0" oninput="setAmbientVolume(this.value)" type="range" value="15" />
+                    <input type="range" id="ambient-volume" min="0" max="100" value="15" oninput="setAmbientVolume(this.value)">
                     <span class="ambient-vol-val" id="ambient-vol-val">15%</span>
                 </div>
             </div>
         </div><!-- cierre ambient-player -->
         <!-- Barra de procesamiento con fases — visible en el reading area al procesar -->
-        <div id="main-processing-bar" style="display:none">
-            <div class="s9" style="display:flex">
-                <span id="mpb-label">Procesando...</span>
-                <span id="mpb-pct">0%</span>
+        <div id="main-processing-bar" style="display:none;flex-direction:column;align-items:stretch;gap:6px;padding:10px 28px 12px;background:var(--surface2);border-top:1px solid var(--border);border-bottom:1px solid var(--border);">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                <span id="mpb-label" style="font-size:0.7rem;color:var(--accent2);font-family:'DM Mono',monospace;font-style:italic;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Procesando...</span>
+                <span id="mpb-pct" style="font-size:0.65rem;color:var(--text-dim);font-family:'DM Mono',monospace;flex-shrink:0;">0%</span>
             </div>
             <!-- Barra unificada -->
-            <div class="s10">
-                <div id="mpb-fill"></div>
+            <div style="height:4px;background:var(--border);border-radius:4px;overflow:hidden;">
+                <div id="mpb-fill" style="height:100%;width:0%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:4px;transition:width 0.5s ease;"></div>
             </div>
             <!-- Indicadores de fase -->
-            <div class="s11" style="display:flex">
-                <span id="mpb-f1">① Traducción</span>
-                <span id="mpb-f2">② Revisión</span>
-                <span id="mpb-f3">③ Optimización</span>
+            <div style="display:flex;justify-content:space-between;font-family:'DM Mono',monospace;font-size:0.58rem;color:var(--text-dim);margin-top:1px;">
+                <span id="mpb-f1" style="transition:color 0.3s;">① Traducción</span>
+                <span id="mpb-f2" style="transition:color 0.3s;">② Revisión</span>
+                <span id="mpb-f3" style="transition:color 0.3s;">③ Optimización</span>
             </div>
         </div>
+
         <div class="editor-panel" id="editor-panel">
             <div class="editor-inner">
                 <div class="section-label">Editor de Texto</div>
-<textarea id="editor-texto" placeholder="Pega aquí tu texto o edita el contenido actual..."></textarea>
+                <textarea id="editor-texto" placeholder="Pega aquí tu texto o edita el contenido actual..."></textarea>
                 <div class="editor-actions">
-                    <button class="btn btn-success" onclick="aplicarTexto()" type="button">Aplicar</button>
-                    <button class="btn btn-secondary" onclick="limpiarEditor()" type="button">Limpiar</button>
-                    <button class="btn btn-secondary" onclick="copiarTexto()" type="button">Copiar</button>
-                    <button class="btn btn-secondary s12" onclick="traducirTextoActual()" type="button">Traducir</button>
+                    <button type="button" class="btn btn-success" onclick="aplicarTexto()">Aplicar</button>
+                    <button type="button" class="btn btn-secondary" onclick="limpiarEditor()">Limpiar</button>
+                    <button type="button" class="btn btn-secondary" onclick="copiarTexto()">Copiar</button>
+                    <button type="button" class="btn btn-secondary" onclick="traducirTextoActual()" style="margin-left:auto;">Traducir</button>
                 </div>
             </div>
         </div>
+
         <span id="tts-status-label" style="display:none;"></span>
+
         <div class="progress-wrap">
-            <div class="progress-track" id="main-progress-track" onclick="seekTTS(event)" onmouseleave="mainProgressMouseLeave()" onmousemove="mainProgressMouseMove(event)">
+            <div class="progress-track" id="main-progress-track"
+                 onclick="seekTTS(event)"
+                 onmousemove="mainProgressMouseMove(event)"
+                 onmouseleave="mainProgressMouseLeave()">
                 <div class="progress-fill" id="progress-fill"></div>
                 <div id="main-progress-tooltip"></div>
             </div>
         </div>
     </div>
+
     <!-- ─── SIDEBAR ─── -->
     <div class="sidebar">
+
         <!-- Cargar EPUB -->
         <div class="sidebar-section">
             <div class="section-label">Archivo</div>
-            <label class="file-label" for="epub-file">📂 Seleccionar EPUB</label>
-            <input accept=".epub" id="epub-file" type="file" />
+            <label for="epub-file" class="file-label">📂 Seleccionar EPUB</label>
+            <input type="file" id="epub-file" accept=".epub">
             <span id="file-name">Ningún archivo seleccionado</span>
         </div>
+
         <!-- Capítulos -->
         <div class="sidebar-section">
             <div class="section-label">Capítulos</div>
             <div id="chapter-selector" style="display:none;">
-                <input id="chapter-search" oninput="filtrarCapitulos(this.value)" placeholder="🔍 Buscar capítulo..." type="text" />
+                <input type="text" id="chapter-search" placeholder="🔍 Buscar capítulo..."
+                       oninput="filtrarCapitulos(this.value)"
+                       style="width:100%;margin-bottom:6px;font-size:0.68rem;padding:6px 10px;
+                              background:var(--bg);border:1px solid var(--border);border-radius:4px;
+                              color:var(--text);font-family:'DM Mono',monospace;outline:none;">
                 <select id="chapters" size="6">
-                    <option disabled="">— sin capítulos —</option>
+                    <option disabled>— sin capítulos —</option>
                 </select>
             </div>
         </div>
+
         <!-- ═══════════════ AJUSTES ═══════════════ -->
         <div class="sidebar-section">
             <div class="section-label">Ajustes</div>
-            <!-- ── Imágenes IA ── -->
-            <div class="s13">
-                <!-- ▶ Imágenes (nivel 1) -->
-                <div class="collapsible-label s14" onclick="toggleImagenIAPanel()" style="display:flex">
-                    🖼 Imágenes <span id="img-ia-arrow">▶</span>
-                </div>
-                <div id="imagen-ia-body" style="display:none">
-                    <!-- ▶▶ Imágenes IA (nivel 2) -->
-                    <div class="s15">
-                        <div class="s16" onclick="toggleSubPanel('ia-options-body','ia-options-arrow')" style="display:flex">
-                            🤖 Imágenes IA <span id="ia-options-arrow">▶</span>
-                        </div>
-                        <div id="ia-options-body" style="display:none">
-                            <!-- Opciones (proveedores) -->
-                            <div class="s17">
-                                <div class="s18" onclick="toggleSubPanel('ia-prov-body','ia-prov-arrow')" style="display:flex">
-                                    ⚙ Opciones <span id="ia-prov-arrow">▶</span>
-                                </div>
-                                <div id="ia-prov-body" style="display:none">
-                                    <div class="s19" style="display:flex">
-                                        <label class="s20" style="display:flex">
-                                            <input checked="" id="prov-puter" name="img-provider" onchange="setImageProvider('puter')" type="radio" value="puter" />
-                                            <span>Puter.js <span class="s21">(gratis)</span></span>
-                                        </label>
-                                        <label class="s22" style="display:flex">
-                                            <input id="prov-stability" name="img-provider" onchange="setImageProvider('stability')" type="radio" value="stability" />
-                                            <span>Stability AI <span class="s23">(key)</span></span>
-                                        </label>
-                                        <label class="s24" style="display:flex">
-                                            <input id="prov-pollinations" name="img-provider" onchange="setImageProvider('pollinations')" type="radio" value="pollinations" />
-                                            <span>Pollinations.AI <span class="s25">(gratis)</span></span>
-                                        </label>
-                                        <label class="s26" style="display:flex">
-                                            <input id="prov-procedural" name="img-provider" onchange="setImageProvider('procedural')" type="radio" value="procedural" />
-                                            <span>Procedural <span class="s27">(sin internet)</span></span>
-                                        </label>
-                                    </div>
-                                    <div id="puter-panel">
-                                        <div class="s28">Modelo Puter.js</div>
-                                        <select id="puter-model" onchange="puterModel=this.value;localStorage.setItem('puter_model',this.value);">
-                                            <optgroup label="── GPT Image ──"><option value="gpt-image-1.5">GPT Image 1.5 (recomendado)</option><option value="gpt-image-1">GPT Image 1</option><option value="dall-e-3">DALL-E 3</option></optgroup>
-                                            <optgroup label="── FLUX ──"><option value="black-forest-labs/FLUX.1-schnell-Free">FLUX.1 Schnell</option><option value="black-forest-labs/FLUX.1-pro">FLUX.1 Pro</option><option value="black-forest-labs/FLUX.1.1-pro">FLUX.1.1 Pro</option><option value="black-forest-labs/FLUX.1-dev">FLUX.1 Dev</option></optgroup>
-                                            <optgroup label="── Stable Diffusion ──"><option value="stabilityai/stable-diffusion-3-medium">SD3 Medium</option><option value="stabilityai/stable-diffusion-xl-base-1.0">SDXL Base</option></optgroup>
-                                            <optgroup label="── Otros ──"><option value="ideogram/ideogram-3.0">Ideogram 3.0</option><option value="grok-2-image">Grok 2 (xAI)</option><option value="google/imagen-4.0-fast">Imagen 4.0 Fast</option><option value="gemini-2.5-flash-image-preview">Gemini 2.5 Flash</option></optgroup>
-                                        </select>
-                                    </div>
-                                    <div id="stability-panel" style="display:none;">
-                                        <div class="s29">🔑 Stability Key <span id="stability-key-status"></span></div>
-                                        <div class="s30" style="display:flex">
-                                            <input id="stability-api-key" placeholder="sk-..." type="password" />
-                                            <button class="s31" onclick="guardarStabilityKey()" type="button">OK</button>
-                                        </div>
-                                        <select id="stability-model" onchange="stabilityModel=this.value;localStorage.setItem('stability_model',this.value);">
-                                            <option value="sd3.5-large">SD3.5 Large</option>
-                                            <option value="sd3.5-large-turbo">SD3.5 Turbo</option>
-                                            <option selected="" value="sd3.5-medium">SD3.5 Medium</option>
-                                            <option value="core">Stable Image Core</option>
-                                            <option value="ultra">Stable Image Ultra</option>
-                                        </select>
-                                    </div>
-                                    <div id="pollinations-panel" style="display:none">Flux · Pollinations.AI — sin key</div>
-                                    <div id="procedural-panel" style="display:none">Canvas 2D local — sin internet</div>
-                                </div>
+
+
+            <!-- ── Imágenes: selector movido a la barra del visor de video ── -->
+            <!-- IDs necesarios por JS — ocultos, sin UI en sidebar -->
+            <div style="display:none;">
+                <div id="imagen-ia-body">
+                    <div id="ia-options-body">
+                        <div id="ia-prov-body">
+                            <input type="radio" name="img-provider" value="puter" id="prov-puter" onchange="setImageProvider('puter')" checked>
+                            <input type="radio" name="img-provider" value="stability" id="prov-stability" onchange="setImageProvider('stability')">
+                            <input type="radio" name="img-provider" value="pollinations" id="prov-pollinations" onchange="setImageProvider('pollinations')">
+                            <input type="radio" name="img-provider" value="procedural" id="prov-procedural" onchange="setImageProvider('procedural')">
+                            <input type="radio" name="img-provider" value="pixabay" id="prov-pixabay" onchange="setImageProvider('pixabay')">
+                            <div id="puter-panel">
+                                <select id="puter-model" onchange="puterModel=this.value;localStorage.setItem('puter_model',this.value);">
+                                    <optgroup label="── GPT Image ──"><option value="gpt-image-1.5">GPT Image 1.5 (recomendado)</option><option value="gpt-image-1">GPT Image 1</option><option value="dall-e-3">DALL-E 3</option></optgroup>
+                                    <optgroup label="── FLUX ──"><option value="black-forest-labs/FLUX.1-schnell-Free">FLUX.1 Schnell</option><option value="black-forest-labs/FLUX.1-pro">FLUX.1 Pro</option><option value="black-forest-labs/FLUX.1.1-pro">FLUX.1.1 Pro</option><option value="black-forest-labs/FLUX.1-dev">FLUX.1 Dev</option></optgroup>
+                                    <optgroup label="── Stable Diffusion ──"><option value="stabilityai/stable-diffusion-3-medium">SD3 Medium</option><option value="stabilityai/stable-diffusion-xl-base-1.0">SDXL Base</option></optgroup>
+                                    <optgroup label="── Otros ──"><option value="ideogram/ideogram-3.0">Ideogram 3.0</option><option value="grok-2-image">Grok 2 (xAI)</option><option value="google/imagen-4.0-fast">Imagen 4.0 Fast</option><option value="gemini-2.5-flash-image-preview">Gemini 2.5 Flash</option></optgroup>
+                                </select>
                             </div>
-                            <!-- Modelos -->
-                            <div>
-                                <div class="s32" onclick="toggleSubPanel('ia-models-body','ia-models-arrow')" style="display:flex">
-                                    🎨 Modelos <span id="ia-models-arrow">▶</span>
-                                </div>
-                                <div id="ia-models-body" style="display:none">
-                                    <div class="s33">Selecciona el proveedor en Opciones para ver los modelos disponibles.</div>
-                                </div>
+                            <div id="stability-panel">
+                                <input type="password" id="stability-api-key" placeholder="sk-...">
+                                <button type="button" onclick="guardarStabilityKey()">OK</button>
+                                <span id="stability-key-status"></span>
+                                <select id="stability-model" onchange="stabilityModel=this.value;localStorage.setItem('stability_model',this.value);">
+                                    <option value="sd3.5-large">SD3.5 Large</option>
+                                    <option value="sd3.5-large-turbo">SD3.5 Turbo</option>
+                                    <option value="sd3.5-medium" selected>SD3.5 Medium</option>
+                                    <option value="core">Stable Image Core</option>
+                                    <option value="ultra">Stable Image Ultra</option>
+                                </select>
                             </div>
-                            <div id="img-ia-status-txt">Activa el visor y presiona 🖼 IA</div>
+                            <div id="pollinations-panel"></div>
+                            <div id="procedural-panel"></div>
+                            <div id="pixabay-video-panel"></div>
                         </div>
                     </div>
-                    <!-- ▶▶ Imágenes web — Unsplash (nivel 2) -->
-                    <div>
-                        <div class="s34" onclick="toggleSubPanel('ia-web-body','ia-web-arrow')" style="display:flex">
-                            🌐 Imágenes web <span id="ia-web-arrow">▶</span>
-                        </div>
-                        <div id="ia-web-body" style="display:none">
-                            <!-- Badge de universo detectado -->
-                            <div id="img-universe-badge" style="display:flex">
-                                🌐 Universo: <span id="img-universe-label">—</span>
-                            </div>
-                            <!-- Barra de búsqueda custom -->
-                            <div class="s35" style="display:flex">
-                                <input id="img-search-input" placeholder="Buscar en Unsplash… o dejar vacío" type="text">
-                                <button class="s36" onclick="ejecutarBusquedaImagenCustom()" type="button">
-                                    🔍
-                                </button>
-                                </input>
-                            </div>
-                            <!-- Botón principal: generar según universo -->
-                            <button class="s37" onclick="generarImagenesUniverso()" onmouseout="this.style.borderColor='var(--border)'" onmouseover="this.style.borderColor='var(--accent)'" type="button">
-                                ✨ Generar por universo
-                            </button>
-                            <!-- Botón quitar fondo -->
-                            <button class="s38" onclick="quitarImagenFondo()" onmouseout="this.style.color='var(--text-dim)'" onmouseover="this.style.color='var(--text)'" type="button">
-                                ✕ Quitar fondo
-                            </button>
-                            <!-- Galería (gestionada por images.js) -->
-                            <div id="imagen-ia-galeria"></div>
-                            <!-- Atribución Unsplash -->
-                            <div class="s39">
-                                Imágenes via <a class="s40" href="https://unsplash.com?utm_source=epub_reader&amp;utm_medium=referral" rel="noopener" target="_blank">Unsplash</a>
-                            </div>
-                        </div>
+                    <div id="img-ia-status-txt"></div>
+                    <div id="ia-web-body">
+                        <div id="img-universe-badge"><span id="img-universe-label"></span></div>
+                        <input type="text" id="img-search-input">
+                        <div id="imagen-ia-galeria"></div>
                     </div>
                 </div>
-            </div> <!-- ── Traducción ── -->
-            <div class="s41">
-                <div class="toggle-row s42">
-                    <span class="s43" style="display:flex">
+            </div>
+            <div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border);">
+                <div class="toggle-row" style="margin-bottom:4px;">
+                    <span style="display:flex;flex-direction:column;gap:1px;">
                         <span>Traducción automática</span>
-                        <span id="traduccion-lang-hint">→ detectando idioma...</span>
+                        <span style="font-size:0.68rem;color:var(--text-dim);" id="traduccion-lang-hint">→ detectando idioma...</span>
                     </span>
                     <label class="toggle">
-                        <input id="auto-translate" onchange="marcarCambioPendiente()" type="checkbox" />
+                        <input type="checkbox" id="auto-translate" onchange="marcarCambioPendiente()">
                         <span class="toggle-slider"></span>
                     </label>
                 </div>
                 <!-- Selector de idioma destino: todas las opciones que soporta el navegador -->
-                <div class="s44">
-                    <div class="s45">Traducir a:</div>
-                    <select id="translation-lang-select" onchange="cambiarIdiomaTraduccion(this.value)">
+                <div style="margin:6px 0 4px 0;">
+                    <div style="font-size:0.6rem;color:var(--text-dim);margin-bottom:3px;">Traducir a:</div>
+                    <select id="translation-lang-select"
+                            onchange="cambiarIdiomaTraduccion(this.value)"
+                            style="width:100%;background:var(--bg);border:1px solid var(--border);
+                                   border-radius:4px;color:var(--text);font-family:'DM Mono',monospace;
+                                   font-size:0.62rem;padding:5px 8px;outline:none;cursor:pointer;">
                         <!-- Poblado por JS con los idiomas del navegador -->
                     </select>
                 </div>
                 <div id="translation-status">Traducción desactivada</div>
             </div>
+
             <!-- ── Naturalizar para TTS ── -->
-            <div class="s46">
+            <div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border);">
                 <div class="toggle-row">
-                    <span class="s47" style="display:flex">
+                    <span style="display:flex;flex-direction:column;gap:2px;">
                         <span>✨ Naturalizar para TTS</span>
-                        <span id="humanizer-status">Desactivado</span>
+                        <span style="font-size:0.7rem;color:var(--text-dim);" id="humanizer-status">Desactivado</span>
                     </span>
                     <label class="toggle">
-                        <input id="tts-humanizer" onchange="toggleTTSHumanizer()" type="checkbox" />
+                        <input type="checkbox" id="tts-humanizer" onchange="toggleTTSHumanizer()">
                         <span class="toggle-slider"></span>
                     </label>
                 </div>
-                <div id="claude-key-panel" style="display:none">
-                    <select id="humanizer-provider" onchange="cambiarProveedorHumanizer(this.value)">
+                <div id="claude-key-panel" style="margin-top:6px;display:none;">
+                    <select id="humanizer-provider" onchange="cambiarProveedorHumanizer(this.value)"
+                            style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:4px;
+                                   color:var(--text);font-family:'DM Mono',monospace;font-size:0.62rem;
+                                   padding:5px 8px;outline:none;cursor:pointer;margin-bottom:6px;">
                         <option value="perplexity">Perplexity AI (sonar)</option>
                         <option value="openai">OpenAI (gpt-4o-mini)</option>
                         <option value="anthropic">Anthropic (claude-haiku)</option>
@@ -347,144 +319,280 @@
                         <option value="groq">Groq (llama-3.3-70b)</option>
                         <option value="openrouter">OpenRouter (auto)</option>
                     </select>
-                    <div class="s48">
-                        🔑 API Key <span id="claude-key-status"></span>
+                    <div style="font-size:0.58rem;color:var(--text-dim);margin-bottom:4px;">
+                        🔑 API Key <span style="color:var(--accent2)" id="claude-key-status"></span>
                     </div>
-                    <div class="s49" style="display:flex">
-                        <input id="claude-api-key" placeholder="Pega tu API key..." type="password" />
-                        <button class="s50" onclick="guardarClaudeApiKey()" type="button">
+                    <div style="display:flex;gap:6px;">
+                        <input type="password" id="claude-api-key" placeholder="Pega tu API key..."
+                               style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:4px;
+                               color:var(--text);font-family:'DM Mono',monospace;font-size:0.62rem;padding:5px 8px;outline:none;">
+                        <button type="button" onclick="guardarClaudeApiKey()"
+                                style="background:var(--accent);border:none;border-radius:4px;color:var(--bg);
+                                font-family:'DM Mono',monospace;font-size:0.6rem;padding:5px 8px;cursor:pointer;">
                             OK
                         </button>
                     </div>
-                    <div id="humanizer-info">
+                    <div style="font-size:0.55rem;color:var(--text-dim);margin-top:3px;" id="humanizer-info">
                         Procesa ~2500 chars por bloque · puede tardar unos segundos
                     </div>
                 </div>
             </div>
+
             <!-- ── Reproducir al terminar ── -->
             <div class="toggle-row" id="auto-play-row" style="display:none;">
                 <span>▶ Reproducir al terminar</span>
                 <label class="toggle">
-                    <input checked="" id="auto-play-after-translate" onchange="marcarCambioPendiente()" type="checkbox" />
+                    <input type="checkbox" id="auto-play-after-translate" onchange="marcarCambioPendiente()" checked>
                     <span class="toggle-slider"></span>
                 </label>
             </div>
+
             <!-- ── Auto siguiente capítulo ── -->
-            <div class="toggle-row s51">
-                <span class="s52" style="display:flex">
+            <div class="toggle-row" style="margin-top:6px;">
+                <span style="display:flex;flex-direction:column;gap:1px;">
                     <span>⏭ Siguiente capítulo auto</span>
-                    <span class="s53">Al terminar, carga el siguiente</span>
+                    <span style="font-size:0.62rem;color:var(--text-dim);">Al terminar, carga el siguiente</span>
                 </span>
                 <label class="toggle">
-                    <input checked="" id="auto-next-chapter" type="checkbox" />
+                    <input type="checkbox" id="auto-next-chapter" checked>
                     <span class="toggle-slider"></span>
                 </label>
             </div>
+
             <!-- ── Botón Aplicar ── -->
-            <div id="aplicar-row" style="display:none">
-                <button id="btn-aplicar" onclick="aplicarConfiguracion()" type="button">
+            <div id="aplicar-row" style="display:none;margin-top:10px;">
+                <button type="button" id="btn-aplicar" onclick="aplicarConfiguracion()"
+                        style="width:100%;background:var(--accent);border:none;border-radius:6px;
+                               color:var(--bg);font-family:'DM Mono',monospace;font-size:0.72rem;
+                               font-weight:700;padding:8px 0;cursor:pointer;letter-spacing:0.03em;
+                               transition:opacity 0.2s;">
                     ✓ Aplicar
                 </button>
-                <div id="aplicar-hint">
+                <div style="font-size:0.55rem;color:var(--text-dim);text-align:center;margin-top:3px;" id="aplicar-hint">
                     Cambios pendientes — recarga el capítulo actual
                 </div>
             </div>
         </div>
+
         <!-- Reemplazar palabras -->
         <div class="sidebar-section">
-            <div class="section-label collapsible-label s54" onclick="toggleReemplazar()" style="display:flex">
+            <div class="section-label collapsible-label" onclick="toggleReemplazar()" style="cursor:pointer;user-select:none;display:flex;align-items:center;">
                 Reemplazar
-                <span id="reemplazar-arrow">▶</span>
-                <button class="s55" onclick="event.stopPropagation();abrirModalReemplazos()" onmouseout="this.style.color='var(--text-dim)';this.style.borderColor='var(--border)'" onmouseover="this.style.color='var(--accent)';this.style.borderColor='var(--accent)'" title="Ver reemplazos activos" type="button">
+                <span id="reemplazar-arrow" style="margin-left:auto;font-size:0.7rem;color:var(--text-dim);">▶</span>
+                <button type="button" onclick="event.stopPropagation();abrirModalReemplazos()" title="Ver reemplazos activos"
+                        style="margin-left:6px;background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-dim);font-size:0.58rem;padding:1px 5px;cursor:pointer;line-height:1.4;transition:color 0.2s,border-color 0.2s;"
+                        onmouseover="this.style.color='var(--accent)';this.style.borderColor='var(--accent)'"
+                        onmouseout="this.style.color='var(--text-dim)';this.style.borderColor='var(--border)'">
                     📋
                 </button>
             </div>
             <div class="replace-pair" id="reemplazar-body" style="display:none;">
-                <input id="palabra-buscar" placeholder="Buscar..." type="text" />
-                <input id="palabra-reemplazar" placeholder="Reemplazar con..." type="text" />
-                <div class="s56" style="display:flex">
-                    <button class="btn btn-secondary" disabled="" id="btn-limpiar-reemplazos" onclick="limpiarReemplazosGuardados()" type="button">🗑 Limpiar</button>
-                    <button class="btn btn-primary s57" onclick="reemplazarPalabra()" type="button">Reemplazar</button>
+                <input type="text" id="palabra-buscar" placeholder="Buscar...">
+                <input type="text" id="palabra-reemplazar" placeholder="Reemplazar con...">
+                <div style="display:flex;gap:6px;">
+                    <button type="button" class="btn btn-secondary" id="btn-limpiar-reemplazos" onclick="limpiarReemplazosGuardados()" style="flex:1;font-size:0.62rem;" disabled>🗑 Limpiar</button>
+                    <button type="button" class="btn btn-primary" onclick="reemplazarPalabra()" style="flex:1;">Reemplazar</button>
                 </div>
-                <div id="reemplazos-guardados-lista" style="display:none"></div>
+                <div id="reemplazos-guardados-lista" style="display:none;margin-top:6px;max-height:90px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--border) transparent;"></div>
             </div>
         </div>
+
+
+
     </div>
+
+
     <!-- ─── FOOTER ─── -->
     <footer class="app-footer">
         <span>© 2025 Lector EPUB</span>
         <span class="footer-sep">·</span>
-        <span>Desarrollado por <strong class="s58">hpqode</strong></span>
+        <span>Desarrollado por <strong style="color:var(--accent);">hpqode</strong></span>
         <span class="footer-sep">·</span>
-        <a href="/cdn-cgi/l/email-protection#3141584545544353525a71565c50585d1f525e5c" title="Contacto por email">Email</a>
+        <a href="mailto:pitterbck@gmail.com" title="Contacto por email">Email</a>
         <span class="footer-sep">·</span>
-        <a href="https://wa.me/5493412282254" rel="noopener" target="_blank" title="WhatsApp">WhatsApp</a>
+        <a href="https://wa.me/5493412282254" target="_blank" rel="noopener" title="WhatsApp">WhatsApp</a>
     </footer>
+
+
     <!-- ─── VIDEO OVERLAY ─── -->
     <div id="video-overlay">
-        <div id="ai-bg-a"></div>
-        <div id="ai-bg-b"></div>
-        <div id="ai-bg-overlay"></div>
-        <canvas id="video-canvas" style="display:block"></canvas>
+        <div id="ai-bg-a" style="position:absolute;inset:0;background-size:cover;background-position:center;opacity:0;transition:opacity 1.2s ease;pointer-events:none;z-index:0;"></div>
+        <div id="ai-bg-b" style="position:absolute;inset:0;background-size:cover;background-position:center;opacity:0;transition:opacity 1.2s ease;pointer-events:none;z-index:0;"></div>
+        <div id="ai-bg-overlay" style="position:absolute;inset:0;background:rgba(8,7,6,0);transition:background 1s ease;pointer-events:none;z-index:1;"></div>
+        <canvas id="video-canvas" style="position:absolute;inset:0;width:100%;height:100%;z-index:2;pointer-events:none;display:block;"></canvas>
+
         <div id="video-progress-wrap">
-            <div id="video-progress-track" onclick="videoProgressSeek(event)" onmouseenter="this.style.height='8px'" onmouseleave="this.style.height='4px';videoProgressHover(false)" onmousemove="videoProgressMouseMove(event)">
+            <div id="video-progress-track"
+                 onmouseenter="this.style.height='8px'"
+                 onmouseleave="this.style.height='4px';videoProgressHover(false)"
+                 onmousemove="videoProgressMouseMove(event)"
+                 onclick="videoProgressSeek(event)">
                 <div id="video-progress-fill"></div>
                 <div id="video-seek-tooltip"></div>
             </div>
         </div>
+
         <div class="video-bar">
-            <button id="kbtn-playpause" onclick="videoTogglePlay()">▶</button>
-            <button class="s59" onclick="videoCapituloAnterior()" onmouseout="this.style.color='var(--text-dim)'" onmouseover="this.style.color='var(--accent)'">⏮</button>
-            <button class="s60" onclick="videoCapituloSiguiente()" onmouseout="this.style.color='var(--text-dim)'" onmouseover="this.style.color='var(--accent)'">⏭</button>
-            <span id="kp-current">—</span>
-            <span id="kp-chapter"></span>
-            <span class="s61" title="Volumen general">🔊</span>
-            <input id="kol-tts-vol" max="100" min="0" oninput="setTTSVolume(this.value);document.getElementById('kol-tts-pct').textContent=this.value+'%'" type="range" value="100" />
-            <span id="kol-tts-pct">100%</span>
-            <button id="kbtn-ambient-mute" onclick="toggleAmbientMute()">🔊</button>
-            <button id="kbtn-ambient-playpause" onclick="videoToggleAmbient()">▶</button>
-            <button class="s62" onclick="videoMusicaPrev()" onmouseout="this.style.color='var(--text-dim)'" onmouseover="this.style.color='var(--accent)'">◀</button>
-            <span id="video-music-label">♬</span>
-            <button class="s63" onclick="videoMusicaSiguiente()" onmouseout="this.style.color='var(--text-dim)'" onmouseover="this.style.color='var(--accent)'">▶</button>
-            <input id="kol-music-vol" max="100" min="0" oninput="setAmbientVolume(this.value);document.getElementById('kol-music-pct').textContent=this.value+'%';document.getElementById('ambient-vol-val').textContent=this.value+'%'" type="range" value="15" />
-            <span id="kol-music-pct">15%</span>
-            <button id="btn-toggle-ai-img" onclick="toggleAIImages()" onmouseout="if(!this.classList.contains('ai-active')){this.style.borderColor='var(--border)';this.style.color='var(--text-dim)'}" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'">🖼 IA</button>
-            <button id="btn-toggle-index" onclick="togglevideoIndex()" onmouseout="this.style.color='var(--text-dim)'" onmouseover="this.style.color='var(--accent)'">☰</button>
-            <button id="btn-export-video" onclick="exportarVideo()" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-dim)'" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'">⬇ Video</button>
-            <button id="btn-cancel-export" onclick="cancelarExportacion()" style="display:none">✕ Cancelar</button>
-            <button id="btn-fullscreen" onclick="toggleFullscreen()" onmouseout="this.style.color='var(--text-dim)'" onmouseover="this.style.color='var(--accent)'">⛶</button>
-            <button class="s64" onclick="cerrarvideo()" onmouseout="this.style.color='var(--text-dim)'" onmouseover="this.style.color='#ff6b6b'">✕</button>
+            <button id="kbtn-playpause" onclick="videoTogglePlay()" style="background:none;border:none;color:var(--accent);font-size:1.3rem;cursor:pointer;padding:0 2px;line-height:1;flex-shrink:0;">&#9654;</button>
+            <button onclick="videoCapituloAnterior()" style="background:none;border:none;color:var(--text-dim);font-size:0.85rem;cursor:pointer;padding:0 2px;flex-shrink:0;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-dim)'">&#9198;</button>
+            <button onclick="videoCapituloSiguiente()" style="background:none;border:none;color:var(--text-dim);font-size:0.85rem;cursor:pointer;padding:0 2px;flex-shrink:0;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-dim)'">&#9197;</button>
+            <span id="kp-current" style="font-family:'DM Mono',monospace;font-size:0.6rem;color:var(--text-dim);flex-shrink:0;white-space:nowrap;">&#8212;</span>
+            <span id="kp-chapter" style="font-family:'Lora',serif;font-size:0.68rem;color:var(--text-dim);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+            <span style="font-size:0.7rem;color:var(--text-dim);flex-shrink:0;" title="Volumen general">&#128266;</span>
+            <input type="range" id="kol-tts-vol" min="0" max="100" value="100" oninput="setTTSVolume(this.value);document.getElementById('kol-tts-pct').textContent=this.value+'%'" style="width:64px;accent-color:var(--accent);flex-shrink:0;cursor:pointer;">
+            <span id="kol-tts-pct" style="font-family:'DM Mono',monospace;font-size:0.58rem;color:var(--text-dim);flex-shrink:0;min-width:28px;">100%</span>
+            <!-- Music popup button -->
+            <div style="position:relative;flex-shrink:0;" id="video-music-wrapper">
+                <button id="kbtn-music-popup" onclick="_toggleMusicMenu()"
+                        style="background:none;border:1px solid var(--border);border-radius:4px;
+                               color:var(--text-dim);font-size:0.58rem;padding:2px 6px;cursor:pointer;
+                               display:flex;align-items:center;gap:3px;white-space:nowrap;
+                               transition:color 0.2s,border-color 0.2s;"
+                        onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
+                        onmouseout="if(!document.getElementById('video-music-menu').classList.contains('open')){this.style.borderColor='var(--border)';this.style.color='var(--text-dim)'}">
+                    🎵 <span id="video-music-label" style="max-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Música</span>
+                    <span id="kbtn-ambient-indicator" style="font-size:0.5rem;color:var(--accent2);">●</span> ▾
+                </button>
+                <!-- Popup hacia arriba -->
+                <div id="video-music-menu"
+                     style="display:none;position:absolute;bottom:calc(100% + 6px);left:0;
+                            background:var(--surface2);border:1px solid var(--border);border-radius:6px;
+                            padding:8px;min-width:220px;z-index:300;box-shadow:0 -4px 20px rgba(0,0,0,0.7);">
+                    <!-- Controles de playback -->
+                    <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;padding-bottom:7px;border-bottom:1px solid var(--border);">
+                        <button id="kbtn-ambient-mute" onclick="toggleAmbientMute()" style="background:none;border:none;color:var(--text-dim);font-size:1rem;cursor:pointer;padding:0;transition:color 0.2s;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-dim)'">&#128266;</button>
+                        <button onclick="videoMusicaPrev()" style="background:none;border:none;color:var(--text-dim);font-size:0.85rem;cursor:pointer;padding:0;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-dim)'">&#9664;</button>
+                        <button id="kbtn-ambient-playpause" onclick="videoToggleAmbient()" style="background:none;border:none;color:var(--accent);font-size:1.1rem;cursor:pointer;padding:0;">&#9654;</button>
+                        <button onclick="videoMusicaSiguiente()" style="background:none;border:none;color:var(--text-dim);font-size:0.85rem;cursor:pointer;padding:0;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-dim)'">&#9654;</button>
+                        <div style="flex:1;min-width:0;">
+                            <div style="font-family:'DM Mono',monospace;font-size:0.6rem;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" id="video-music-label-full">─</div>
+                            <div style="font-size:0.52rem;color:var(--text-dim);" id="video-music-genre-label">─</div>
+                        </div>
+                    </div>
+                    <!-- Volumen -->
+                    <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;padding-bottom:7px;border-bottom:1px solid var(--border);">
+                        <span style="font-size:0.58rem;color:var(--text-dim);flex-shrink:0;">Vol</span>
+                        <input type="range" id="kol-music-vol" min="0" max="100" value="15"
+                               oninput="setAmbientVolume(this.value);document.getElementById('kol-music-pct').textContent=this.value+'%';document.getElementById('ambient-vol-val').textContent=this.value+'%'"
+                               style="flex:1;accent-color:var(--accent);cursor:pointer;">
+                        <span id="kol-music-pct" style="font-family:'DM Mono',monospace;font-size:0.58rem;color:var(--text-dim);min-width:28px;">15%</span>
+                    </div>
+                    <!-- Géneros -->
+                    <div style="font-size:0.56rem;color:var(--text-dim);letter-spacing:0.05em;text-transform:uppercase;margin-bottom:5px;">Género</div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:3px;" id="video-genre-grid">
+                        <button onclick="selectGenre('mystery');_actualizarMusicLabel()" style="background:none;border:1px solid var(--border);border-radius:3px;color:var(--text-dim);font-size:0.58rem;padding:3px 0;cursor:pointer;transition:all 0.15s;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-dim)'">🔍 Misterio</button>
+                        <button onclick="selectGenre('suspense');_actualizarMusicLabel()" style="background:none;border:1px solid var(--border);border-radius:3px;color:var(--text-dim);font-size:0.58rem;padding:3px 0;cursor:pointer;transition:all 0.15s;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-dim)'">😰 Suspenso</button>
+                        <button onclick="selectGenre('fantasy');_actualizarMusicLabel()" style="background:none;border:1px solid var(--border);border-radius:3px;color:var(--text-dim);font-size:0.58rem;padding:3px 0;cursor:pointer;transition:all 0.15s;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-dim)'">🧙 Fantasía</button>
+                        <button onclick="selectGenre('action');_actualizarMusicLabel()" style="background:none;border:1px solid var(--border);border-radius:3px;color:var(--text-dim);font-size:0.58rem;padding:3px 0;cursor:pointer;transition:all 0.15s;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-dim)'">⚡ Acción</button>
+                        <button onclick="selectGenre('drama');_actualizarMusicLabel()" style="background:none;border:1px solid var(--border);border-radius:3px;color:var(--text-dim);font-size:0.58rem;padding:3px 0;cursor:pointer;transition:all 0.15s;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-dim)'">🎭 Drama</button>
+                        <button onclick="selectGenre('romance');_actualizarMusicLabel()" style="background:none;border:1px solid var(--border);border-radius:3px;color:var(--text-dim);font-size:0.58rem;padding:3px 0;cursor:pointer;transition:all 0.15s;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-dim)'">💫 Romance</button>
+                        <button onclick="selectGenre('lofi');_actualizarMusicLabel()" style="background:none;border:1px solid var(--border);border-radius:3px;color:var(--text-dim);font-size:0.58rem;padding:3px 0;cursor:pointer;transition:all 0.15s;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-dim)'">📚 Lo-Fi</button>
+                        <button onclick="selectGenre('nature');_actualizarMusicLabel()" style="background:none;border:1px solid var(--border);border-radius:3px;color:var(--text-dim);font-size:0.58rem;padding:3px 0;cursor:pointer;transition:all 0.15s;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-dim)'">🌿 Naturaleza</button>
+                    </div>
+                </div>
+            </div>
+            <!-- Selector de proveedor de imágenes — popup sobre el botón -->
+            <div style="position:relative;flex-shrink:0;" id="img-prov-wrapper">
+                <button id="btn-img-prov" onclick="_toggleImgProvMenu()"
+                        style="background:none;border:1px solid var(--border);border-radius:4px;
+                               color:var(--text-dim);font-size:0.58rem;padding:2px 6px;cursor:pointer;
+                               white-space:nowrap;transition:color 0.2s,border-color 0.2s;display:flex;align-items:center;gap:3px;"
+                        onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
+                        onmouseout="if(!document.getElementById('img-prov-menu').classList.contains('open')){this.style.borderColor='var(--border)';this.style.color='var(--text-dim)'}">
+                    🖼 <span id="btn-img-prov-label">Pixabay</span> ▾
+                </button>
+                <!-- Menú desplegable -->
+                <div id="img-prov-menu"
+                     style="display:none;position:absolute;bottom:calc(100% + 6px);left:0;
+                            background:var(--surface2);border:1px solid var(--border);border-radius:6px;
+                            padding:8px;min-width:200px;z-index:200;box-shadow:0 4px 20px rgba(0,0,0,0.6);">
+                    <div style="font-size:0.58rem;color:var(--text-dim);letter-spacing:0.05em;text-transform:uppercase;margin-bottom:6px;">Fuente de imágenes</div>
+                    <!-- Opciones -->
+                    <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:8px;" id="img-prov-options">
+                        <label id="opt-pixabay" class="img-prov-opt img-prov-active"><span class="img-prov-dot"></span> 📷 Pixabay    <small>(fotos reales)</small></label>
+                        <label id="opt-puter" class="img-prov-opt"><span class="img-prov-dot"></span> 🤖 Puter.js   <small>(IA generativa)</small></label>
+                        <label id="opt-pollinations" class="img-prov-opt"><span class="img-prov-dot"></span> ✨ Pollinations <small>(IA, gratis)</small></label>
+                        <label id="opt-procedural" class="img-prov-opt"><span class="img-prov-dot"></span> 🎨 Procedural  <small>(sin internet)</small></label>
+                    </div>
+                    <!-- Panel Pixabay key -->
+                    <div id="pixabay-key-popover" style="border-top:1px solid var(--border);padding-top:7px;margin-top:2px;">
+                        <div style="font-size:0.58rem;color:var(--text-dim);margin-bottom:4px;">
+                            🔑 Pixabay API Key
+                            <span id="pixabay-key-status-video" style="color:var(--accent2);margin-left:4px;"></span>
+                        </div>
+                        <div style="display:flex;gap:4px;">
+                            <input type="password" id="pixabay-key-input-video" placeholder="tu-api-key-aquí"
+                                   style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:4px;
+                                          color:var(--text);font-family:'DM Mono',monospace;font-size:0.6rem;
+                                          padding:4px 6px;outline:none;min-width:0;">
+                            <button type="button" onclick="guardarPixabayKeyVideo()"
+                                    style="background:var(--accent2);border:none;border-radius:4px;color:var(--bg);
+                                           font-family:'DM Mono',monospace;font-size:0.6rem;padding:4px 8px;cursor:pointer;flex-shrink:0;">
+                                OK
+                            </button>
+                        </div>
+                        <div style="font-size:0.52rem;color:var(--text-dim);margin-top:4px;line-height:1.3;">
+                            Sin key → fotos aleatorias (Picsum).<br>
+                            Key gratis en <a href="https://pixabay.com/api/docs/" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none;">pixabay.com/api/docs</a>
+                        </div>
+                    </div>
+                    <!-- Panel Puter model -->
+                    <div id="puter-key-popover" style="display:none;border-top:1px solid var(--border);padding-top:7px;margin-top:2px;">
+                        <div style="font-size:0.58rem;color:var(--text-dim);margin-bottom:4px;">Modelo Puter.js</div>
+                        <select id="puter-model-pop" onchange="puterModel=this.value;localStorage.setItem('puter_model',this.value);document.getElementById('puter-model').value=this.value;"
+                                style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:4px;
+                                       color:var(--text);font-family:'DM Mono',monospace;font-size:0.6rem;padding:4px 6px;">
+                            <option value="gpt-image-1.5">GPT Image 1.5 (recomendado)</option>
+                            <option value="gpt-image-1">GPT Image 1</option>
+                            <option value="dall-e-3">DALL-E 3</option>
+                            <option value="black-forest-labs/FLUX.1-schnell-Free">FLUX.1 Schnell</option>
+                            <option value="black-forest-labs/FLUX.1-pro">FLUX.1 Pro</option>
+                            <option value="google/imagen-4.0-fast">Imagen 4.0 Fast</option>
+                        </select>
+                    </div>
+                    <div style="font-size:0.52rem;color:var(--text-dim);margin-top:6px;" id="img-prov-status-pop"></div>
+                </div>
+            </div>
+            <button id="btn-toggle-ai-img" onclick="toggleAIImages()" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-dim);font-size:0.58rem;padding:2px 6px;cursor:pointer;flex-shrink:0;white-space:nowrap;transition:color 0.2s,border-color 0.2s;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="if(!this.classList.contains('ai-active')){this.style.borderColor='var(--border)';this.style.color='var(--text-dim)'}">&#128444; IA</button>
+            <button id="btn-toggle-index" onclick="togglevideoIndex()" style="background:none;border:none;color:var(--text-dim);font-size:0.9rem;cursor:pointer;padding:0 2px;flex-shrink:0;transition:color 0.2s;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-dim)'">&#9776;</button>
+            <button id="btn-export-video" onclick="exportarVideo()" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-dim);font-size:0.58rem;padding:2px 6px;cursor:pointer;flex-shrink:0;white-space:nowrap;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-dim)'">&#11015; Video</button>
+            <button id="btn-cancel-export" onclick="cancelarExportacion()" style="display:none;background:none;border:1px solid var(--accent);border-radius:4px;color:var(--accent);font-size:0.58rem;padding:2px 6px;cursor:pointer;flex-shrink:0;white-space:nowrap;">&#10005; Cancelar</button>
+            <button id="btn-fullscreen" onclick="toggleFullscreen()" style="background:none;border:none;color:var(--text-dim);font-size:0.9rem;cursor:pointer;padding:0 2px;flex-shrink:0;transition:color 0.2s;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-dim)'">&#x26F6;</button>
+            <button onclick="cerrarvideo()" style="background:none;border:none;color:var(--text-dim);font-size:1rem;cursor:pointer;padding:0 2px;flex-shrink:0;transition:color 0.2s;" onmouseover="this.style.color='#ff6b6b'" onmouseout="this.style.color='var(--text-dim)'">&#10005;</button>
         </div>
+
         <div id="video-index-panel">
             <div id="video-index-header">Capítulos</div>
-            <div class="s65">
-                <input id="video-index-search" oninput="filtrarIndicevideo(this.value)" placeholder="Buscar..." type="text" />
+            <div style="padding:6px 10px 8px;">
+                <input type="text" id="video-index-search" placeholder="Buscar..." oninput="filtrarIndicevideo(this.value)">
             </div>
             <div id="video-index-list"></div>
         </div>
-        <div id="video-translation-progress" style="display:none">
-            <span class="s66">⏳ Traduciendo...</span>
-            <div class="s67">
-                <div id="ktl-fill"></div>
+
+        <div id="video-translation-progress" style="display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:20;flex-direction:column;align-items:center;gap:10px;background:rgba(8,7,6,0.88);border:1px solid var(--border);border-radius:8px;padding:18px 28px;min-width:240px;">
+            <span style="font-family:'DM Mono',monospace;font-size:0.7rem;color:var(--accent2);">&#9203; Traduciendo...</span>
+            <div style="width:100%;height:4px;background:var(--border);border-radius:4px;overflow:hidden;">
+                <div id="ktl-fill" style="height:100%;width:0%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:4px;transition:width 0.4s ease;"></div>
             </div>
-            <span id="ktl-pct">0%</span>
+            <span id="ktl-pct" style="font-family:'DM Mono',monospace;font-size:0.65rem;color:var(--text-dim);">0%</span>
         </div>
     </div>
+
     <!-- ─── MODAL REEMPLAZOS ─── -->
     <div id="modal-reemplazos">
         <div class="modal-box">
             <div class="modal-header">
                 <span>📋 Reemplazos activos al cargar capítulo</span>
-                <button onclick="cerrarModalReemplazos()" title="Cerrar" type="button">✕</button>
+                <button type="button" onclick="cerrarModalReemplazos()" title="Cerrar">✕</button>
             </div>
             <div class="modal-body" id="modal-reemplazos-body">
                 <div class="modal-empty">No hay reemplazos guardados.</div>
             </div>
         </div>
     </div>
+
     <!-- ─── SCRIPTS ─── -->
     <!-- Librerías externas -->
-    <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://js.puter.com/v2/"></script>
     <!-- Estado global — debe cargarse primero -->
@@ -499,5 +607,167 @@
     <script src="js/images.js"></script>
     <!-- UI: patches y helpers — debe cargarse último -->
     <script src="js/ui.js"></script>
+
+    <style>
+        /* ── Selector de proveedor de imágenes en video bar ── */
+        .img-prov-opt {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            font-family: 'DM Mono', monospace;
+            font-size: 0.65rem;
+            color: var(--text-dim);
+            cursor: pointer;
+            padding: 3px 6px;
+            border-radius: 4px;
+            transition: background 0.15s, color 0.15s;
+        }
+
+            .img-prov-opt:hover {
+                background: rgba(255,255,255,0.05);
+                color: var(--text);
+            }
+
+            .img-prov-opt.img-prov-active {
+                color: var(--accent2);
+            }
+
+            .img-prov-opt small {
+                color: var(--text-dim);
+                font-size: 0.56rem;
+                margin-left: auto;
+            }
+
+        .img-prov-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            border: 1.5px solid var(--text-dim);
+            flex-shrink: 0;
+            transition: background 0.15s, border-color 0.15s;
+        }
+
+        .img-prov-active .img-prov-dot {
+            background: var(--accent2);
+            border-color: var(--accent2);
+        }
+
+        #img-prov-menu.open {
+            display: block !important;
+        }
+
+        #video-music-menu.open {
+            display: block !important;
+        }
+    </style>
+
+    <script>
+        // ── Lógica del selector de proveedor de imágenes en video bar ──
+        (function () {
+            // Proveedores disponibles: label, key, panel popover id
+            const PROVS = [
+                { key: 'pixabay', label: 'Pixabay', optId: 'opt-pixabay', panelId: 'pixabay-key-popover' },
+                { key: 'puter', label: 'Puter.js', optId: 'opt-puter', panelId: 'puter-key-popover' },
+                { key: 'pollinations', label: 'Pollinations', optId: 'opt-pollinations', panelId: null },
+                { key: 'procedural', label: 'Procedural', optId: 'opt-procedural', panelId: null },
+            ];
+
+            function _activarProv(key) {
+                // Actualizar radio oculto
+                const radio = document.getElementById('prov-' + key);
+                if (radio) { radio.checked = true; radio.dispatchEvent(new Event('change')); }
+
+                // Actualizar estilos de labels
+                PROVS.forEach(p => {
+                    const el = document.getElementById(p.optId);
+                    if (el) el.classList.toggle('img-prov-active', p.key === key);
+                });
+
+                // Actualizar label del botón
+                const prov = PROVS.find(p => p.key === key);
+                const lblEl = document.getElementById('btn-img-prov-label');
+                if (lblEl && prov) lblEl.textContent = prov.label;
+
+                // Mostrar/ocultar paneles de key
+                PROVS.forEach(p => {
+                    if (p.panelId) {
+                        const panel = document.getElementById(p.panelId);
+                        if (panel) panel.style.display = p.key === key ? 'block' : 'none';
+                    }
+                });
+
+                // Actualizar estado en el status del popover
+                const statusEl = document.getElementById('img-prov-status-pop');
+                if (statusEl) statusEl.textContent = '';
+            }
+
+            window._toggleImgProvMenu = function () {
+                const menu = document.getElementById('img-prov-menu');
+                const btn = document.getElementById('btn-img-prov');
+                const isOpen = menu.classList.toggle('open');
+                if (btn) {
+                    btn.style.borderColor = isOpen ? 'var(--accent2)' : 'var(--border)';
+                    btn.style.color = isOpen ? 'var(--accent2)' : 'var(--text-dim)';
+                }
+            };
+
+            // ── Music popup ──
+            window._toggleMusicMenu = function () {
+                const menu = document.getElementById('video-music-menu');
+                const btn = document.getElementById('kbtn-music-popup');
+                const isOpen = menu.classList.toggle('open');
+                menu.style.display = isOpen ? 'block' : 'none';
+                if (btn) {
+                    btn.style.borderColor = isOpen ? 'var(--accent2)' : 'var(--border)';
+                    btn.style.color = isOpen ? 'var(--accent2)' : 'var(--text-dim)';
+                }
+            };
+
+            document.addEventListener('click', function (e) {
+                // Close img-prov-menu
+                const wrapper = document.getElementById('img-prov-wrapper');
+                if (wrapper && !wrapper.contains(e.target)) {
+                    const menu = document.getElementById('img-prov-menu');
+                    const btn = document.getElementById('btn-img-prov');
+                    if (menu) menu.classList.remove('open');
+                    if (btn) { btn.style.borderColor = 'var(--border)'; btn.style.color = 'var(--text-dim)'; }
+                }
+                // Close music-menu
+                const mwrapper = document.getElementById('video-music-wrapper');
+                if (mwrapper && !mwrapper.contains(e.target)) {
+                    const mmenu = document.getElementById('video-music-menu');
+                    const mbtn = document.getElementById('kbtn-music-popup');
+                    if (mmenu) { mmenu.classList.remove('open'); mmenu.style.display = 'none'; }
+                    if (mbtn) { mbtn.style.borderColor = 'var(--border)'; mbtn.style.color = 'var(--text-dim)'; }
+                }
+            });
+
+            // Asignar click a cada opción
+            document.addEventListener('DOMContentLoaded', function () {
+                PROVS.forEach(p => {
+                    const el = document.getElementById(p.optId);
+                    if (el) el.addEventListener('click', function (e) {
+                        e.stopPropagation();
+                        _activarProv(p.key);
+                    });
+                });
+
+                // Leer proveedor guardado o usar pixabay como default
+                const saved = localStorage.getItem('img_provider') || 'pixabay';
+                // Override: si estaba en puter/pollinations/procedural, respetar; si no había nada, pixabay
+                _activarProv(saved);
+
+                // Sincronizar modelo Puter
+                const puterModelSaved = localStorage.getItem('puter_model') || 'gpt-image-1.5';
+                const puterModelPop = document.getElementById('puter-model-pop');
+                if (puterModelPop) puterModelPop.value = puterModelSaved;
+
+                // Mostrar estado de key si ya está guardada
+                const pixKey = localStorage.getItem('pixabay_api_key');
+                const statusEl = document.getElementById('pixabay-key-status-video');
+                if (pixKey && statusEl) { statusEl.textContent = '✓'; statusEl.style.color = 'var(--accent2)'; }
+            });
+        })();
+    </script>
 </body>
 </html>

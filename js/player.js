@@ -513,6 +513,7 @@ function toggleAmbientPanel() {
     const player = document.getElementById('ambient-player');
     const arrow = document.getElementById('ambient-arrow');
     player.classList.toggle('collapsed');
+    // Panel opens UPWARD like a CD tray: ▲ = closed (click to open), ▼ = open (click to close)
     arrow.textContent = player.classList.contains('collapsed') ? '▲' : '▼';
 }
 

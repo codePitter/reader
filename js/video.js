@@ -141,6 +141,10 @@ function abrirvideo() {
         const btn = document.getElementById('btn-toggle-ai-img');
         if (btn) { btn.classList.add('ai-active'); btn.textContent = '🖼 IA ON'; }
     }
+    // Precalentar pool Pixabay si ese proveedor está seleccionado
+    if (imageProvider === 'pixabay' && typeof precalentarPoolPixabay === 'function') {
+        precalentarPoolPixabay();
+    }
     // Siempre reconstruir el slot map (puede haber cambiado de capítulo)
     if (aiImagesEnabled) {
         detectarUniverso();
@@ -1125,7 +1129,7 @@ function dibujarFondoProcedural(slot, tipoOPrompt, promptCompleto) {
 // ═══════════════════════════════════════
 // PROVEEDORES DE IMÁGENES IA
 // ═══════════════════════════════════════
-let imageProvider = localStorage.getItem('img_provider') || 'puter';
+let imageProvider = localStorage.getItem('img_provider') || 'pixabay';
 let stabilityApiKey = localStorage.getItem('stability_api_key') || '';
 let stabilityModel = localStorage.getItem('stability_model') || 'sd3.5-medium';
 let puterModel = localStorage.getItem('puter_model') || 'gpt-image-1.5';
@@ -1158,6 +1162,8 @@ function _updateProviderPanels(prov) {
     document.getElementById('stability-panel').style.display = prov === 'stability' ? 'block' : 'none';
     document.getElementById('pollinations-panel').style.display = prov === 'pollinations' ? 'block' : 'none';
     document.getElementById('procedural-panel').style.display = prov === 'procedural' ? 'block' : 'none';
+    const pixabayPanelEl = document.getElementById('pixabay-video-panel');
+    if (pixabayPanelEl) pixabayPanelEl.style.display = prov === 'pixabay' ? 'block' : 'none';
 }
 
 function setImageProvider(prov) {
@@ -1350,6 +1356,14 @@ async function solicitarImagenParaSlot(slot) {
     // ── PASO 2: si hay proveedor real, intentarlo en background y reemplazar si funciona ──
     if (imageProvider === 'procedural') return; // solo procedural, listo
 
+    // Pixabay / Picsum (imágenes web reales — no IA generativa)
+    if (imageProvider === 'pixabay') {
+        if (typeof buscarYAplicarFondoPixabay === 'function') {
+            buscarYAplicarFondoPixabay(slot, fragmento);
+        }
+        return;
+    }
+
     const statusTxt = document.getElementById('img-ia-status-txt');
 
     // Puter.js
@@ -1401,7 +1415,8 @@ async function solicitarImagenParaSlot(slot) {
 }
 
 function mostrarImagenEnPanel(slot, url) {
-    if (!aiImagesEnabled) return;
+    // Para slot === -1 (imágenes web/Pixabay) siempre mostrar, sin requerir aiImagesEnabled
+    if (slot !== -1 && !aiImagesEnabled) return;
     if (!url) return;
 
     const panelAct = aiActivePanel === 'a' ? 'ai-bg-a' : 'ai-bg-b';
@@ -1534,6 +1549,8 @@ async function videoNavegar(direccion) {
     detenerTTS();
     actualizarIndicevideo();
     window._navegacionIntencionada = true;
+    // Limpiar cache de slots Pixabay al cambiar de capítulo
+    if (typeof limpiarCachePixabaySlots === 'function') limpiarCachePixabaySlots();
     await cargarCapitulo(opts[idx].value);
 }
 
@@ -1650,11 +1667,22 @@ function _syncAmbientBtn() {
 }
 
 function _actualizarMusicLabel() {
-    const lbl = document.getElementById('video-music-label');
-    if (!lbl) return;
     const trackName = document.getElementById('ambient-track-name');
-    lbl.textContent = trackName ? trackName.textContent : (ambientGenre || '♪');
-    _syncAmbientBtn(); // también sincronizar el botón
+    const trackGenre = document.getElementById('ambient-track-genre');
+    const trackText = trackName ? trackName.textContent : (ambientGenre || '♪');
+    const genreText = trackGenre ? trackGenre.textContent : '';
+
+    // Label corto en el botón
+    const lbl = document.getElementById('video-music-label');
+    if (lbl) lbl.textContent = trackText;
+
+    // Labels completos en el popup
+    const lblFull = document.getElementById('video-music-label-full');
+    if (lblFull) lblFull.textContent = trackText;
+    const lblGenre = document.getElementById('video-music-genre-label');
+    if (lblGenre) lblGenre.textContent = genreText;
+
+    _syncAmbientBtn();
 }
 
 // Sincronizar label de música cuando cambia el track

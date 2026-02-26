@@ -825,7 +825,10 @@ input[type="text"] {
     z-index: 100;
     overflow: hidden;
     box-shadow: 4px -4px 20px rgba(0,0,0,0.4);
-    transition: transform 0.4s ease, opacity 0.5s ease, bottom 0.4s ease;
+    transition: opacity 0.5s ease, bottom 0.4s ease;
+    /* Flex column-reverse: header stays at bottom, body grows upward */
+    display: flex;
+    flex-direction: column-reverse;
 }
 
     /* Translúcido cuando está reproduciendo */
@@ -842,8 +845,12 @@ input[type="text"] {
         bottom: 104px;
     }
 
+    /* Collapsed: body has zero height (tray closed) */
     #ambient-player.collapsed .ambient-body {
-        display: none;
+        max-height: 0 !important;
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+        overflow: hidden;
     }
 
 .ambient-header {
@@ -853,8 +860,11 @@ input[type="text"] {
     padding: 10px 14px;
     cursor: pointer;
     background: var(--surface2);
-    border-bottom: 1px solid var(--border);
+    /* Border now on TOP since header is visually at bottom */
+    border-top: 1px solid var(--border);
+    border-bottom: none;
     user-select: none;
+    flex-shrink: 0;
 }
 
 .ambient-header-left {
@@ -941,6 +951,9 @@ input[type="text"] {
 
 .ambient-body {
     padding: 14px;
+    max-height: 600px; /* large enough for content */
+    overflow: hidden;
+    transition: max-height 0.45s cubic-bezier(0.4, 0, 0.2, 1), padding 0.45s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .ambient-genres {
@@ -1333,7 +1346,7 @@ input[type="text"] {
     background: linear-gradient(to top, rgba(8,7,6,0.96) 0%, rgba(8,7,6,0) 100%);
     opacity: 1;
     transition: opacity 0.4s ease;
-    overflow: hidden;
+    overflow: visible;
     box-sizing: border-box;
 }
 
