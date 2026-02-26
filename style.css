@@ -1454,6 +1454,50 @@ input[type="text"] {
             background: rgba(126,184,154,0.1);
         }
 
+        .video-controls button.gs-active {
+            border-color: var(--accent2);
+            color: var(--accent2);
+            background: rgba(126,184,154,0.1);
+        }
+
+/* Botones de la barra de video (IA, B&W, etc.) — sin inline styles */
+.vbar-btn {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-dim);
+    font-size: 0.58rem;
+    padding: 2px 6px;
+    cursor: pointer;
+    flex-shrink: 0;
+    white-space: nowrap;
+    transition: color 0.2s, border-color 0.2s, background 0.2s;
+    font-family: 'DM Mono', monospace;
+}
+
+    .vbar-btn:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+    }
+
+    .vbar-btn.ai-active {
+        border-color: var(--accent2) !important;
+        color: var(--accent2) !important;
+        background: rgba(126,184,154,0.12) !important;
+    }
+
+    .vbar-btn.gs-active {
+        border-color: var(--accent2) !important;
+        color: var(--accent2) !important;
+        background: rgba(126,184,154,0.12) !important;
+    }
+
+        .vbar-btn.ai-active:hover,
+        .vbar-btn.gs-active:hover {
+            border-color: var(--accent2) !important;
+            color: var(--accent2) !important;
+        }
+
 .video-playbar {
     display: flex;
     align-items: center;
@@ -3158,18 +3202,18 @@ input[type="text"] {
     z-index: 200;
     display: flex;
     flex-direction: row;
-    align-items: center;
+    align-items: stretch;
     pointer-events: auto;
 }
 
 /* ── Solapa siempre visible ── */
 .vsb-tab {
-    width: 14px;
-    height: 54px;
-    background: rgba(22, 19, 16, 0.82);
+    width: 16px;
+    min-height: 64px;
+    background: rgba(22, 19, 16, 0.88);
     border: 1px solid rgba(255,255,255,0.10);
     border-left: none;
-    border-radius: 0 7px 7px 0;
+    border-radius: 0 8px 8px 0;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -3178,22 +3222,23 @@ input[type="text"] {
     cursor: pointer;
     flex-shrink: 0;
     transition: background 0.2s, width 0.2s;
+    align-self: center;
 }
 
     .vsb-tab:hover {
-        background: rgba(40, 35, 28, 0.95);
-        width: 18px;
+        background: rgba(40, 35, 28, 0.97);
+        width: 20px;
     }
 
     .vsb-tab.vsb-tab-active {
-        background: rgba(40, 35, 28, 0.95);
-        border-color: rgba(200,169,110,0.25);
+        background: rgba(40, 35, 28, 0.97);
+        border-color: rgba(200,169,110,0.3);
     }
 
 /* Las 3 líneas del "hamburger" minimalista */
 .vsb-tab-line {
     display: block;
-    width: 6px;
+    width: 7px;
     height: 1.5px;
     background: rgba(255,255,255,0.35);
     border-radius: 2px;
@@ -3202,62 +3247,82 @@ input[type="text"] {
 
 .vsb-tab:hover .vsb-tab-line,
 .vsb-tab.vsb-tab-active .vsb-tab-line {
-    background: rgba(200,169,110,0.85);
+    background: rgba(200,169,110,0.9);
 }
 
 /* ── Panel deslizante ── */
 .vsb-panel {
     width: 0;
     overflow: hidden;
-    transition: width 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: width 0.30s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
     .vsb-panel.vsb-panel-open {
-        width: 56px;
+        width: 170px;
     }
 
 /* Cuerpo del panel */
 .vsb-body {
-    width: 56px;
-    background: rgba(14, 12, 10, 0.92);
-    border: 1px solid rgba(255,255,255,0.07);
+    width: 170px;
+    background: rgba(12, 10, 8, 0.96);
+    border: 1px solid rgba(255,255,255,0.08);
     border-left: none;
-    border-radius: 0 8px 8px 0;
-    padding: 10px 8px;
+    border-radius: 0 10px 10px 0;
+    padding: 10px 10px 12px 10px;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    gap: 5px;
-    backdrop-filter: blur(10px);
-    box-shadow: 3px 0 16px rgba(0,0,0,0.5);
+    align-items: stretch;
+    gap: 0;
+    backdrop-filter: blur(14px);
+    box-shadow: 4px 0 20px rgba(0,0,0,0.6);
+    max-height: 90vh;
+    overflow-y: auto;
+    scrollbar-width: none;
 }
+
+    .vsb-body::-webkit-scrollbar {
+        display: none;
+    }
 
 .vsb-section-label {
     font-family: 'DM Mono', monospace;
-    font-size: 0.42rem;
-    color: rgba(255,255,255,0.22);
-    letter-spacing: 0.1em;
+    font-size: 0.44rem;
+    color: rgba(200,169,110,0.45);
+    letter-spacing: 0.12em;
     text-transform: uppercase;
     width: 100%;
-    text-align: center;
-    margin-top: 2px;
+    margin-top: 8px;
+    margin-bottom: 4px;
+    padding-bottom: 3px;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
 }
 
+    .vsb-section-label:first-child {
+        margin-top: 0;
+    }
+
 .vsb-divider {
-    width: 75%;
+    width: 100%;
     height: 1px;
     background: rgba(255,255,255,0.06);
-    margin: 3px 0;
+    margin: 6px 0;
+}
+
+/* ── Fila de botones de imagen ── */
+.vsb-btn-row {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 2px;
 }
 
 .vsb-btn {
-    width: 34px;
-    height: 34px;
+    flex: 1;
+    height: 30px;
     background: rgba(255,255,255,0.04);
-    border: 1px solid rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.09);
     border-radius: 6px;
-    color: rgba(255,255,255,0.45);
-    font-size: 0.88rem;
+    color: rgba(255,255,255,0.5);
+    font-size: 0.82rem;
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -3269,18 +3334,36 @@ input[type="text"] {
 
     .vsb-btn:hover {
         background: rgba(255,255,255,0.1);
-        color: rgba(255,255,255,0.9);
-        border-color: rgba(255,255,255,0.2);
+        color: rgba(255,255,255,0.95);
+        border-color: rgba(255,255,255,0.22);
     }
 
     .vsb-btn.vsb-active {
         background: rgba(200,169,110,0.15);
-        border-color: rgba(200,169,110,0.4);
+        border-color: rgba(200,169,110,0.45);
         color: #c8a96e;
     }
 
+/* ── Color de texto ── */
+.vsb-color-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+}
+
 .vsb-color-btn {
-    padding: 4px;
+    width: 28px;
+    height: 28px;
+    padding: 3px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .vsb-color-swatch {
@@ -3297,15 +3380,17 @@ input[type="text"] {
 }
 
 .vsb-color-panel {
-    flex-direction: column;
-    gap: 4px;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 5px;
     align-items: center;
-    padding: 2px 0;
+    padding: 4px 0 2px 0;
 }
 
 .vsb-swatch {
-    width: 20px;
-    height: 20px;
+    width: 18px;
+    height: 18px;
     border-radius: 50%;
     cursor: pointer;
     border: 2px solid rgba(255,255,255,0.1);
@@ -3314,34 +3399,44 @@ input[type="text"] {
 }
 
     .vsb-swatch:hover {
-        transform: scale(1.2);
+        transform: scale(1.22);
         border-color: rgba(255,255,255,0.5);
     }
 
 .vsb-color-custom {
-    width: 24px;
-    height: 24px;
+    width: 22px;
+    height: 22px;
     border-radius: 50%;
-    border: none;
+    border: 1px solid #333;
     padding: 0;
     cursor: pointer;
     background: none;
+    flex-shrink: 0;
+}
+
+/* ── Tamaño de texto ── */
+.vsb-size-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-bottom: 2px;
 }
 
 .vsb-row {
     display: flex;
     align-items: center;
-    gap: 2px;
+    gap: 4px;
+    width: 100%;
 }
 
 .vsb-mini-btn {
-    width: 18px;
-    height: 18px;
+    width: 22px;
+    height: 22px;
     background: rgba(255,255,255,0.05);
     border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 3px;
-    color: rgba(255,255,255,0.55);
-    font-size: 0.8rem;
+    border-radius: 4px;
+    color: rgba(255,255,255,0.6);
+    font-size: 0.85rem;
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -3349,25 +3444,132 @@ input[type="text"] {
     padding: 0;
     line-height: 1;
     transition: all 0.14s;
+    flex-shrink: 0;
 }
 
     .vsb-mini-btn:hover {
-        background: rgba(255,255,255,0.14);
+        background: rgba(255,255,255,0.16);
         color: white;
+        border-color: rgba(255,255,255,0.3);
+    }
+
+    .vsb-mini-btn.vsb-active {
+        background: rgba(200,169,110,0.18);
+        border-color: rgba(200,169,110,0.5);
+        color: #c8a96e;
     }
 
 .vsb-mini-lbl {
     font-family: 'DM Mono', monospace;
-    font-size: 0.52rem;
-    color: rgba(255,255,255,0.38);
-    min-width: 20px;
+    font-size: 0.56rem;
+    color: rgba(255,255,255,0.5);
+    min-width: 24px;
     text-align: center;
 }
 
+/* ── Range ── */
+.vsb-range-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    margin-bottom: 2px;
+}
+
 .vsb-range {
-    width: 36px;
+    flex: 1;
+    min-width: 0;
     accent-color: #c8a96e;
     cursor: pointer;
+    height: 3px;
+}
+
+.vsb-range-lbl {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.52rem;
+    color: rgba(255,255,255,0.45);
+    min-width: 26px;
+    text-align: right;
+    flex-shrink: 0;
+}
+
+.vsb-select {
+    width: 100%;
+    background: #0d0d0d;
+    border: 1px solid #2a2a2a;
+    border-radius: 5px;
+    color: #c8a96e;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.54rem;
+    padding: 5px 6px;
+    cursor: pointer;
+    outline: none;
+    margin-bottom: 4px;
+}
+
+    .vsb-select:hover {
+        border-color: rgba(200,169,110,0.6);
+    }
+
+.vsb-font-preview {
+    text-align: center;
+    font-size: 11px;
+    color: #c8a96e;
+    font-style: italic;
+    background: rgba(0,0,0,0.5);
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 4px;
+    padding: 5px 8px;
+    margin-bottom: 2px;
+    min-height: 24px;
+    font-family: Georgia, serif;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ── Borde texto ── */
+.vsb-stroke-type-row {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 5px;
+}
+
+.vsb-stroke-colors-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-wrap: wrap;
+    margin-bottom: 4px;
+}
+
+.vsb-color-tiny {
+    width: 26px;
+    height: 22px;
+    border: 1px solid #2a2a2a;
+    border-radius: 4px;
+    background: #0d0d0d;
+    cursor: pointer;
+    padding: 0;
+    flex-shrink: 0;
+}
+
+    .vsb-color-tiny:hover {
+        border-color: #c8a96e;
+    }
+
+.vsb-micro-lbl {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.48rem;
+    color: rgba(255,255,255,0.35);
+    white-space: nowrap;
+}
+
+/* ── Botones de reproducción ── */
+.vsb-playback-row {
+    display: flex;
+    gap: 4px;
+    margin-top: 2px;
 }
 
 

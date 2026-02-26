@@ -199,8 +199,34 @@ document.getElementById('epub-file').addEventListener('change', async function (
 });
 
 // Cargar capítulo seleccionado
-async function cargarCapitulo(ruta) {
+async function cargarCapitulo(ruta, _cancelToken) {
     if (!ruta || !archivosHTML[ruta]) return;
+
+    // Si no se pasa token, capturar el actual (para no romper llamadas existentes)
+    if (_cancelToken === undefined) _cancelToken = typeof _cargaCapituloToken !== 'undefined' ? _cargaCapituloToken : 0;
+    const _isCancelled = () => typeof _cargaCapituloToken !== 'undefined' && _cargaCapituloToken !== _cancelToken;
+
+    const _limpiarBarrasCancelacion = () => {
+        ['main-processing-bar', 'video-translation-progress'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = 'none';
+        });
+        const fill = document.getElementById('progress-fill');
+        const pctEl = document.getElementById('tts-percent');
+        const label2 = document.getElementById('tts-status-label');
+        const statusEl = document.getElementById('tts-status');
+        if (fill) fill.style.width = '0%';
+        if (pctEl) pctEl.style.display = 'none';
+        if (label2) label2.textContent = '';
+        if (statusEl) statusEl.textContent = 'Detenido';
+        const ambPlayer = document.getElementById('ambient-player');
+        if (ambPlayer && typeof ambientPlaying !== 'undefined') {
+            ambPlayer.style.opacity = '';
+            ambPlayer.style.pointerEvents = '';
+        }
+        if (typeof ocultarNotificacionPersistente === 'function') ocultarNotificacionPersistente();
+        setTimeout(() => { if (typeof mostrarNotificacion === 'function') mostrarNotificacion('✕ Proceso cancelado'); }, 100);
+    };
 
     // Detener TTS si está activo
     detenerTTS();
@@ -325,12 +351,15 @@ async function cargarCapitulo(ruta) {
 
                 textoCompleto = await traducirTexto(textoCompleto);
 
+                if (_isCancelled()) { _limpiarBarrasCancelacion(); return; }
+
                 window._overrideActualizarProgreso = null;
                 document.getElementById('tts-status').textContent = 'Revisando...';
 
                 // Fase 2: Revisión explícita — detectar y re-traducir párrafos que quedaron en inglés
                 _mostrarBarraFase(2, 0, `<span style="color:var(--accent)">🔍</span> Revisando traducción...`);
                 textoCompleto = await revisarYRetraducirTexto(textoCompleto);
+                if (_isCancelled()) { _limpiarBarrasCancelacion(); return; }
                 _mostrarBarraFase(2, 100, `<span style="color:var(--accent)">🔍</span> Revisión completa ✓`);
                 await new Promise(r => setTimeout(r, 300));
                 document.getElementById('tts-status').textContent = 'Detenido';
@@ -339,12 +368,15 @@ async function cargarCapitulo(ruta) {
             // Fase 2.5: Limpieza silenciosa de URLs (entre revisión y optimización)
             textoCompleto = limpiarURLs(textoCompleto);
 
+            if (_isCancelled()) { _limpiarBarrasCancelacion(); return; }
+
             // Fase 3: Optimización IA
             if (ttsHumanizerActivo && claudeApiKey) {
                 document.getElementById('tts-status').textContent = '✨ Optimizando...';
                 textoCompleto = await naturalizarTextoParaTTS(textoCompleto, (hecho, total) => {
                     _mostrarBarraFase(3, (hecho / total) * 100, `<span style="color:var(--accent)">✨</span> Optimizando con IA... ${hecho}/${total}`);
                 });
+                if (_isCancelled()) { _limpiarBarrasCancelacion(); return; }
                 document.getElementById('tts-status').textContent = 'Detenido';
             }
 

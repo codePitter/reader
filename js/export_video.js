@@ -13,6 +13,25 @@ const EXPORT_SEC_FRASE = 4.0;   // segundos/frase cuando no hay XTTS
 
 let _expTtsMode = 'browser'; // se setea en el modal de config, se lee en _iniciarExportacion
 let _expFileName = '';       // nombre de archivo congelado al iniciar — no cambia aunque cambie el capítulo
+
+// Efectos globales para la exportación (configurables en el paso de preview)
+let _expEffects = {
+    grayscale: false,
+    vignette: true,
+    vigIntensity: 0.65,   // 0–1
+    vigSize: 0.85,    // radio exterior (0.5–1.2)
+    imgOpacity: 0.58,    // 0.05–1
+    brightness: 1.0,     // 0.5–2
+    contrast: 1.0,     // 0.5–2
+    zoom: 1.0,     // 1–2
+    textColor: '#c8a96e',
+    textOpacity: 1.0,
+    fontFamily: 'Georgia,serif',  // tipografía del texto
+    strokeType: 'solid',          // 'none' | 'solid' | 'gradient'
+    strokeWidth: 1,               // px
+    strokeColor1: '#000000',      // color sólido / inicio degradado
+    strokeColor2: '#1a0a00',      // fin degradado
+};
 let _expImagenes = [];   // [{ img: HTMLImageElement|null, url: string, grupo: int }]
 
 // ───────────────────────────────────────────────────────────────────
@@ -296,7 +315,7 @@ async function _pasarASeleccionImagenes() {
             }
         } catch (e) { }
         if (!url) url = `https://picsum.photos/seed/${g * 13 + 7}/${EXPORT_W}/${EXPORT_H}`;
-        _expImagenes.push({ url, img: null, grupo: g, fragmento });
+        _expImagenes.push({ url, img: null, grupo: g, fragmento, offsetX: 0, offsetY: 0 });
         if (btnNext) btnNext.textContent = `⏳ Cargando ${g + 1}/${grupos}…`;
         await new Promise(r => setTimeout(r, 0)); // no bloquear UI
     }
@@ -319,14 +338,17 @@ function _renderModalImagenes() {
         const hasta = Math.min((g + 1) * EXPORT_IMGS_PER, sentences.length);
         return `
         <div style="background:#111;border:1px solid #2a2a2a;border-radius:8px;overflow:hidden;">
-            <!-- Thumbnail -->
-            <div style="position:relative;width:100%;padding-bottom:56.25%;background:#0d0d0d;overflow:hidden;">
-                <img id="exp-img-thumb-${g}" src="${item.url}"
-                     style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.8;"
-                     onerror="this.src='https://picsum.photos/seed/${g + 200}/320/180'">
+            <!-- Thumbnail con drag para centrar -->
+            <div id="exp-thumb-wrap-${g}" style="position:relative;width:100%;padding-bottom:56.25%;background:#0d0d0d;overflow:hidden;cursor:grab;
+                 background-image:url('${item.url}');background-size:cover;background-position:${50 + (item.offsetX || 0)}% ${50 + (item.offsetY || 0)}%;opacity:.85;"
+                 onmousedown="_expDragStart(event,${g})" title="Arrastrá para reposicionar la imagen">
+                <div style="position:absolute;top:4px;left:4px;font-size:.45rem;color:rgba(200,169,110,.6);
+                            background:rgba(0,0,0,.5);border-radius:3px;padding:1px 4px;pointer-events:none;">
+                    ✥ mover
+                </div>
                 <div style="position:absolute;bottom:0;left:0;right:0;
                             background:linear-gradient(transparent,rgba(0,0,0,.7));
-                            padding:6px 8px;font-size:.5rem;color:#c8a96e;">
+                            padding:6px 8px;font-size:.5rem;color:#c8a96e;pointer-events:none;">
                     Frases ${desde}–${hasta}
                 </div>
             </div>
@@ -359,50 +381,48 @@ function _renderModalImagenes() {
 
     m.innerHTML = `
     <div style="width:100%;max-width:860px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+        <!-- Header + botones ARRIBA -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
             <div style="font-size:.62rem;color:#c8a96e;letter-spacing:.1em;">
                 🖼 SELECCIÓN DE IMÁGENES — ${grupos} grupos
             </div>
-            <div style="font-size:.52rem;color:#555;">
-                Editá la URL o pulsá 🔀 para sugerir otra
+            <div style="display:flex;gap:8px;align-items:center;">
+                <span style="font-size:.5rem;color:#555;margin-right:4px;">Editá la URL o pulsá 🔀 para sugerir otra</span>
+                <button onclick="_abrirModalConfig()"
+                        id="exp-btn-back"
+                        style="background:none;border:1px solid #2a2a2a;border-radius:5px;
+                               color:#555;font-size:.57rem;padding:6px 12px;cursor:pointer;">
+                    ← Atrás
+                </button>
+                <button onclick="_cerrarModalExport()"
+                        style="background:none;border:1px solid #2a2a2a;border-radius:5px;
+                               color:#555;font-size:.57rem;padding:6px 12px;cursor:pointer;">
+                    Cancelar
+                </button>
+                <button onclick="_abrirPreviewEfectos()"
+                        id="exp-btn-start"
+                        style="background:#c8a96e;border:none;border-radius:5px;
+                               color:#0a0908;font-size:.58rem;font-weight:700;
+                               padding:6px 18px;cursor:pointer;">
+                    Siguiente → Preview
+                </button>
             </div>
         </div>
 
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));
-                    gap:12px;margin-bottom:24px;">
+                    gap:12px;margin-bottom:16px;">
             ${grid}
         </div>
 
         <!-- Barra de progreso (oculta al inicio) -->
         <div id="exp-progress-wrap" style="display:none;background:#111;border:1px solid #2a2a2a;
              border-radius:8px;padding:16px 18px;margin-bottom:16px;">
-            <div style="font-size:.58rem;color:#888;margin-bottom:8px;" id="exp-phase-label">Iniciando…</div>
+            <div style="font-size:.58rem;color:#888;margin-bottom:8px;" id="exp-phase-label">Iniciando...</div>
             <div style="background:#1a1a1a;border-radius:4px;height:5px;overflow:hidden;margin-bottom:4px;">
                 <div id="exp-progress-bar"
                      style="height:100%;width:0%;background:#c8a96e;transition:width .25s;"></div>
             </div>
             <div style="font-size:.52rem;color:#444;text-align:right;" id="exp-progress-pct">0%</div>
-        </div>
-
-        <div style="display:flex;gap:10px;justify-content:flex-end;">
-            <button onclick="_abrirModalConfig()"
-                    id="exp-btn-back"
-                    style="background:none;border:1px solid #2a2a2a;border-radius:5px;
-                           color:#555;font-size:.57rem;padding:8px 14px;cursor:pointer;">
-                ← Atrás
-            </button>
-            <button onclick="_cerrarModalExport()"
-                    style="background:none;border:1px solid #2a2a2a;border-radius:5px;
-                           color:#555;font-size:.57rem;padding:8px 14px;cursor:pointer;">
-                Cancelar
-            </button>
-            <button onclick="_iniciarExportacion()"
-                    id="exp-btn-start"
-                    style="background:#c8a96e;border:none;border-radius:5px;
-                           color:#0a0908;font-size:.58rem;font-weight:700;
-                           padding:8px 22px;cursor:pointer;">
-                ▶ Exportar
-            </button>
         </div>
     </div>`;
     document.body.appendChild(m);
@@ -419,10 +439,10 @@ function _renderModalImagenes() {
 function _expCambiarUrl(g, url) {
     if (!url.trim()) return;
     _expImagenes[g].url = url.trim();
-    // Actualizar thumbnail
-    const thumb = document.getElementById(`exp-img-thumb-${g}`);
-    if (thumb) thumb.src = url.trim();
-    // Recargar HTMLImageElement
+    // Actualizar thumbnail (ahora es background-image en el wrap div)
+    const wrap = document.getElementById(`exp-thumb-wrap-${g}`);
+    if (wrap) wrap.style.backgroundImage = `url('${url.trim()}')`;
+    // Recargar HTMLImageElement para la exportación
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = () => { _expImagenes[g].img = img; };
@@ -455,13 +475,13 @@ function _expCargarArchivoLocal(g, inputEl) {
     const file = inputEl.files && inputEl.files[0];
     if (!file) return;
     const objectUrl = URL.createObjectURL(file);
-    // Actualizar thumbnail inmediatamente
-    const thumb = document.getElementById(`exp-img-thumb-${g}`);
-    if (thumb) thumb.src = objectUrl;
+    // Actualizar thumbnail inmediatamente (background-image en wrap div)
+    const wrap = document.getElementById(`exp-thumb-wrap-${g}`);
+    if (wrap) wrap.style.backgroundImage = `url('${objectUrl}')`;
     // Actualizar campo URL con nombre del archivo
     const urlInput = document.getElementById(`exp-url-${g}`);
     if (urlInput) urlInput.value = `[local] ${file.name}`;
-    // Cargar la imagen como HTMLImageElement para la exportación
+    // Cargar la imagen como HTMLImageElement para la exportación (sin crossOrigin para blobs)
     const img = new Image();
     img.onload = () => {
         _expImagenes[g].img = img;
@@ -728,6 +748,356 @@ async function _exportarSoloAudio() {
     }
 }
 
+
+// ───────────────────────────────────────────────────────────────────
+// DRAG para reposicionar imágenes en el grid
+// ───────────────────────────────────────────────────────────────────
+let _expDragState = null;
+
+function _expDragStart(e, g) {
+    e.preventDefault();
+    const wrap = document.getElementById(`exp-thumb-wrap-${g}`);
+    if (!wrap) return;
+
+    wrap.style.cursor = 'grabbing';
+    _expDragState = {
+        g,
+        startX: e.clientX,
+        startY: e.clientY,
+        baseOffX: _expImagenes[g].offsetX || 0,
+        baseOffY: _expImagenes[g].offsetY || 0,
+    };
+
+    const onMove = (ev) => {
+        if (!_expDragState) return;
+        const dx = ev.clientX - _expDragState.startX;
+        const dy = ev.clientY - _expDragState.startY;
+        const maxOff = 40;
+        const nx = Math.max(-maxOff, Math.min(maxOff, _expDragState.baseOffX + dx * 0.25));
+        const ny = Math.max(-maxOff, Math.min(maxOff, _expDragState.baseOffY + dy * 0.25));
+        _expImagenes[g].offsetX = nx;
+        _expImagenes[g].offsetY = ny;
+        wrap.style.backgroundPosition = `${50 + nx}% ${50 + ny}%`;
+    };
+
+    const onUp = () => {
+        if (_expDragState) {
+            const w = document.getElementById(`exp-thumb-wrap-${_expDragState.g}`);
+            if (w) w.style.cursor = 'grab';
+        }
+        _expDragState = null;
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+    };
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+}
+
+
+
+// ───────────────────────────────────────────────────────────────────
+// PASO 3 — PREVIEW DE EFECTOS
+// ───────────────────────────────────────────────────────────────────
+function _abrirPreviewEfectos() {
+    // Sincronizar _expEffects con variables globales del visor
+    _expEffects.grayscale = (typeof _grayscaleActive !== 'undefined') ? _grayscaleActive : false;
+    _expEffects.vignette = (typeof _vignetteEnabled !== 'undefined') ? _vignetteEnabled : true;
+    _expEffects.imgOpacity = (typeof _videoTextOpacity !== 'undefined') ? _videoTextOpacity * 0.58 : 0.58;
+    _expEffects.textColor = (typeof _videoTextColor !== 'undefined') ? _videoTextColor : '#c8a96e';
+    _expEffects.textOpacity = (typeof _videoTextOpacity !== 'undefined') ? _videoTextOpacity : 1.0;
+
+    _quitarModal();
+    const m = document.createElement('div');
+    m.id = 'export-modal';
+    m.style.cssText = `position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.95);
+        display:flex;flex-direction:column;align-items:center;justify-content:center;
+        overflow:hidden;font-family:'DM Mono',monospace;padding:12px 16px;`;
+
+    m.innerHTML = `
+    <div style="width:90%;max-width:1200px;display:flex;flex-direction:column;height:calc(100vh - 24px);">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-shrink:0;">
+            <div style="font-size:.62rem;color:#c8a96e;letter-spacing:.1em;">🎨 PREVIEW — EFECTOS DE VIDEO</div>
+            <div style="font-size:.5rem;color:#555;">Los efectos se aplican a todo el video</div>
+        </div>
+
+        <!-- Layout horizontal: canvas izquierda + controles derecha -->
+        <div style="display:flex;gap:14px;flex:1;min-height:0;overflow:hidden;">
+
+        <!-- Canvas preview: ocupa todo el alto disponible manteniendo 16:9 -->
+        <div style="flex:1;min-width:0;display:flex;align-items:center;justify-content:center;background:#000;border-radius:8px;overflow:hidden;">
+            <canvas id="exp-preview-canvas" style="max-width:100%;max-height:100%;display:block;"></canvas>
+        </div>
+
+        <!-- Panel de controles derecha -->
+        <div style="flex:0 0 260px;display:flex;flex-direction:column;gap:10px;overflow-y:auto;">
+
+        <!-- Controles en grid 2 columnas (ahora columna única dentro del panel derecho) -->
+        <div style="display:flex;flex-direction:column;gap:10px;">
+
+            <!-- Col izquierda: imagen -->
+            <div style="background:#111;border:1px solid #2a2a2a;border-radius:8px;padding:14px 16px;">
+                <div style="font-size:.52rem;color:#c8a96e;letter-spacing:.08em;margin-bottom:12px;">IMAGEN</div>
+
+                <label style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+                    <span style="font-size:.55rem;color:#888;">Blanco y negro</span>
+                    <input type="checkbox" id="exp-fx-bw" ${_expEffects.grayscale ? 'checked' : ''}
+                           onchange="_expFxChange()" style="accent-color:#c8a96e;width:14px;height:14px;">
+                </label>
+
+                <div style="margin-bottom:10px;">
+                    <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                        <span style="font-size:.52rem;color:#888;">Opacidad imagen</span>
+                        <span id="exp-fx-opacity-val" style="font-size:.52rem;color:#c8a96e;">${Math.round(_expEffects.imgOpacity * 100)}%</span>
+                    </div>
+                    <input type="range" id="exp-fx-opacity" min="5" max="100" value="${Math.round(_expEffects.imgOpacity * 100)}"
+                           oninput="_expFxChange()" style="width:100%;accent-color:#c8a96e;">
+                </div>
+
+                <div style="margin-bottom:10px;">
+                    <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                        <span style="font-size:.52rem;color:#888;">Brillo</span>
+                        <span id="exp-fx-brightness-val" style="font-size:.52rem;color:#c8a96e;">${_expEffects.brightness.toFixed(2)}</span>
+                    </div>
+                    <input type="range" id="exp-fx-brightness" min="50" max="200" value="${Math.round(_expEffects.brightness * 100)}"
+                           oninput="_expFxChange()" style="width:100%;accent-color:#c8a96e;">
+                </div>
+
+                <div style="margin-bottom:0;">
+                    <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                        <span style="font-size:.52rem;color:#888;">Contraste</span>
+                        <span id="exp-fx-contrast-val" style="font-size:.52rem;color:#c8a96e;">${_expEffects.contrast.toFixed(2)}</span>
+                    </div>
+                    <input type="range" id="exp-fx-contrast" min="50" max="200" value="${Math.round(_expEffects.contrast * 100)}"
+                           oninput="_expFxChange()" style="width:100%;accent-color:#c8a96e;">
+                </div>
+            </div>
+
+            <!-- Col derecha: viñeta + texto -->
+            <div style="background:#111;border:1px solid #2a2a2a;border-radius:8px;padding:14px 16px;">
+                <div style="font-size:.52rem;color:#c8a96e;letter-spacing:.08em;margin-bottom:12px;">VIÑETA & TEXTO</div>
+
+                <label style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+                    <span style="font-size:.55rem;color:#888;">Viñeta</span>
+                    <input type="checkbox" id="exp-fx-vignette" ${_expEffects.vignette ? 'checked' : ''}
+                           onchange="_expFxChange()" style="accent-color:#c8a96e;width:14px;height:14px;">
+                </label>
+
+                <div style="margin-bottom:10px;">
+                    <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                        <span style="font-size:.52rem;color:#888;">Intensidad viñeta</span>
+                        <span id="exp-fx-vigint-val" style="font-size:.52rem;color:#c8a96e;">${Math.round(_expEffects.vigIntensity * 100)}%</span>
+                    </div>
+                    <input type="range" id="exp-fx-vigint" min="0" max="100" value="${Math.round(_expEffects.vigIntensity * 100)}"
+                           oninput="_expFxChange()" style="width:100%;accent-color:#c8a96e;">
+                </div>
+
+                <div style="margin-bottom:10px;">
+                    <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                        <span style="font-size:.52rem;color:#888;">Tamaño viñeta</span>
+                        <span id="exp-fx-vigsize-val" style="font-size:.52rem;color:#c8a96e;">${_expEffects.vigSize.toFixed(2)}</span>
+                    </div>
+                    <input type="range" id="exp-fx-vigsize" min="50" max="120" value="${Math.round(_expEffects.vigSize * 100)}"
+                           oninput="_expFxChange()" style="width:100%;accent-color:#c8a96e;">
+                </div>
+
+                <div style="margin-bottom:10px;">
+                    <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                        <span style="font-size:.52rem;color:#888;">Opacidad texto</span>
+                        <span id="exp-fx-textopacity-val" style="font-size:.52rem;color:#c8a96e;">${Math.round(_expEffects.textOpacity * 100)}%</span>
+                    </div>
+                    <input type="range" id="exp-fx-textopacity" min="10" max="100" value="${Math.round(_expEffects.textOpacity * 100)}"
+                           oninput="_expFxChange()" style="width:100%;accent-color:#c8a96e;">
+                </div>
+
+                <div>
+                    <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                        <span style="font-size:.52rem;color:#888;">Color de texto</span>
+                        <span id="exp-fx-color-val" style="font-size:.52rem;color:#c8a96e;">${_expEffects.textColor}</span>
+                    </div>
+                    <input type="color" id="exp-fx-color" value="${_expEffects.textColor}"
+                           oninput="_expFxChange()" style="width:100%;height:28px;border:1px solid #2a2a2a;border-radius:4px;background:#0d0d0d;cursor:pointer;">
+                </div>
+
+                <!-- Borde de texto -->
+                <div style="margin-top:10px;">
+                    <div style="font-size:.52rem;color:#888;margin-bottom:6px;">Borde texto</div>
+                    <div style="display:flex;gap:5px;margin-bottom:7px;">
+                        <button id="exp-stroke-none" onclick="_expSetStrokeType('none')"
+                            style="flex:1;padding:5px 0;font-size:.52rem;background:${_expEffects.strokeType === 'none' ? 'rgba(200,169,110,.18)' : 'rgba(255,255,255,.04)'};border:1px solid ${_expEffects.strokeType === 'none' ? 'rgba(200,169,110,.5)' : '#2a2a2a'};border-radius:4px;color:${_expEffects.strokeType === 'none' ? '#c8a96e' : '#888'};cursor:pointer;font-family:'DM Mono',monospace;">
+                            ✕ Sin borde
+                        </button>
+                        <button id="exp-stroke-solid" onclick="_expSetStrokeType('solid')"
+                            style="flex:1;padding:5px 0;font-size:.52rem;background:${_expEffects.strokeType === 'solid' ? 'rgba(200,169,110,.18)' : 'rgba(255,255,255,.04)'};border:1px solid ${_expEffects.strokeType === 'solid' ? 'rgba(200,169,110,.5)' : '#2a2a2a'};border-radius:4px;color:${_expEffects.strokeType === 'solid' ? '#c8a96e' : '#888'};cursor:pointer;font-family:'DM Mono',monospace;">
+                            ▣ Sólido
+                        </button>
+                        <button id="exp-stroke-gradient" onclick="_expSetStrokeType('gradient')"
+                            style="flex:1;padding:5px 0;font-size:.52rem;background:${_expEffects.strokeType === 'gradient' ? 'rgba(200,169,110,.18)' : 'rgba(255,255,255,.04)'};border:1px solid ${_expEffects.strokeType === 'gradient' ? 'rgba(200,169,110,.5)' : '#2a2a2a'};border-radius:4px;color:${_expEffects.strokeType === 'gradient' ? '#c8a96e' : '#888'};cursor:pointer;font-family:'DM Mono',monospace;">
+                            ▦ Degrado
+                        </button>
+                    </div>
+                    <div id="exp-stroke-color-row" style="display:flex;align-items:center;gap:8px;margin-bottom:7px;${_expEffects.strokeType === 'none' ? 'opacity:.35;pointer-events:none;' : ''}">
+                        <input type="color" id="exp-fx-stroke-c1" value="${_expEffects.strokeColor1}"
+                               oninput="_expFxChange()" style="width:36px;height:24px;border:1px solid #2a2a2a;border-radius:4px;background:#0d0d0d;cursor:pointer;padding:0;flex-shrink:0;">
+                        <div id="exp-stroke-grad-c2" style="display:${_expEffects.strokeType === 'gradient' ? 'flex' : 'none'};align-items:center;gap:6px;">
+                            <span style="font-size:.5rem;color:#555;">→</span>
+                            <input type="color" id="exp-fx-stroke-c2" value="${_expEffects.strokeColor2}"
+                                   oninput="_expFxChange()" style="width:36px;height:24px;border:1px solid #2a2a2a;border-radius:4px;background:#0d0d0d;cursor:pointer;padding:0;">
+                        </div>
+                        <span style="font-size:.5rem;color:#666;margin-left:auto;">Ancho</span>
+                        <input type="range" id="exp-fx-stroke-w" min="0" max="6" step="0.5" value="${_expEffects.strokeWidth}"
+                               oninput="_expFxChange()" style="width:70px;accent-color:#c8a96e;">
+                        <span id="exp-fx-stroke-w-val" style="font-size:.52rem;color:#c8a96e;min-width:22px;text-align:right;">${_expEffects.strokeWidth}px</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Zoom -->
+            <div style="background:#111;border:1px solid #2a2a2a;border-radius:8px;padding:12px 16px;">
+                <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                    <span style="font-size:.52rem;color:#888;">Zoom imagen</span>
+                    <span id="exp-fx-zoom-val" style="font-size:.52rem;color:#c8a96e;">${_expEffects.zoom.toFixed(2)}x</span>
+                </div>
+                <input type="range" id="exp-fx-zoom" min="100" max="200" value="${Math.round(_expEffects.zoom * 100)}"
+                       oninput="_expFxChange()" style="width:100%;accent-color:#c8a96e;">
+            </div>
+
+            <!-- Tipografía -->
+            <div style="background:#111;border:1px solid #2a2a2a;border-radius:8px;padding:12px 16px;">
+                <div style="font-size:.52rem;color:#c8a96e;letter-spacing:.08em;margin-bottom:10px;">TIPOGRAFÍA</div>
+                <select id="exp-fx-font" onchange="_expFxChange()"
+                        style="width:100%;background:#0d0d0d;border:1px solid #2a2a2a;border-radius:4px;
+                               color:#e8e0d0;font-size:.55rem;padding:5px 7px;cursor:pointer;
+                               font-family:'DM Mono',monospace;accent-color:#c8a96e;">
+                    <option value="Georgia,serif" ${_expEffects.fontFamily === 'Georgia,serif' ? 'selected' : ''}>Georgia (Clásica)</option>
+                    <option value="'Times New Roman',serif" ${_expEffects.fontFamily === "'Times New Roman',serif" ? 'selected' : ''}>Times New Roman</option>
+                    <option value="'Palatino Linotype',Palatino,serif" ${_expEffects.fontFamily.includes('Palatino') ? 'selected' : ''}>Palatino (Elegante)</option>
+                    <option value="'Book Antiqua',Palatino,serif" ${_expEffects.fontFamily.includes('Book Antiqua') ? 'selected' : ''}>Book Antiqua</option>
+                    <option value="Garamond,serif" ${_expEffects.fontFamily.includes('Garamond') ? 'selected' : ''}>Garamond (Editorial)</option>
+                    <option value="'Trebuchet MS',sans-serif" ${_expEffects.fontFamily.includes('Trebuchet') ? 'selected' : ''}>Trebuchet (Moderno)</option>
+                    <option value="'Arial',sans-serif" ${_expEffects.fontFamily === "'Arial',sans-serif" ? 'selected' : ''}>Arial (Limpio)</option>
+                    <option value="'Courier New',monospace" ${_expEffects.fontFamily.includes('Courier') ? 'selected' : ''}>Courier (Máquina)</option>
+                    <option value="Impact,fantasy" ${_expEffects.fontFamily.includes('Impact') ? 'selected' : ''}>Impact (Dramático)</option>
+                </select>
+                <!-- Preview de la tipografía -->
+                <div id="exp-font-preview" style="margin-top:8px;padding:6px;background:#0a0908;border-radius:4px;
+                     text-align:center;font-size:14px;color:#c8a96e;font-style:italic;
+                     font-family:${_expEffects.fontFamily};">
+                    El hechicero inmortal...
+                </div>
+            </div>
+
+        </div><!-- fin flex-direction:column controles -->
+        </div><!-- fin panel derecha -->
+        </div><!-- fin layout horizontal flex:1 -->
+
+        <!-- Botones abajo -->
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:10px;flex-shrink:0;">
+            <button onclick="_renderModalImagenes()"
+                    style="background:none;border:1px solid #2a2a2a;border-radius:5px;
+                           color:#555;font-size:.57rem;padding:8px 14px;cursor:pointer;">
+                ← Atrás
+            </button>
+            <button onclick="_cerrarModalExport()"
+                    style="background:none;border:1px solid #2a2a2a;border-radius:5px;
+                           color:#555;font-size:.57rem;padding:8px 14px;cursor:pointer;">
+                Cancelar
+            </button>
+            <button onclick="_iniciarExportacion()"
+                    style="background:#c8a96e;border:none;border-radius:5px;
+                           color:#0a0908;font-size:.58rem;font-weight:700;
+                           padding:8px 22px;cursor:pointer;">
+                ▶ Exportar
+            </button>
+        </div>
+    </div>`; // fin div height:calc(100vh-24px)
+
+    document.body.appendChild(m);
+
+    // Inicializar canvas preview
+    const canvas = document.getElementById('exp-preview-canvas');
+    canvas.width = EXPORT_W;
+    canvas.height = EXPORT_H;
+
+    // Mostrar primera imagen disponible
+    _expPreviewRender();
+}
+
+function _expSetStrokeType(type) {
+    _expEffects.strokeType = type;
+    // Update button styles
+    ['none', 'solid', 'gradient'].forEach(t => {
+        const btn = document.getElementById(`exp-stroke-${t}`);
+        if (!btn) return;
+        const active = t === type;
+        btn.style.background = active ? 'rgba(200,169,110,.18)' : 'rgba(255,255,255,.04)';
+        btn.style.borderColor = active ? 'rgba(200,169,110,.5)' : '#2a2a2a';
+        btn.style.color = active ? '#c8a96e' : '#888';
+    });
+    const colorRow = document.getElementById('exp-stroke-color-row');
+    if (colorRow) { colorRow.style.opacity = type === 'none' ? '0.35' : '1'; colorRow.style.pointerEvents = type === 'none' ? 'none' : ''; }
+    const gradC2 = document.getElementById('exp-stroke-grad-c2');
+    if (gradC2) gradC2.style.display = type === 'gradient' ? 'flex' : 'none';
+    _expPreviewRender();
+}
+
+function _expFxChange() {
+    const bw = document.getElementById('exp-fx-bw')?.checked ?? false;
+    const vig = document.getElementById('exp-fx-vignette')?.checked ?? true;
+    const opacity = (document.getElementById('exp-fx-opacity')?.value ?? 58) / 100;
+    const brightness = (document.getElementById('exp-fx-brightness')?.value ?? 100) / 100;
+    const contrast = (document.getElementById('exp-fx-contrast')?.value ?? 100) / 100;
+    const vigInt = (document.getElementById('exp-fx-vigint')?.value ?? 65) / 100;
+    const vigSize = (document.getElementById('exp-fx-vigsize')?.value ?? 85) / 100;
+    const textOp = (document.getElementById('exp-fx-textopacity')?.value ?? 100) / 100;
+    const textColor = document.getElementById('exp-fx-color')?.value ?? '#c8a96e';
+    const zoom = (document.getElementById('exp-fx-zoom')?.value ?? 100) / 100;
+    const fontFamily = document.getElementById('exp-fx-font')?.value ?? 'Georgia,serif';
+    const strokeType = _expEffects.strokeType ?? 'solid';
+    const strokeWidth = parseFloat(document.getElementById('exp-fx-stroke-w')?.value ?? 1);
+    const strokeColor1 = document.getElementById('exp-fx-stroke-c1')?.value ?? '#000000';
+    const strokeColor2 = document.getElementById('exp-fx-stroke-c2')?.value ?? '#1a0a00';
+
+    // Actualizar preview de tipografía
+    const fontPrev = document.getElementById('exp-font-preview');
+    if (fontPrev) { fontPrev.style.fontFamily = fontFamily; }
+
+    _expEffects = {
+        grayscale: bw, vignette: vig, imgOpacity: opacity, brightness, contrast,
+        vigIntensity: vigInt, vigSize, textColor, textOpacity: textOp, zoom, fontFamily,
+        strokeType, strokeWidth, strokeColor1, strokeColor2
+    };
+
+    // Actualizar labels
+    const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    set('exp-fx-opacity-val', Math.round(opacity * 100) + '%');
+    set('exp-fx-brightness-val', brightness.toFixed(2));
+    set('exp-fx-contrast-val', contrast.toFixed(2));
+    set('exp-fx-vigint-val', Math.round(vigInt * 100) + '%');
+    set('exp-fx-vigsize-val', vigSize.toFixed(2));
+    set('exp-fx-textopacity-val', Math.round(textOp * 100) + '%');
+    set('exp-fx-color-val', textColor);
+    set('exp-fx-zoom-val', zoom.toFixed(2) + 'x');
+    set('exp-fx-stroke-w-val', strokeWidth + 'px');
+
+    _expPreviewRender();
+}
+
+function _expPreviewRender() {
+    const canvas = document.getElementById('exp-preview-canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+
+    // Buscar primera imagen cargada
+    const imgItem = _expImagenes.find(i => i.img) || _expImagenes[0];
+    // Usar frase del medio del primer grupo
+    const midSentence = Math.floor(Math.min(EXPORT_IMGS_PER / 2, sentences.length - 1));
+
+    _expDibujarFrame(ctx, EXPORT_W, EXPORT_H, imgItem?.img || null, midSentence,
+        sentences.length, sentences, imgItem, _expEffects);
+}
+
+
 async function _expGenerarAudioXTTSWidget(updateFn) {
     const total = sentences.length;
     const buffers = new Array(total).fill(null);
@@ -845,7 +1215,7 @@ async function _expRenderizar(audioBuffers, updateFn) {
 
         const tick = () => {
             if (_expCancelled) {
-                cancelAnimationFrame(rafId);
+                clearTimeout(rafId);
                 recorder.stop();
                 resolve();
                 return;
@@ -868,7 +1238,7 @@ async function _expRenderizar(audioBuffers, updateFn) {
 
             // Dibujar frame
             const imgItem = _expImagenes[Math.floor(sentenceIdx / EXPORT_IMGS_PER)];
-            _expDibujarFrame(ctx, EXPORT_W, EXPORT_H, imgItem?.img || null, sentenceIdx, total, _sentences);
+            _expDibujarFrame(ctx, EXPORT_W, EXPORT_H, imgItem?.img || null, sentenceIdx, total, _sentences, imgItem, _expEffects);
 
             // Progreso
             const pct = pctBase + (Math.min(virtualTime, totalDur) / totalDur) * (99 - pctBase);
@@ -881,10 +1251,10 @@ async function _expRenderizar(audioBuffers, updateFn) {
                 return;
             }
 
-            rafId = requestAnimationFrame(tick);
+            rafId = setTimeout(tick, 1000 / 30); // 30fps, no se pausa con tab oculto
         };
 
-        rafId = requestAnimationFrame(tick);
+        rafId = setTimeout(tick, 1000 / 30);
     });
 
 
@@ -967,32 +1337,56 @@ function _audioBufferToWavBlob(ab) {
 // ───────────────────────────────────────────────────────────────────
 // DIBUJAR FRAME — idéntico al visor pero sobre canvas offscreen
 // ───────────────────────────────────────────────────────────────────
-function _expDibujarFrame(ctx, W, H, img, current, total, _sentencesSnap) {
+function _expDibujarFrame(ctx, W, H, img, current, total, _sentencesSnap, imgItem, effects) {
+    // effects: objeto _expEffects (usa globales como fallback)
+    const fx = effects || _expEffects || {};
+    const grayscale = fx.grayscale ?? (typeof _grayscaleActive !== 'undefined' ? _grayscaleActive : false);
+    const vignette = fx.vignette ?? (typeof _vignetteEnabled !== 'undefined' ? _vignetteEnabled : true);
+    const vigInt = fx.vigIntensity ?? 0.65;
+    const vigSize = fx.vigSize ?? 0.85;
+    const imgOpacity = fx.imgOpacity ?? 0.58;
+    const brightness = fx.brightness ?? 1.0;
+    const contrast_v = fx.contrast ?? 1.0;
+    const zoom = fx.zoom ?? 1.0;
+    const textColor = fx.textColor ?? (typeof _videoTextColor !== 'undefined' ? _videoTextColor : '#c8a96e');
+    const textOpacity = fx.textOpacity ?? (typeof _videoTextOpacity !== 'undefined' ? _videoTextOpacity : 1);
+    const fontFamily = fx.fontFamily ?? 'Georgia,serif';
+    const strokeType = fx.strokeType ?? (typeof _textStrokeType !== 'undefined' ? _textStrokeType : 'solid');
+    const strokeWidth = fx.strokeWidth ?? (typeof _textStrokeWidth !== 'undefined' ? _textStrokeWidth : 1);
+    const strokeColor1 = fx.strokeColor1 ?? (typeof _textStrokeColor1 !== 'undefined' ? _textStrokeColor1 : '#000000');
+    const strokeColor2 = fx.strokeColor2 ?? (typeof _textStrokeColor2 !== 'undefined' ? _textStrokeColor2 : '#1a0a00');
+    const offX = imgItem?.offsetX ?? 0;  // % de offset para centrado
+    const offY = imgItem?.offsetY ?? 0;
+
     ctx.fillStyle = '#0a0908';
     ctx.fillRect(0, 0, W, H);
 
     if (img) {
         ctx.save();
-        // Opacidad base 0.58; _videoTextOpacity actúa como multiplicador (1.0 = sin cambio)
-        const imgAlpha = 0.58 * ((typeof _videoTextOpacity !== 'undefined') ? _videoTextOpacity : 1);
-        ctx.globalAlpha = Math.max(0.05, Math.min(1, imgAlpha));
+        ctx.globalAlpha = Math.max(0.05, Math.min(1, imgOpacity));
         const ir = img.naturalWidth / img.naturalHeight || 1.78;
         const cr = W / H;
         let sw, sh, sx, sy;
-        if (ir > cr) { sh = H; sw = sh * ir; sx = (W - sw) / 2; sy = 0; }
-        else { sw = W; sh = sw / ir; sx = 0; sy = (H - sh) / 2; }
-        ctx.filter = (typeof _grayscaleActive !== 'undefined' && _grayscaleActive)
-            ? 'grayscale(1) brightness(0.82) contrast(1.12)' : 'none';
+        if (ir > cr) { sh = H * zoom; sw = sh * ir; sx = (W - sw) / 2; sy = (H - sh) / 2; }
+        else { sw = W * zoom; sh = sw / ir; sx = (W - sw) / 2; sy = (H - sh) / 2; }
+        // Aplicar offset de posición — negado para coincidir con background-position CSS
+        // (en CSS background-position mayor % mueve el contenido a la izquierda)
+        sx -= (offX / 100) * (sw - W);
+        sy -= (offY / 100) * (sh - H);
+        // Filtros CSS: brillo, contraste, escala de grises
+        let filterStr = `brightness(${brightness}) contrast(${contrast_v})`;
+        if (grayscale) filterStr += ' grayscale(1)';
+        ctx.filter = filterStr;
         ctx.drawImage(img, sx, sy, sw, sh);
         ctx.filter = 'none';
         ctx.restore();
     }
 
-    // Viñeta — respeta el toggle _vignetteEnabled igual que el visor en vivo
-    if (typeof _vignetteEnabled === 'undefined' || _vignetteEnabled) {
-        const vig = ctx.createRadialGradient(W / 2, H / 2, H * .2, W / 2, H / 2, H * .85);
+    // Viñeta con intensidad y tamaño configurables
+    if (vignette) {
+        const vig = ctx.createRadialGradient(W / 2, H / 2, H * 0.2, W / 2, H / 2, H * vigSize);
         vig.addColorStop(0, 'rgba(0,0,0,0)');
-        vig.addColorStop(1, 'rgba(0,0,0,0.65)');
+        vig.addColorStop(1, `rgba(0,0,0,${vigInt})`);
         ctx.fillStyle = vig;
         ctx.fillRect(0, 0, W, H);
     }
@@ -1007,11 +1401,11 @@ function _expDibujarFrame(ctx, W, H, img, current, total, _sentencesSnap) {
     const NEXT_SZ = 20;
     const CUR_LH = 52; const PREV_LH = 32; const NEXT_LH = 30; const GAP = 28;
 
-    ctx.font = `italic ${CUR_SZ}px Georgia,serif`;
+    ctx.font = `italic ${CUR_SZ}px ${fontFamily}`;
     const curL = wrapText(ctx, _s[current] || '', MAX_W);
-    ctx.font = `${PREV_SZ}px Georgia,serif`;
+    ctx.font = `${PREV_SZ}px ${fontFamily}`;
     const prevL = current > 0 ? wrapText(ctx, _s[current - 1], MAX_W) : [];
-    ctx.font = `${NEXT_SZ}px Georgia,serif`;
+    ctx.font = `${NEXT_SZ}px ${fontFamily}`;
     const nextL = current < total - 1 ? wrapText(ctx, _s[current + 1], MAX_W) : [];
 
     const totalH = prevL.length * PREV_LH + (prevL.length ? GAP : 0)
@@ -1019,23 +1413,36 @@ function _expDibujarFrame(ctx, W, H, img, current, total, _sentencesSnap) {
         + (nextL.length ? GAP : 0) + nextL.length * NEXT_LH;
     let y = 28 + Math.max(0, (H - 56 - totalH) / 2);
 
-    ctx.globalAlpha = (typeof _videoTextOpacity !== 'undefined') ? _videoTextOpacity : 1;
+    ctx.globalAlpha = textOpacity;
     ctx.textAlign = 'center';
     ctx.shadowBlur = 0;
 
     if (prevL.length) {
-        ctx.font = `${PREV_SZ}px Georgia,serif`;
+        ctx.font = `${PREV_SZ}px ${fontFamily}`;
         ctx.fillStyle = '#5a5248';
         prevL.forEach((l, i) => ctx.fillText(l, CX, y + i * PREV_LH));
         y += prevL.length * PREV_LH + GAP;
     }
-    ctx.font = `italic ${CUR_SZ}px Georgia,serif`;
-    ctx.fillStyle = (typeof _videoTextColor !== 'undefined') ? _videoTextColor : '#c8a96e';
+    ctx.font = `italic ${CUR_SZ}px ${fontFamily}`;
+    ctx.fillStyle = textColor;
+    if (strokeType !== 'none' && strokeWidth > 0) {
+        ctx.lineWidth = strokeWidth * 2;
+        ctx.lineJoin = 'round';
+        if (strokeType === 'gradient') {
+            const grd = ctx.createLinearGradient(CX - MAX_W / 2, 0, CX + MAX_W / 2, 0);
+            grd.addColorStop(0, strokeColor1);
+            grd.addColorStop(1, strokeColor2);
+            ctx.strokeStyle = grd;
+        } else {
+            ctx.strokeStyle = strokeColor1;
+        }
+        curL.forEach((l, i) => ctx.strokeText(l, CX, y + i * CUR_LH));
+    }
     curL.forEach((l, i) => ctx.fillText(l, CX, y + i * CUR_LH));
     y += curL.length * CUR_LH + GAP;
 
     if (nextL.length) {
-        ctx.font = `${NEXT_SZ}px Georgia,serif`;
+        ctx.font = `${NEXT_SZ}px ${fontFamily}`;
         ctx.fillStyle = 'rgba(200,169,110,0.22)';
         nextL.forEach((l, i) => ctx.fillText(l, CX, y + i * NEXT_LH));
     }

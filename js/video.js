@@ -266,16 +266,41 @@ function drawvideoScene(ctx, W, H, current, total) {
     const CUR_LH = 52;
     const NEXT_LH = 30;
     const GAP = 28; // espacio entre bloques
+    const FONT = (typeof _videoFontFamily !== 'undefined') ? _videoFontFamily : 'Georgia,serif';
 
-    ctx.font = `italic ${CUR_SIZE}px "Georgia", serif`;
+    // ─── helper: dibujar texto con borde opcional ───
+    function drawStrokedText(text, x, y, isCurrent) {
+        const sType = (typeof _textStrokeType !== 'undefined') ? _textStrokeType : 'solid';
+        const sWidth = (typeof _textStrokeWidth !== 'undefined') ? _textStrokeWidth : 1;
+        if (sType !== 'none' && sWidth > 0) {
+            ctx.save();
+            ctx.lineWidth = sWidth * 2;
+            ctx.lineJoin = 'round';
+            if (sType === 'gradient') {
+                const c1 = (typeof _textStrokeColor1 !== 'undefined') ? _textStrokeColor1 : '#000000';
+                const c2 = (typeof _textStrokeColor2 !== 'undefined') ? _textStrokeColor2 : '#1a0a00';
+                const grd = ctx.createLinearGradient(x - MAX_W / 2, y - CUR_SIZE, x + MAX_W / 2, y);
+                grd.addColorStop(0, c1);
+                grd.addColorStop(1, c2);
+                ctx.strokeStyle = grd;
+            } else {
+                ctx.strokeStyle = (typeof _textStrokeColor1 !== 'undefined') ? _textStrokeColor1 : '#000000';
+            }
+            ctx.strokeText(text, x, y);
+            ctx.restore();
+        }
+        ctx.fillText(text, x, y);
+    }
+
+    ctx.font = `italic ${CUR_SIZE}px ${FONT}`;
     const curLines = wrapText(ctx, sentences[current] || '', MAX_W);
     const curBlockH = curLines.length * CUR_LH;
 
-    ctx.font = `${PREV_SIZE}px "Georgia", serif`;
+    ctx.font = `${PREV_SIZE}px ${FONT}`;
     const prevLines = current > 0 ? wrapText(ctx, sentences[current - 1], MAX_W) : [];
     const prevBlockH = prevLines.length * PREV_LH;
 
-    ctx.font = `${NEXT_SIZE}px "Georgia", serif`;
+    ctx.font = `${NEXT_SIZE}px ${FONT}`;
     const nextLines = current < total - 1 ? wrapText(ctx, sentences[current + 1], MAX_W) : [];
     const nextBlockH = nextLines.length * NEXT_LH;
 
@@ -297,32 +322,32 @@ function drawvideoScene(ctx, W, H, current, total) {
 
     // Draw previous (dim, above)
     if (prevLines.length) {
-        ctx.font = `${PREV_SIZE}px "Georgia", serif`;
+        ctx.font = `${PREV_SIZE}px ${FONT}`;
         ctx.fillStyle = video_TEXT_DIM;
         ctx.textAlign = 'center';
         prevLines.forEach((l, i) => {
-            ctx.fillText(l, CX, drawY + i * PREV_LH);
+            drawStrokedText(l, CX, drawY + i * PREV_LH, false);
         });
         drawY += prevBlockH + GAP;
     }
 
     // Draw current — sin glow, color mutable
-    ctx.font = `italic ${CUR_SIZE}px "Georgia", serif`;
+    ctx.font = `italic ${CUR_SIZE}px ${FONT}`;
     ctx.textAlign = 'center';
     ctx.shadowBlur = 0;
     ctx.fillStyle = (typeof _videoTextColor !== 'undefined') ? _videoTextColor : video_HIGHLIGHT;
     curLines.forEach((l, i) => {
-        ctx.fillText(l, CX, drawY + i * CUR_LH);
+        drawStrokedText(l, CX, drawY + i * CUR_LH, true);
     });
     drawY += curBlockH + GAP;
 
     // Draw next (very dim, below)
     if (nextLines.length) {
-        ctx.font = `${NEXT_SIZE}px "Georgia", serif`;
+        ctx.font = `${NEXT_SIZE}px ${FONT}`;
         ctx.fillStyle = 'rgba(200,169,110,0.22)';
         ctx.textAlign = 'center';
         nextLines.forEach((l, i) => {
-            ctx.fillText(l, CX, drawY + i * NEXT_LH);
+            drawStrokedText(l, CX, drawY + i * NEXT_LH, false);
         });
     }
 
@@ -2067,9 +2092,17 @@ document.addEventListener('DOMContentLoaded', () => {
 let _videoTextColor = '#c8a96e';
 let _videoTextOpacity = 1.0;
 let _videoFontSize = 36;
+let _videoFontFamily = 'Georgia,serif';
 let _grayscaleActive = true;
 let _vignetteEnabled = true;
 let _sidebarOpen = false;
+
+// ─── BORDE DE TEXTO ───
+// type: 'none' | 'solid' | 'gradient'
+let _textStrokeType = 'solid';
+let _textStrokeWidth = 1;        // px (0 = sin borde)
+let _textStrokeColor1 = '#000000'; // color sólido o color inicio gradiente
+let _textStrokeColor2 = '#1a0a00'; // color fin gradiente
 
 // ═══════════════════════════════════════════════════════════
 // TOOLBAR LATERAL — CONTROLES DE PRESENTACIÓN
@@ -2126,6 +2159,34 @@ function _changeFontSize(delta) {
     if (lbl) lbl.textContent = _videoFontSize;
 }
 
+function _setFontFamily(val) {
+    _videoFontFamily = val;
+    const prev = document.getElementById('vsb-font-preview');
+    if (prev) prev.style.fontFamily = val;
+}
+
+function _setStrokeType(type) {
+    _textStrokeType = type;
+    const panel = document.getElementById('vsb-stroke-colors');
+    if (panel) panel.style.display = (type === 'none') ? 'none' : 'flex';
+    const gradRow = document.getElementById('vsb-stroke-grad-row');
+    if (gradRow) gradRow.style.display = (type === 'gradient') ? 'flex' : 'none';
+    // update button states
+    ['none', 'solid', 'gradient'].forEach(t => {
+        const b = document.getElementById(`vsb-stroke-${t}`);
+        if (b) b.classList.toggle('vsb-active', t === type);
+    });
+}
+
+function _setStrokeWidth(val) {
+    _textStrokeWidth = parseFloat(val);
+    const lbl = document.getElementById('vsb-stroke-w-lbl');
+    if (lbl) lbl.textContent = val + 'px';
+}
+
+function _setStrokeColor1(hex) { _textStrokeColor1 = hex; }
+function _setStrokeColor2(hex) { _textStrokeColor2 = hex; }
+
 function _changeTextOpacity(val) {
     _videoTextOpacity = parseFloat(val);
     const lbl = document.getElementById('vsb-opacity-lbl');
@@ -2163,36 +2224,90 @@ function _inyectarSidebarToolbar() {
         </div>
         <div id="vsb-panel" class="vsb-panel">
             <div class="vsb-body">
-                <div class="vsb-section-label">Imagen</div>
-                <button id="vsb-bw" class="vsb-btn" onclick="toggleImageGrayscale()" title="Escala de grises">⬜</button>
-                <button id="vsb-vignette" class="vsb-btn vsb-active" onclick="_toggleVignette()" title="Viñeta">◉</button>
 
-                <div class="vsb-divider"></div>
+                <!-- IMAGEN -->
+                <div class="vsb-section-label">Imagen</div>
+                <div class="vsb-btn-row">
+                    <button id="vsb-bw" class="vsb-btn" onclick="toggleImageGrayscale()" title="Escala de grises">B&W</button>
+                    <button id="vsb-vignette" class="vsb-btn vsb-active" onclick="_toggleVignette()" title="Viñeta">◉</button>
+                </div>
+
+                <!-- TEXTO -->
                 <div class="vsb-section-label">Texto</div>
-                <button class="vsb-btn vsb-color-btn" onclick="_openColorPicker()" title="Color del texto">
-                    <span id="vsb-color-swatch" class="vsb-color-swatch" style="background:#c8a96e"></span>
-                </button>
+
+                <!-- Color -->
+                <div class="vsb-color-row">
+                    <button class="vsb-color-btn" onclick="_openColorPicker()" title="Color del texto">
+                        <span id="vsb-color-swatch" class="vsb-color-swatch" style="background:#c8a96e"></span>
+                    </button>
+                    <span class="vsb-micro-lbl">Color</span>
+                </div>
                 <div id="vsb-color-panel" class="vsb-color-panel" style="display:none">
                     ${colorSwatches}
                     <input type="color" value="#c8a96e" oninput="_setTextColor(this.value)" title="Personalizado" class="vsb-color-custom">
                 </div>
 
-                <div class="vsb-row">
+                <!-- Tamaño -->
+                <div class="vsb-size-row">
                     <button class="vsb-mini-btn" onclick="_changeFontSize(-2)">−</button>
-                    <span id="vsb-size-lbl" class="vsb-mini-lbl">36</span>
+                    <span id="vsb-size-lbl" class="vsb-mini-lbl" style="flex:1;text-align:center;">36</span>
                     <button class="vsb-mini-btn" onclick="_changeFontSize(2)">+</button>
+                    <span class="vsb-micro-lbl">px</span>
                 </div>
 
-                <div class="vsb-section-label" style="margin-top:4px;">Opacidad</div>
-                <input type="range" min="0.2" max="1" step="0.05" value="1"
-                       oninput="_changeTextOpacity(this.value)" class="vsb-range">
-                <span id="vsb-opacity-lbl" class="vsb-mini-lbl">100%</span>
+                <!-- Opacidad -->
+                <div class="vsb-range-row">
+                    <span class="vsb-micro-lbl">Opac.</span>
+                    <input type="range" min="0.2" max="1" step="0.05" value="1"
+                           oninput="_changeTextOpacity(this.value)" class="vsb-range">
+                    <span id="vsb-opacity-lbl" class="vsb-range-lbl">100%</span>
+                </div>
+
+                <!-- TIPOGRAFÍA -->
+                <div class="vsb-section-label">Tipografía</div>
+                <select class="vsb-select" onchange="_setFontFamily(this.value)" title="Fuente del texto">
+                    <option value="Georgia,serif">Georgia (Clásica)</option>
+                    <option value="'Times New Roman',serif">Times New Roman</option>
+                    <option value="'Palatino Linotype',Palatino,serif">Palatino</option>
+                    <option value="Garamond,serif">Garamond</option>
+                    <option value="'Trebuchet MS',sans-serif">Trebuchet</option>
+                    <option value="'Arial',sans-serif">Arial</option>
+                    <option value="'Courier New',monospace">Courier New</option>
+                    <option value="Impact,fantasy">Impact</option>
+                </select>
+                <div id="vsb-font-preview" class="vsb-font-preview">El hechicero...</div>
+
+                <!-- BORDE TEXTO -->
+                <div class="vsb-section-label">Borde texto</div>
+                <div class="vsb-stroke-type-row">
+                    <button id="vsb-stroke-none" class="vsb-mini-btn" onclick="_setStrokeType('none')" title="Sin borde" style="flex:1">✕</button>
+                    <button id="vsb-stroke-solid" class="vsb-mini-btn vsb-active" onclick="_setStrokeType('solid')" title="Sólido" style="flex:1">▣</button>
+                    <button id="vsb-stroke-gradient" class="vsb-mini-btn" onclick="_setStrokeType('gradient')" title="Degradado" style="flex:1">▦</button>
+                </div>
+                <div id="vsb-stroke-colors" class="vsb-stroke-colors-row">
+                    <input type="color" value="#000000" oninput="_setStrokeColor1(this.value)" title="Color borde" class="vsb-color-tiny">
+                    <div id="vsb-stroke-grad-row" style="display:none;align-items:center;gap:4px;display:flex;">
+                        <span class="vsb-micro-lbl">→</span>
+                        <input type="color" value="#1a0a00" oninput="_setStrokeColor2(this.value)" title="Color fin" class="vsb-color-tiny">
+                    </div>
+                </div>
+                <div class="vsb-range-row">
+                    <span class="vsb-micro-lbl">Ancho</span>
+                    <input type="range" min="0" max="6" step="0.5" value="1"
+                           oninput="_setStrokeWidth(this.value)" class="vsb-range">
+                    <span id="vsb-stroke-w-lbl" class="vsb-range-lbl">1px</span>
+                </div>
 
                 <div class="vsb-divider"></div>
+
+                <!-- REPRODUCCIÓN -->
                 <div class="vsb-section-label">Reproducción</div>
-                <button class="vsb-btn" onclick="videoTogglePlay()" title="Pausa / Continuar">⏯</button>
-                <button class="vsb-btn" onclick="videoCapituloAnterior()" title="Cap. anterior">⏮</button>
-                <button class="vsb-btn" onclick="videoCapituloSiguiente()" title="Cap. siguiente">⏭</button>
+                <div class="vsb-playback-row">
+                    <button class="vsb-btn" onclick="videoCapituloAnterior()" title="Cap. anterior">⏮</button>
+                    <button class="vsb-btn" onclick="videoTogglePlay()" title="Pausa / Continuar">⏯</button>
+                    <button class="vsb-btn" onclick="videoCapituloSiguiente()" title="Cap. siguiente">⏭</button>
+                </div>
+
             </div>
         </div>
     `;

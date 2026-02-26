@@ -1,4 +1,4 @@
-﻿// ═══════════════════════════════════════
+﻿/// ═══════════════════════════════════════
 // MAIN — Variables globales y configuración
 // Punto de entrada: define el estado compartido por todos los módulos
 // Orden de carga: main.js → epub.js → translation.js → player.js → tts.js → video.js → ui.js
@@ -42,6 +42,10 @@ let _bgCancelToken = 0;        // si cambia, el proceso BG activo se aborta
 // ─── CONFIG PENDIENTE ───
 // Los toggles NO aplican inmediatamente; se acumulan hasta presionar "Aplicar"
 let _configPendiente = false;
+
+// ─── CANCELACIÓN DE CARGA DE CAPÍTULO ───
+// Se incrementa para abortar el proceso en curso (traducción / revisión / optimización)
+let _cargaCapituloToken = 0;
 
 // ─── UNIVERSOS NARRATIVOS ───
 // aiDetectedUniverse: seteado por player.js cuando la IA identifica el universo del libro
@@ -120,6 +124,21 @@ function mostrarNotificacion(mensaje) {
     setTimeout(() => notif.classList.remove('show'), 3000);
 }
 
+function mostrarNotificacionPersistente(mensaje) {
+    const notif = document.getElementById('notification');
+    if (!notif) return;
+    notif.textContent = mensaje;
+    notif.classList.add('show');
+    notif._persistente = true;
+}
+
+function ocultarNotificacionPersistente() {
+    const notif = document.getElementById('notification');
+    if (!notif || !notif._persistente) return;
+    notif._persistente = false;
+    notif.classList.remove('show');
+}
+
 function actualizarEstadisticas() {
     const el = document.getElementById('texto-contenido');
     if (!el) return;
@@ -167,6 +186,31 @@ async function aplicarConfiguracion() {
     const hint = document.getElementById('aplicar-hint');
     if (btn) { btn.disabled = true; btn.textContent = '⏳ Aplicando...'; }
 
+    // Mostrar botón cancelar
+    let cancelBtn = document.getElementById('btn-cancelar-aplicar');
+    if (!cancelBtn) {
+        cancelBtn = document.createElement('button');
+        cancelBtn.id = 'btn-cancelar-aplicar';
+        cancelBtn.type = 'button';
+        cancelBtn.textContent = '✕ Cancelar';
+        cancelBtn.style.cssText = 'width:100%;margin-top:4px;background:none;border:1px solid var(--accent);border-radius:6px;color:var(--accent);font-family:\'DM Mono\',monospace;font-size:0.62rem;font-weight:600;padding:5px 0;cursor:pointer;letter-spacing:0.03em;transition:opacity 0.2s;';
+        const aplicarRow = document.getElementById('aplicar-row');
+        if (aplicarRow) aplicarRow.appendChild(cancelBtn);
+    }
+    cancelBtn.style.display = 'block';
+
+    // Capturar token actual para detectar si se cancela
+    _cargaCapituloToken++;
+    const miToken = _cargaCapituloToken;
+
+    cancelBtn.onclick = () => {
+        _cargaCapituloToken++; // invalida el proceso en curso
+        _bgCancelToken++;       // cancela también cualquier BG
+        cancelBtn.style.display = 'none';
+        if (btn) { btn.disabled = false; btn.textContent = '✓ Aplicar'; }
+        mostrarNotificacionPersistente('⏳ Cancelando proceso...');
+    };
+
     const nuevoTraducir = document.getElementById('auto-translate').checked;
     traduccionAutomatica = nuevoTraducir;
 
@@ -194,13 +238,17 @@ async function aplicarConfiguracion() {
     const selector = document.getElementById('chapters');
     if (selector && selector.value) {
         delete _capCache[selector.value];
-        await cargarCapitulo(selector.value);
+        await cargarCapitulo(selector.value, miToken);
     }
+
+    // Si fue cancelado durante cargarCapitulo, no continuar
+    if (_cargaCapituloToken !== miToken) return;
 
     _configPendiente = false;
     const row = document.getElementById('aplicar-row');
     if (row) row.style.display = 'none';
     if (btn) { btn.disabled = false; btn.textContent = '✓ Aplicar'; }
+    if (cancelBtn) cancelBtn.style.display = 'none';
     if (hint) hint.textContent = 'Cambios pendientes — recarga el capítulo actual';
 }
 

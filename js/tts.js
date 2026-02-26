@@ -31,11 +31,11 @@ async function verificarServidorTTS() {
             servidorTTSDisponible = true;
             console.log('✅ Servidor TTS local disponible:', data);
             mostrarNotificacion('🎤 TTS Local (' + (data.engine || 'edge-tts') + ') disponible');
-            // Mostrar selector de voz del servidor, ocultar el del browser
+            // Mantener siempre visible el selector del browser — edge-voice-select solo para export
             const _evs = document.getElementById('edge-voice-select');
-            if (_evs) { _evs.style.display = ''; _evs.value = _edgeTtsVoice; }
+            if (_evs) _evs.style.display = 'none';
             const _bvs = document.getElementById('voice-select');
-            if (_bvs) _bvs.style.display = 'none';
+            if (_bvs) _bvs.style.display = '';
 
             return true;
         }
