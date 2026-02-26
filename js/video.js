@@ -102,8 +102,6 @@ function descargarAudio() {
 let videoAnimFrame = null;
 let videoCanvas = null;
 let videoCtx = null;
-let videoRecorder = null;
-let videoChunks = [];
 let videoActive = false;
 
 const video_BG = '#0a0908';
@@ -141,8 +139,8 @@ function abrirvideo() {
         const btn = document.getElementById('btn-toggle-ai-img');
         if (btn) { btn.classList.add('ai-active'); btn.textContent = '🖼 IA ON'; }
     }
-    // Precalentar pool Pixabay si ese proveedor está seleccionado
-    if (imageProvider === 'pixabay' && typeof precalentarPoolPixabay === 'function') {
+    // Precalentar pool de imágenes web si ese proveedor está seleccionado
+    if ((imageProvider === 'pixabay' || imageProvider === 'pexels') && typeof precalentarPoolPixabay === 'function') {
         precalentarPoolPixabay();
     }
     // Siempre reconstruir el slot map (puede haber cambiado de capítulo)
@@ -152,12 +150,24 @@ function abrirvideo() {
         // Si ya hay sentences cargadas, solicitar inmediatamente; si no, esperar
         const hayTexto = typeof sentences !== 'undefined' && sentences && sentences.length > 0;
         if (hayTexto) {
-            // Solo solicitar slot 0 al abrir — el smart pool cambia imágenes por frases
-            setTimeout(() => solicitarImagenParaSlot(0), 30);
+            setTimeout(() => {
+                solicitarImagenParaSlot(0);
+                // Solo pre-cargar 1 slot adelante, no 2, para reducir requests
+                setTimeout(() => solicitarImagenParaSlot(1), 800);
+            }, 30);
         }
     }
 
     rendervideoFrame();
+    _inyectarSidebarToolbar();
+    // Aplicar filtro grayscale según estado actual (activo por defecto)
+    _aplicarFiltroGrayscale(_grayscaleActive);
+    const _bwBtn = document.getElementById('vsb-bw');
+    if (_bwBtn) {
+        _bwBtn.classList.toggle('vsb-active', _grayscaleActive);
+        _bwBtn.title = _grayscaleActive ? 'Volver a color' : 'Escala de grises';
+        _bwBtn.textContent = _grayscaleActive ? '🎨' : '⬜';
+    }
     // Poblar el índice de capítulos y el título junto al contador
     poblarIndicevideo();
     const capEl = document.getElementById('kp-chapter');
@@ -177,7 +187,6 @@ function cerrarvideo() {
     videoActive = false;
     document.getElementById('video-overlay').classList.remove('active');
     if (videoAnimFrame) cancelAnimationFrame(videoAnimFrame);
-    if (videoRecorder && videoRecorder.state !== 'inactive') videoRecorder.stop();
     // Restaurar visibilidad del panel principal
     const mainPanel = document.querySelector('.main-panel');
     if (mainPanel) mainPanel.style.visibility = '';
@@ -213,6 +222,7 @@ function measureTextBlock(ctx, text, maxW, lineH) {
 }
 
 function drawvideoScene(ctx, W, H, current, total) {
+    ctx.globalAlpha = (typeof _videoTextOpacity !== 'undefined') ? _videoTextOpacity : 1;
     // Background: sólido si no hay imágenes IA, transparente si las hay (esperando o mostrando)
     if (aiImagesEnabled) {
         ctx.clearRect(0, 0, W, H);
@@ -226,12 +236,14 @@ function drawvideoScene(ctx, W, H, current, total) {
         ctx.fillRect(0, 0, W, H);
     }
 
-    // Vignette
-    const vignette = ctx.createRadialGradient(W / 2, H / 2, H * 0.2, W / 2, H / 2, H * 0.85);
-    vignette.addColorStop(0, 'rgba(0,0,0,0)');
-    vignette.addColorStop(1, 'rgba(0,0,0,0.65)');
-    ctx.fillStyle = vignette;
-    ctx.fillRect(0, 0, W, H);
+    // Vignette (togglable)
+    if (typeof _vignetteEnabled === 'undefined' || _vignetteEnabled) {
+        const vignette = ctx.createRadialGradient(W / 2, H / 2, H * 0.2, W / 2, H / 2, H * 0.85);
+        vignette.addColorStop(0, 'rgba(0,0,0,0)');
+        vignette.addColorStop(1, 'rgba(0,0,0,0.65)');
+        ctx.fillStyle = vignette;
+        ctx.fillRect(0, 0, W, H);
+    }
 
     // Header eliminado del canvas — título y contador se muestran bajo la barra de progreso exterior
 
@@ -247,8 +259,8 @@ function drawvideoScene(ctx, W, H, current, total) {
     const CX = W / 2;
 
     // ── Layout dinámico: calcular alturas reales antes de dibujar ──
-    const PREV_SIZE = 22;
-    const CUR_SIZE = 36;
+    const CUR_SIZE = (typeof _videoFontSize !== 'undefined') ? _videoFontSize : 36;
+    const PREV_SIZE = Math.round(CUR_SIZE * 0.61);
     const NEXT_SIZE = 20;
     const PREV_LH = 32;
     const CUR_LH = 52;
@@ -294,16 +306,14 @@ function drawvideoScene(ctx, W, H, current, total) {
         drawY += prevBlockH + GAP;
     }
 
-    // Draw current (highlighted, glow)
+    // Draw current — sin glow, color mutable
     ctx.font = `italic ${CUR_SIZE}px "Georgia", serif`;
     ctx.textAlign = 'center';
-    ctx.shadowColor = video_HIGHLIGHT;
-    ctx.shadowBlur = 18;
-    ctx.fillStyle = video_HIGHLIGHT;
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = (typeof _videoTextColor !== 'undefined') ? _videoTextColor : video_HIGHLIGHT;
     curLines.forEach((l, i) => {
         ctx.fillText(l, CX, drawY + i * CUR_LH);
     });
-    ctx.shadowBlur = 0;
     drawY += curBlockH + GAP;
 
     // Draw next (very dim, below)
@@ -315,6 +325,8 @@ function drawvideoScene(ctx, W, H, current, total) {
             ctx.fillText(l, CX, drawY + i * NEXT_LH);
         });
     }
+
+    ctx.globalAlpha = 1.0;
 
     // Indicador de carga de imagen IA
     if (aiImagesEnabled && aiLoadingSlot !== null) {
@@ -335,129 +347,6 @@ function rendervideoFrame() {
     }
     drawvideoScene(videoCtx, W, H, currentSentenceIndex, sentences.length);
     videoAnimFrame = requestAnimationFrame(rendervideoFrame);
-}
-
-// ── Generación de video en segundo plano (sin grabar en tiempo real) ──
-// Dibuja cada frame del video a velocidad acelerada y los codifica
-let exportandoVideo = false;
-
-async function exportarVideo() {
-    if (!sentences || sentences.length === 0) {
-        mostrarNotificacion('Cargá y reproducí un capítulo primero');
-        return;
-    }
-    if (exportandoVideo) { mostrarNotificacion('Ya hay una exportación en curso...'); return; }
-
-    exportandoVideo = true;
-
-    // Asegurar que el video esté abierto (necesitamos el canvas)
-    if (!videoActive) abrirvideo();
-
-    const W = videoCanvas.width;
-    const H = videoCanvas.height;
-    const FPS = 24;
-    // Estimar duración: promedio de 3.5 segundos por oración
-    const SEC_PER_SENTENCE = 3.5;
-    const totalSec = sentences.length * SEC_PER_SENTENCE;
-    const totalFrames = Math.ceil(totalSec * FPS);
-
-    mostrarNotificacion(`⏳ Generando ${sentences.length} escenas... (${Math.ceil(totalSec)}s de video)`);
-
-
-    // Usar un canvas offscreen para no interferir con la vista live
-    const offCanvas = document.createElement('canvas');
-    offCanvas.width = W; offCanvas.height = H;
-    const offCtx = offCanvas.getContext('2d');
-
-    // Capturar el stream del offscreen canvas
-    const stream = offCanvas.captureStream(FPS);
-
-    // Agregar audio ambiental al stream si está disponible
-    if (ambientGainNode) {
-        try {
-            const actx = getAudioCtx();
-            const audioDest = actx.createMediaStreamDestination();
-            ambientGainNode.connect(audioDest);
-            audioDest.stream.getAudioTracks().forEach(t => stream.addTrack(t));
-        } catch (e) { }
-    }
-
-    videoChunks = [];
-    const mimeType = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm']
-        .find(m => MediaRecorder.isTypeSupported(m)) || 'video/webm';
-
-    videoRecorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 2500000 });
-    videoRecorder.ondataavailable = e => { if (e.data.size > 0) videoChunks.push(e.data); };
-    videoRecorder.onstop = () => {
-        const blob = new Blob(videoChunks, { type: 'video/webm' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        const cap = (document.getElementById('current-chapter-title').textContent || 'lectura').trim();
-        a.download = `${cap.replace(/[^a-zA-Z0-9áéíóúñ ]/g, '_')}_video.webm`;
-        a.click();
-        URL.revokeObjectURL(url);
-        exportandoVideo = false;
-        document.getElementById('btn-export-video').style.display = 'inline';
-        document.getElementById('btn-cancel-export').style.display = 'none';
-        mostrarNotificacion('✓ Video generado y descargado');
-
-    };
-
-    videoRecorder.start();
-    document.getElementById('btn-export-video').style.display = 'none';
-    document.getElementById('btn-cancel-export').style.display = 'inline';
-
-    // Renderizar frame a frame en segundo plano a mayor velocidad
-    // ~4 frames por oración = transición suave sin que dure 30 min
-    const FRAMES_PER_SENTENCE = FPS * SEC_PER_SENTENCE;
-    let frameIdx = 0;
-
-    const renderNext = () => {
-        if (!exportandoVideo) { videoRecorder.stop(); return; }
-
-        const sentenceIdx = Math.min(Math.floor(frameIdx / FRAMES_PER_SENTENCE), sentences.length - 1);
-        const frameInSentence = frameIdx % FRAMES_PER_SENTENCE;
-        const total = sentences.length;
-
-        drawvideoScene(offCtx, W, H, sentenceIdx, total);
-
-        // Transición suave: fade en los primeros/últimos frames de la oración
-        if (frameInSentence < 8) {
-            const alpha = frameInSentence / 8;
-            offCtx.fillStyle = `rgba(10,9,8,${(1 - alpha) * 0.7})`;
-            offCtx.fillRect(0, 0, W, H);
-        } else if (frameInSentence > FRAMES_PER_SENTENCE - 8) {
-            const alpha = (FRAMES_PER_SENTENCE - frameInSentence) / 8;
-            offCtx.fillStyle = `rgba(10,9,8,${(1 - alpha) * 0.5})`;
-            offCtx.fillRect(0, 0, W, H);
-        }
-
-        frameIdx++;
-
-        // Progreso
-        if (frameIdx % (FPS * 2) === 0) {
-            const pct = Math.round((frameIdx / totalFrames) * 100);
-
-        }
-
-        if (frameIdx >= totalFrames) {
-            // Último frame — pausa un momento y termina
-            setTimeout(() => videoRecorder.stop(), 300);
-            return;
-        }
-
-        // Usar setTimeout(0) para no bloquear el UI, pero ir rápido
-        setTimeout(renderNext, 1000 / FPS / 4); // 4x más rápido que tiempo real
-    };
-
-    renderNext();
-}
-
-function cancelarExportacion() {
-    exportandoVideo = false;
-    if (videoRecorder && videoRecorder.state !== 'inactive') videoRecorder.stop();
-    mostrarNotificacion('Exportación cancelada');
 }
 
 // ═══════════════════════════════════════
@@ -536,6 +425,10 @@ function detectarUniverso() {
             aiDetectedUniverse = val;
             console.log(`📚 Universo detectado: ${val}`);
             mostrarNotificacion(`📚 Universo: ${val}`);
+            // Reconstruir el smart pool de imágenes con queries del universo detectado
+            if (typeof refrescarSmartPool === 'function') {
+                refrescarSmartPool();
+            }
 
             // ── Auto-aplicar género musical del universo ──
             const univConfig = UNIVERSE_CONFIG[val];
@@ -571,29 +464,6 @@ function getStyleTag() {
     return AI_DEFAULT_STYLE;
 }
 
-// ── Filtro escala de grises para fondos de imagen ──
-let _grayscaleActive = false;
-
-function toggleImageGrayscale() {
-    _grayscaleActive = !_grayscaleActive;
-    const btn = document.getElementById('btn-toggle-grayscale');
-    _aplicarFiltroGrayscale(_grayscaleActive);
-    btn?.classList.toggle('gs-active', _grayscaleActive);
-    if (btn) btn.textContent = _grayscaleActive ? '🎨 Color' : '⬜ B&W';
-}
-
-// Aplica o quita el filtro de grises en todos los contenedores de imagen
-function _aplicarFiltroGrayscale(activo) {
-    const filtro = activo
-        ? 'grayscale(1) brightness(0.82) contrast(1.12)'
-        : 'grayscale(0) brightness(1) contrast(1)';
-    const ids = ['ai-bg-a', 'ai-bg-b', 'reader-bg-a', 'reader-bg-b'];
-    ids.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.style.filter = filtro;
-    });
-}
-
 function toggleAIImages() {
     aiImagesEnabled = !aiImagesEnabled;
     const btn = document.getElementById('btn-toggle-ai-img');
@@ -607,8 +477,9 @@ function toggleAIImages() {
         aiCurrentSlot = -1;
         aiActivePanel = 'a';
         const slot = getSlotForSentence(typeof currentSentenceIndex !== 'undefined' ? currentSentenceIndex : 0);
-        // Solo el slot actual — smart pool maneja la rotación por frases
         solicitarImagenParaSlot(slot);
+        // Pre-cargar solo 1 slot adelante (no 2) para reducir requests en APIs con límites
+        setTimeout(() => solicitarImagenParaSlot(slot + 1), 1200);
     } else {
         btn.classList.remove('ai-active');
         btn.textContent = '🖼 IA Imágenes';
@@ -905,6 +776,8 @@ async function generarPromptConClaude(fragmento) {
             if (!esRespuestaInvalida(prompt)) {
                 aiPromptCache[cacheKey] = prompt;
                 console.log('Prompt (Pollinations/mistral):', prompt.slice(0, 80));
+                // Actualizar pool Pixabay con las keywords del nuevo prompt
+                if (typeof actualizarPoolPixabayConPrompt === 'function') actualizarPoolPixabayConPrompt(prompt);
                 return prompt;
             }
         }
@@ -914,6 +787,8 @@ async function generarPromptConClaude(fragmento) {
     const { prompt: promptLocal } = analizarEscena(fragmento);
     aiPromptCache[cacheKey] = promptLocal;
     console.log('Prompt (local):', promptLocal.slice(0, 80));
+    // Actualizar pool Pixabay con el prompt local
+    if (typeof actualizarPoolPixabayConPrompt === 'function') actualizarPoolPixabayConPrompt(promptLocal);
     return promptLocal;
 }
 
@@ -1149,7 +1024,15 @@ function dibujarFondoProcedural(slot, tipoOPrompt, promptCompleto) {
 // ═══════════════════════════════════════
 // PROVEEDORES DE IMÁGENES IA
 // ═══════════════════════════════════════
-let imageProvider = localStorage.getItem('img_provider') || 'pixabay';
+// Forzar pixabay como default — limpiar providers de IA guardados previamente.
+const _webProviders = new Set(['pixabay', 'pexels', 'picsum', 'unsplash', 'procedural']);
+const _savedImgProvider = localStorage.getItem('img_provider');
+if (_savedImgProvider && !_webProviders.has(_savedImgProvider)) {
+    localStorage.removeItem('img_provider');
+}
+let imageProvider = (_savedImgProvider && _webProviders.has(_savedImgProvider))
+    ? _savedImgProvider
+    : 'picsum';
 let stabilityApiKey = localStorage.getItem('stability_api_key') || '';
 let stabilityModel = localStorage.getItem('stability_model') || 'sd3.5-medium';
 let puterModel = localStorage.getItem('puter_model') || 'gpt-image-1.5';
@@ -1184,6 +1067,10 @@ function _updateProviderPanels(prov) {
     document.getElementById('procedural-panel').style.display = prov === 'procedural' ? 'block' : 'none';
     const pixabayPanelEl = document.getElementById('pixabay-video-panel');
     if (pixabayPanelEl) pixabayPanelEl.style.display = prov === 'pixabay' ? 'block' : 'none';
+    const picsumPanelEl = document.getElementById('picsum-panel');
+    if (picsumPanelEl) picsumPanelEl.style.display = prov === 'picsum' ? 'block' : 'none';
+    const unsplashPanelEl = document.getElementById('unsplash-panel');
+    if (unsplashPanelEl) unsplashPanelEl.style.display = prov === 'unsplash' ? 'block' : 'none';
 }
 
 function setImageProvider(prov) {
@@ -1376,11 +1263,19 @@ async function solicitarImagenParaSlot(slot) {
     // ── PASO 2: si hay proveedor real, intentarlo en background y reemplazar si funciona ──
     if (imageProvider === 'procedural') return; // solo procedural, listo
 
-    // Pixabay / Picsum — usa smart pool con scoring y debounce
-    // Pasamos el PROMPT enriquecido (ya tiene escena, personajes, ambiente)
-    // en vez del fragmento crudo — mejora mucho el scoring de afinidad
-    if (imageProvider === 'pixabay') {
-        _pixabaySlotDebounced(slot, prompt);
+    // Pixabay / Pexels / Picsum (imágenes web reales — no IA generativa)
+    if (imageProvider === 'pixabay' || imageProvider === 'pexels') {
+        if (typeof buscarYAplicarFondoPixabay === 'function') {
+            buscarYAplicarFondoPixabay(slot, fragmento);
+        }
+        return;
+    }
+
+    // Picsum / Unsplash — cargar imagen real y reemplazar el procedural
+    if (imageProvider === 'picsum' || imageProvider === 'unsplash') {
+        if (typeof buscarYAplicarFondoPixabay === 'function') {
+            buscarYAplicarFondoPixabay(slot, fragmento);
+        }
         return;
     }
 
@@ -1461,11 +1356,10 @@ function actualizarSlideAI(sentenceIdx) {
     const slotActual = getSlotForSentence(sentenceIdx);
     solicitarImagenParaSlot(slotActual);
 
-    // Pre-cargar slots siguientes SOLO para proveedores lentos (IA generativa)
-    // Para pixabay con smart pool no es necesario — la rotación es por frases
-    if (imageProvider !== 'procedural' && imageProvider !== 'pixabay') {
-        setTimeout(() => solicitarImagenParaSlot(slotActual + 1), 2000);
-        setTimeout(() => solicitarImagenParaSlot(slotActual + 2), 4000);
+    // Pre-cargar el siguiente slot solo si el proveedor es lento (no procedural)
+    // Solo 1 slot adelante para no saturar APIs con rate limits
+    if (imageProvider !== 'procedural') {
+        setTimeout(() => solicitarImagenParaSlot(slotActual + 1), 3000);
     }
 }
 
@@ -1598,13 +1492,12 @@ function poblarIndicevideo() {
         item.dataset.value = opt.value;
         item.textContent = opt.text || `Capítulo ${i + 1}`;
         item.title = opt.text;
-        item.onclick = () => {
+        const _doCargar = () => {
             window._cargandoProgramaticamente = true;
             document.getElementById('chapters').value = opt.value;
             window._cargandoProgramaticamente = false;
             detenerTTS();
             actualizarIndicevideo();
-            // Mostrar botón Aplicar si hay procesamiento configurado
             const hayProcesamiento = (typeof traduccionAutomatica !== 'undefined' && traduccionAutomatica)
                 || (typeof ttsHumanizerActivo !== 'undefined' && ttsHumanizerActivo);
             if (hayProcesamiento) {
@@ -1615,6 +1508,15 @@ function poblarIndicevideo() {
                 if (typeof _configPendiente !== 'undefined') window._configPendiente = true;
             }
             cargarCapitulo(opt.value);
+        };
+        item.onclick = _doCargar;
+        item.ondblclick = () => {
+            _doCargar();
+            // Colapsar el panel con doble click
+            const panel = document.getElementById('video-index-panel');
+            const btn = document.getElementById('btn-toggle-index');
+            if (panel) panel.classList.remove('open');
+            if (btn) btn.style.color = '';
         };
         lista.appendChild(item);
     });
@@ -2145,3 +2047,281 @@ document.getElementById('modal-reemplazos').addEventListener('click', function (
 
 // Exponer para usar desde el sidebar
 window.abrirModalReemplazos = abrirModalReemplazos;
+// ═══════════════════════════════════════════════════════════
+// CLICK EN CANVAS → PAUSA / CONTINUAR
+// ═══════════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+    const canvas = document.getElementById('video-canvas');
+    if (canvas) {
+        canvas.addEventListener('click', (e) => {
+            // Ignorar clicks que vienen de la toolbar lateral
+            if (e.target.closest && e.target.closest('#vsb-wrapper')) return;
+            if (typeof videoTogglePlay === 'function') videoTogglePlay();
+        });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════
+// VARIABLES DE PRESENTACIÓN MUTABLES
+// ═══════════════════════════════════════════════════════════
+let _videoTextColor = '#c8a96e';
+let _videoTextOpacity = 1.0;
+let _videoFontSize = 36;
+let _grayscaleActive = true;
+let _vignetteEnabled = true;
+let _sidebarOpen = false;
+
+// ═══════════════════════════════════════════════════════════
+// TOOLBAR LATERAL — CONTROLES DE PRESENTACIÓN
+// ═══════════════════════════════════════════════════════════
+const _textColorPresets = [
+    { hex: '#c8a96e', label: 'Dorado' },
+    { hex: '#e8e0d0', label: 'Crema' },
+    { hex: '#ffffff', label: 'Blanco' },
+    { hex: '#7eb89a', label: 'Menta' },
+    { hex: '#a8c4e0', label: 'Azul' },
+    { hex: '#e0a8c0', label: 'Rosa' },
+    { hex: '#d4d4d4', label: 'Gris' },
+    { hex: '#f4c77a', label: 'Ámbar' },
+];
+let _colorPickerOpen = false;
+
+function toggleImageGrayscale() {
+    _grayscaleActive = !_grayscaleActive;
+    _aplicarFiltroGrayscale(_grayscaleActive);
+    const btn = document.getElementById('vsb-bw');
+    if (btn) {
+        btn.classList.toggle('vsb-active', _grayscaleActive);
+        btn.title = _grayscaleActive ? 'Volver a color' : 'Escala de grises';
+        btn.textContent = _grayscaleActive ? '🎨' : '⬜';
+    }
+}
+
+function _aplicarFiltroGrayscale(activo) {
+    const filtro = activo ? 'grayscale(1) brightness(0.82) contrast(1.12)' : '';
+    ['ai-bg-a', 'ai-bg-b', 'reader-bg-a', 'reader-bg-b'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.filter = filtro;
+    });
+}
+
+function _openColorPicker() {
+    _colorPickerOpen = !_colorPickerOpen;
+    const panel = document.getElementById('vsb-color-panel');
+    if (panel) panel.style.display = _colorPickerOpen ? 'flex' : 'none';
+}
+
+function _setTextColor(hex) {
+    _videoTextColor = hex;
+    const swatch = document.getElementById('vsb-color-swatch');
+    if (swatch) swatch.style.background = hex;
+    _colorPickerOpen = false;
+    const panel = document.getElementById('vsb-color-panel');
+    if (panel) panel.style.display = 'none';
+}
+
+function _changeFontSize(delta) {
+    _videoFontSize = Math.max(18, Math.min(72, _videoFontSize + delta));
+    const lbl = document.getElementById('vsb-size-lbl');
+    if (lbl) lbl.textContent = _videoFontSize;
+}
+
+function _changeTextOpacity(val) {
+    _videoTextOpacity = parseFloat(val);
+    const lbl = document.getElementById('vsb-opacity-lbl');
+    if (lbl) lbl.textContent = Math.round(val * 100) + '%';
+}
+
+function _toggleVignette() {
+    _vignetteEnabled = !_vignetteEnabled;
+    const btn = document.getElementById('vsb-vignette');
+    if (btn) btn.classList.toggle('vsb-active', _vignetteEnabled);
+}
+
+function _toggleSidebarPanel() {
+    _sidebarOpen = !_sidebarOpen;
+    const panel = document.getElementById('vsb-panel');
+    const tab = document.querySelector('.vsb-tab');
+    if (panel) panel.classList.toggle('vsb-panel-open', _sidebarOpen);
+    if (tab) tab.classList.toggle('vsb-tab-active', _sidebarOpen);
+}
+
+function _inyectarSidebarToolbar() {
+    if (document.getElementById('video-sidebar-toolbar')) return;
+
+    const colorSwatches = _textColorPresets.map(c =>
+        `<div class="vsb-swatch" style="background:${c.hex}" title="${c.label}" onclick="_setTextColor('${c.hex}')"></div>`
+    ).join('');
+
+    const wrapper = document.createElement('div');
+    wrapper.id = 'video-sidebar-toolbar';
+    wrapper.innerHTML = `
+        <div class="vsb-tab" onclick="_toggleSidebarPanel()" title="Herramientas">
+            <span class="vsb-tab-line"></span>
+            <span class="vsb-tab-line"></span>
+            <span class="vsb-tab-line"></span>
+        </div>
+        <div id="vsb-panel" class="vsb-panel">
+            <div class="vsb-body">
+                <div class="vsb-section-label">Imagen</div>
+                <button id="vsb-bw" class="vsb-btn" onclick="toggleImageGrayscale()" title="Escala de grises">⬜</button>
+                <button id="vsb-vignette" class="vsb-btn vsb-active" onclick="_toggleVignette()" title="Viñeta">◉</button>
+
+                <div class="vsb-divider"></div>
+                <div class="vsb-section-label">Texto</div>
+                <button class="vsb-btn vsb-color-btn" onclick="_openColorPicker()" title="Color del texto">
+                    <span id="vsb-color-swatch" class="vsb-color-swatch" style="background:#c8a96e"></span>
+                </button>
+                <div id="vsb-color-panel" class="vsb-color-panel" style="display:none">
+                    ${colorSwatches}
+                    <input type="color" value="#c8a96e" oninput="_setTextColor(this.value)" title="Personalizado" class="vsb-color-custom">
+                </div>
+
+                <div class="vsb-row">
+                    <button class="vsb-mini-btn" onclick="_changeFontSize(-2)">−</button>
+                    <span id="vsb-size-lbl" class="vsb-mini-lbl">36</span>
+                    <button class="vsb-mini-btn" onclick="_changeFontSize(2)">+</button>
+                </div>
+
+                <div class="vsb-section-label" style="margin-top:4px;">Opacidad</div>
+                <input type="range" min="0.2" max="1" step="0.05" value="1"
+                       oninput="_changeTextOpacity(this.value)" class="vsb-range">
+                <span id="vsb-opacity-lbl" class="vsb-mini-lbl">100%</span>
+
+                <div class="vsb-divider"></div>
+                <div class="vsb-section-label">Reproducción</div>
+                <button class="vsb-btn" onclick="videoTogglePlay()" title="Pausa / Continuar">⏯</button>
+                <button class="vsb-btn" onclick="videoCapituloAnterior()" title="Cap. anterior">⏮</button>
+                <button class="vsb-btn" onclick="videoCapituloSiguiente()" title="Cap. siguiente">⏭</button>
+            </div>
+        </div>
+    `;
+    document.getElementById('video-overlay').appendChild(wrapper);
+}
+// ═══════════════════════════════════════
+// EXPORTAR VIDEO — captura canvas + audio → WebM
+// ═══════════════════════════════════════
+
+let _exportMediaRecorder = null;
+let _exportChunks = [];
+let _exportCancelled = false;
+
+async function exportarVideo() {
+    if (_exportMediaRecorder && _exportMediaRecorder.state !== 'inactive') {
+        mostrarNotificacion('⚠ Ya hay una exportación en curso');
+        return;
+    }
+
+    const canvas = document.getElementById('video-canvas');
+    if (!canvas) {
+        mostrarNotificacion('⚠ Canvas no disponible');
+        return;
+    }
+
+    if (!videoActive) {
+        mostrarNotificacion('⚠ Abre el visor cinematográfico antes de exportar');
+        return;
+    }
+
+    _exportCancelled = false;
+    _exportChunks = [];
+
+    // Capturar stream del canvas a 30 fps
+    let canvasStream;
+    try {
+        canvasStream = canvas.captureStream(30);
+    } catch (e) {
+        mostrarNotificacion('⚠ Tu navegador no soporta captureStream');
+        return;
+    }
+
+    // Añadir audio del AudioContext (música ambiental)
+    const tracks = [...canvasStream.getTracks()];
+    try {
+        const ctx = (typeof getAudioCtx === 'function') ? getAudioCtx() : null;
+        if (ctx) {
+            const dest = ctx.createMediaStreamDestination();
+            if (typeof ambientGainNode !== 'undefined' && ambientGainNode) {
+                ambientGainNode.connect(dest);
+            }
+            dest.stream.getAudioTracks().forEach(t => tracks.push(t));
+        }
+    } catch (e) {
+        console.warn('Audio no disponible para exportación:', e);
+    }
+
+    const combinedStream = new MediaStream(tracks);
+
+    // Seleccionar mimeType compatible con el navegador
+    const mimeTypes = [
+        'video/webm;codecs=vp9,opus',
+        'video/webm;codecs=vp8,opus',
+        'video/webm'
+    ];
+    const mimeType = mimeTypes.find(m => MediaRecorder.isTypeSupported(m)) || 'video/webm';
+
+    try {
+        _exportMediaRecorder = new MediaRecorder(combinedStream, {
+            mimeType,
+            videoBitsPerSecond: 4_000_000
+        });
+    } catch (e) {
+        mostrarNotificacion('⚠ Error al crear el grabador de video');
+        console.error(e);
+        return;
+    }
+
+    _exportMediaRecorder.ondataavailable = e => {
+        if (e.data && e.data.size > 0) _exportChunks.push(e.data);
+    };
+
+    _exportMediaRecorder.onstop = () => {
+        if (_exportCancelled) {
+            _exportChunks = [];
+            mostrarNotificacion('✕ Exportación cancelada');
+            _actualizarBotonesExport(false);
+            return;
+        }
+        const blob = new Blob(_exportChunks, { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const titulo = document.getElementById('current-chapter-title')?.textContent || 'lectura';
+        a.download = `${titulo.replace(/[^a-zA-Z0-9]/g, '_')}_video.webm`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+        mostrarNotificacion('✓ Video exportado');
+        _actualizarBotonesExport(false);
+    };
+
+    _exportMediaRecorder.start(200);
+    _actualizarBotonesExport(true);
+    mostrarNotificacion('🔴 Grabando video… pulsa "⏹ Detener" para guardar');
+}
+
+function cancelarExportacion() {
+    if (!_exportMediaRecorder || _exportMediaRecorder.state === 'inactive') {
+        mostrarNotificacion('No hay exportación en curso');
+        return;
+    }
+    _exportCancelled = true;
+    _exportMediaRecorder.stop();
+}
+
+function detenerExportacion() {
+    if (!_exportMediaRecorder || _exportMediaRecorder.state === 'inactive') return;
+    _exportCancelled = false;
+    _exportMediaRecorder.stop();
+}
+
+function _actualizarBotonesExport(grabando) {
+    const btnExport = document.getElementById('btn-export-video');
+    const btnCancel = document.getElementById('btn-cancel-export');
+    if (btnExport) {
+        btnExport.innerHTML = grabando ? '⏹ Detener' : '&#11015; Video';
+        btnExport.onclick = grabando ? detenerExportacion : exportarVideo;
+    }
+    if (btnCancel) btnCancel.style.display = grabando ? 'inline-block' : 'none';
+}

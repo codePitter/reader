@@ -512,9 +512,11 @@ async function buscarEnFreesound(genre, subtono) {
 function toggleAmbientPanel() {
     const player = document.getElementById('ambient-player');
     const arrow = document.getElementById('ambient-arrow');
+    const isCollapsed = player.classList.contains('collapsed');
     player.classList.toggle('collapsed');
-    // Panel opens UPWARD like a CD tray: ▲ = closed (click to open), ▼ = open (click to close)
-    arrow.textContent = player.classList.contains('collapsed') ? '▲' : '▼';
+    // Efecto bandeja DVD: la flecha indica dirección de la bandeja
+    // ▶ = cerrado (bandeja adentro, click para expulsar), ◀ = abierto (bandeja afuera, click para retraer)
+    arrow.textContent = isCollapsed ? '◀' : '▶';
 }
 
 async function selectGenre(genre) {

@@ -526,6 +526,38 @@ select#voice-select {
         border-color: var(--accent);
     }
 
+/* Ambos selects de voz dentro de la barra TTS — estilo unificado */
+.tts-control-bar select#voice-select,
+.tts-control-bar select#edge-voice-select {
+    width: 160px !important;
+    min-width: 0 !important;
+    max-width: 160px !important;
+    padding: 4px 6px !important;
+    font-size: 0.6rem !important;
+    font-family: 'DM Mono', monospace !important;
+    margin-bottom: 0 !important;
+    margin-left: 6px !important;
+    flex-shrink: 0;
+    background: var(--bg) !important;
+    color: var(--text) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 4px !important;
+    outline: none !important;
+    cursor: pointer;
+}
+
+    .tts-control-bar select#voice-select:focus,
+    .tts-control-bar select#edge-voice-select:focus {
+        border-color: var(--accent) !important;
+    }
+
+/* El de servidor mantiene acento dorado en reposo */
+.tts-control-bar select#edge-voice-select {
+    border-color: rgba(200,169,110,.4) !important;
+    color: var(--accent) !important;
+}
+
+
 /* Buttons */
 .btn {
     display: inline-flex;
@@ -842,8 +874,23 @@ input[type="text"] {
         bottom: 104px;
     }
 
+    /* ── DVD TRAY EFFECT ── */
+    /* El cuerpo del player es la "bandeja" que se desliza */
     #ambient-player.collapsed .ambient-body {
-        display: none;
+        transform: translateX(-110%);
+        opacity: 0;
+        pointer-events: none;
+        max-height: 0;
+        padding-top: 0;
+        padding-bottom: 0;
+        overflow: hidden;
+    }
+
+    #ambient-player:not(.collapsed) .ambient-body {
+        transform: translateX(0);
+        opacity: 1;
+        pointer-events: auto;
+        max-height: 600px;
     }
 
 .ambient-header {
@@ -941,6 +988,11 @@ input[type="text"] {
 
 .ambient-body {
     padding: 14px;
+    transform: translateX(0);
+    opacity: 1;
+    max-height: 600px;
+    transition: transform 0.38s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease, max-height 0.38s ease, padding 0.25s ease;
+    overflow: hidden;
 }
 
 .ambient-genres {
@@ -1567,6 +1619,18 @@ input[type="text"] {
 
     .tts-bar-voice:focus {
         border-color: var(--accent);
+    }
+
+/* Variante selector servidor TTS — igual que tts-bar-voice con borde dorado */
+.tts-bar-voice--server {
+    border-color: rgba(200,169,110,.4);
+    color: var(--accent);
+}
+
+    .tts-bar-voice--server:focus,
+    .tts-bar-voice--server:hover {
+        border-color: var(--accent);
+        outline: none;
     }
 
 @media (max-width: 700px) {
@@ -3081,23 +3145,282 @@ input[type="text"] {
     color: var(--text-dim);
 }
 
-/* ── Filtro de escala de grises para imágenes de fondo ── */
-.grayscale-bg #ai-bg-a,
-.grayscale-bg #ai-bg-b,
-.grayscale-bg #reader-bg-a,
-.grayscale-bg #reader-bg-b {
-    filter: grayscale(1) brightness(0.85) contrast(1.1);
-    transition: filter 0.6s ease, opacity 1.8s ease;
+/* ═══════════════════════════════════════════════════════
+   TOOLBAR LATERAL DEL VISOR — tab fija + panel deslizante
+   ═══════════════════════════════════════════════════════ */
+
+/* Contenedor raíz: posicionado en el borde izquierdo, centrado verticalmente */
+#video-sidebar-toolbar {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 200;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    pointer-events: auto;
 }
 
-/* Sin filtro: transición suave al quitar */
-#ai-bg-a, #ai-bg-b, #reader-bg-a, #reader-bg-b {
-    filter: grayscale(0) brightness(1) contrast(1);
-    transition: filter 0.6s ease, opacity 1.8s ease;
+/* ── Solapa siempre visible ── */
+.vsb-tab {
+    width: 14px;
+    height: 54px;
+    background: rgba(22, 19, 16, 0.82);
+    border: 1px solid rgba(255,255,255,0.10);
+    border-left: none;
+    border-radius: 0 7px 7px 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background 0.2s, width 0.2s;
 }
 
-#btn-toggle-grayscale.gs-active {
-    border-color: var(--text-dim) !important;
-    color: var(--text) !important;
-    background: rgba(255,255,255,0.06) !important;
+    .vsb-tab:hover {
+        background: rgba(40, 35, 28, 0.95);
+        width: 18px;
+    }
+
+    .vsb-tab.vsb-tab-active {
+        background: rgba(40, 35, 28, 0.95);
+        border-color: rgba(200,169,110,0.25);
+    }
+
+/* Las 3 líneas del "hamburger" minimalista */
+.vsb-tab-line {
+    display: block;
+    width: 6px;
+    height: 1.5px;
+    background: rgba(255,255,255,0.35);
+    border-radius: 2px;
+    transition: background 0.2s;
+}
+
+.vsb-tab:hover .vsb-tab-line,
+.vsb-tab.vsb-tab-active .vsb-tab-line {
+    background: rgba(200,169,110,0.85);
+}
+
+/* ── Panel deslizante ── */
+.vsb-panel {
+    width: 0;
+    overflow: hidden;
+    transition: width 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+    .vsb-panel.vsb-panel-open {
+        width: 56px;
+    }
+
+/* Cuerpo del panel */
+.vsb-body {
+    width: 56px;
+    background: rgba(14, 12, 10, 0.92);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-left: none;
+    border-radius: 0 8px 8px 0;
+    padding: 10px 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    backdrop-filter: blur(10px);
+    box-shadow: 3px 0 16px rgba(0,0,0,0.5);
+}
+
+.vsb-section-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.42rem;
+    color: rgba(255,255,255,0.22);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    width: 100%;
+    text-align: center;
+    margin-top: 2px;
+}
+
+.vsb-divider {
+    width: 75%;
+    height: 1px;
+    background: rgba(255,255,255,0.06);
+    margin: 3px 0;
+}
+
+.vsb-btn {
+    width: 34px;
+    height: 34px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 6px;
+    color: rgba(255,255,255,0.45);
+    font-size: 0.88rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.16s;
+    padding: 0;
+    flex-shrink: 0;
+}
+
+    .vsb-btn:hover {
+        background: rgba(255,255,255,0.1);
+        color: rgba(255,255,255,0.9);
+        border-color: rgba(255,255,255,0.2);
+    }
+
+    .vsb-btn.vsb-active {
+        background: rgba(200,169,110,0.15);
+        border-color: rgba(200,169,110,0.4);
+        color: #c8a96e;
+    }
+
+.vsb-color-btn {
+    padding: 4px;
+}
+
+.vsb-color-swatch {
+    display: block;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.18);
+    transition: transform 0.15s;
+}
+
+.vsb-color-btn:hover .vsb-color-swatch {
+    transform: scale(1.12);
+}
+
+.vsb-color-panel {
+    flex-direction: column;
+    gap: 4px;
+    align-items: center;
+    padding: 2px 0;
+}
+
+.vsb-swatch {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid rgba(255,255,255,0.1);
+    transition: transform 0.13s, border-color 0.13s;
+    flex-shrink: 0;
+}
+
+    .vsb-swatch:hover {
+        transform: scale(1.2);
+        border-color: rgba(255,255,255,0.5);
+    }
+
+.vsb-color-custom {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    background: none;
+}
+
+.vsb-row {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.vsb-mini-btn {
+    width: 18px;
+    height: 18px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 3px;
+    color: rgba(255,255,255,0.55);
+    font-size: 0.8rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    line-height: 1;
+    transition: all 0.14s;
+}
+
+    .vsb-mini-btn:hover {
+        background: rgba(255,255,255,0.14);
+        color: white;
+    }
+
+.vsb-mini-lbl {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.52rem;
+    color: rgba(255,255,255,0.38);
+    min-width: 20px;
+    text-align: center;
+}
+
+.vsb-range {
+    width: 36px;
+    accent-color: #c8a96e;
+    cursor: pointer;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════
+   SELECTOR DE PROVEEDOR DE IMÁGENES (video bar popup)
+   ═══════════════════════════════════════════════════════════════ */
+
+.img-prov-opt {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--text-dim);
+    cursor: pointer;
+    padding: 3px 6px;
+    border-radius: 4px;
+    transition: background 0.15s, color 0.15s;
+}
+
+    .img-prov-opt:hover {
+        background: rgba(255,255,255,0.05);
+        color: var(--text);
+    }
+
+    .img-prov-opt.img-prov-active {
+        color: var(--accent2);
+    }
+
+    .img-prov-opt small {
+        color: var(--text-dim);
+        font-size: 0.56rem;
+        margin-left: auto;
+    }
+
+.img-prov-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    border: 1.5px solid var(--text-dim);
+    flex-shrink: 0;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.img-prov-active .img-prov-dot {
+    background: var(--accent2);
+    border-color: var(--accent2);
+}
+
+#img-prov-menu.open {
+    display: block !important;
+}
+
+#video-music-menu.open {
+    display: block !important;
 }

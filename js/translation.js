@@ -256,6 +256,12 @@ function _sanitizarParaTTS(texto) {
         .replace(/\u2018([^\u2019]+)\u2019/g, '$1')  // 'comillas simples'
         .replace(/\u00AB([^\u00BB]+)\u00BB/g, '—$1') // «guillemets» → —diálogo
 
+        // ── Comillas sueltas sin par (las que quedaron después del paso anterior) ──
+        .replace(/[\u201C\u201D\u201E\u201F]/g, '')  // " " „ ‟ tipográficas sueltas
+        .replace(/[\u2018\u2019\u201A\u201B]/g, '')  // ' ' ‚ ‛ simples sueltas
+        .replace(/[\u00AB\u00BB\u2039\u203A]/g, '') // « » ‹ › guillemets sueltos
+        .replace(/(?<![\w\d])"(?![\w\d])/g, '')      // " recto solo (no dentro de palabra)
+
         // ── Corchetes: stats [1200/6000] → "1200 de 6000", notas [1] → vacío ──
         .replace(/\[(\d+)\]/g, '')
         .replace(/\[(\d[\d,]*)\s*\/\s*(\d[\d,]*)\]/g, ' $1 de $2 ')
@@ -282,6 +288,9 @@ function _sanitizarParaTTS(texto) {
 
         // ── Espaciado y saltos ──
         .replace(/  +/g, ' ')
+        // ── Eliminar líneas que son solo símbolos/comillas (sin texto real) ──
+        .replace(/^[^\p{L}\p{N}\n]{0,3}$/gmu, '')    // líneas vacías o solo símbolos
+        .replace(/\n{3,}/g, '\n\n')                    // colapsar vacíos generados
         .replace(/\n{3,}/g, '\n\n')
         .trim();
 }

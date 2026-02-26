@@ -16,11 +16,16 @@
     <div class="main-panel">
         <div class="top-bar">
             <h1>📚 Lector EPUB</h1>
-            <button type="button" class="rec-btn" id="btn-rec-audio" onclick="toggleGrabacion()" style="margin-left:16px;margin-bottom:0;">
+            <button type="button" class="rec-btn" id="btn-rec-audio" onclick="toggleGrabacion()" style="margin-left:16px;margin-bottom:0;display:none">
                 <span id="rec-dot">⏺</span> Grabar audio
             </button>
             <button type="button" class="rec-btn" onclick="abrirvideo()" style="margin-bottom:0;">
                 🎬 Modo Video
+            </button>
+            <button type="button" class="rec-btn" id="btn-rec-video"
+                    onclick="(typeof _REC !== 'undefined' && _REC.activo) ? recorder_detener() : recorder_iniciar()"
+                    style="margin-bottom:0;display:none">
+                🔴 Grabar video
             </button>
             <button type="button" class="rec-btn" onclick="toggleEditor()" id="editor-toggle-btn" style="margin-bottom:0;">
                 ✏️ Editor
@@ -57,6 +62,101 @@
                 </div>
             </div>
             <select id="voice-select" class="tts-bar-voice"></select>
+
+            <!-- Selector voz Edge TTS (servidor local) -->
+            <select id="edge-voice-select" class="tts-bar-voice tts-bar-voice--server"
+                    style="display:none;"
+                    onchange="setEdgeTtsVoice(this.value)">
+                <optgroup label="🇲🇽 México">
+                    <option value="es-MX-JorgeNeural">Jorge — ♂</option>
+                    <option value="es-MX-DaliaNeural">Dalia — ♀</option>
+                </optgroup>
+                <optgroup label="🇦🇷 Argentina">
+                    <option value="es-AR-TomasNeural">Tomas — ♂</option>
+                    <option value="es-AR-ElenaNeural">Elena — ♀</option>
+                </optgroup>
+                <optgroup label="🇪🇸 España">
+                    <option value="es-ES-AlvaroNeural">Alvaro — ♂</option>
+                    <option value="es-ES-ElviraNeural">Elvira — ♀</option>
+                    <option value="es-ES-XimenaNeural">Ximena — ♀</option>
+                </optgroup>
+                <optgroup label="🇨🇴 Colombia">
+                    <option value="es-CO-GonzaloNeural">Gonzalo — ♂</option>
+                    <option value="es-CO-SalomeNeural">Salome — ♀</option>
+                </optgroup>
+                <optgroup label="🇺🇸 EEUU">
+                    <option value="es-US-AlonsoNeural">Alonso — ♂</option>
+                    <option value="es-US-PalomaNeural">Paloma — ♀</option>
+                </optgroup>
+                <optgroup label="🇨🇱 Chile">
+                    <option value="es-CL-LorenzoNeural">Lorenzo — ♂</option>
+                    <option value="es-CL-CatalinaNeural">Catalina — ♀</option>
+                </optgroup>
+                <optgroup label="🇵🇪 Perú">
+                    <option value="es-PE-AlexNeural">Alex — ♂</option>
+                    <option value="es-PE-CamilaNeural">Camila — ♀</option>
+                </optgroup>
+                <optgroup label="🇻🇪 Venezuela">
+                    <option value="es-VE-SebastianNeural">Sebastian — ♂</option>
+                    <option value="es-VE-PaolaNeural">Paola — ♀</option>
+                </optgroup>
+                <optgroup label="🇺🇾 Uruguay">
+                    <option value="es-UY-MateoNeural">Mateo — ♂</option>
+                    <option value="es-UY-ValentinaNeural">Valentina — ♀</option>
+                </optgroup>
+                <optgroup label="🇵🇾 Paraguay">
+                    <option value="es-PY-MarioNeural">Mario — ♂</option>
+                    <option value="es-PY-TaniaNeural">Tania — ♀</option>
+                </optgroup>
+                <optgroup label="🇧🇴 Bolivia">
+                    <option value="es-BO-MarceloNeural">Marcelo — ♂</option>
+                    <option value="es-BO-SofiaNeural">Sofia — ♀</option>
+                </optgroup>
+                <optgroup label="🇪🇨 Ecuador">
+                    <option value="es-EC-LuisNeural">Luis — ♂</option>
+                    <option value="es-EC-AndreaNeural">Andrea — ♀</option>
+                </optgroup>
+                <optgroup label="🇩🇴 R. Dominicana">
+                    <option value="es-DO-EmilioNeural">Emilio — ♂</option>
+                    <option value="es-DO-RamonaNeural">Ramona — ♀</option>
+                </optgroup>
+                <optgroup label="🇨🇺 Cuba">
+                    <option value="es-CU-ManuelNeural">Manuel — ♂</option>
+                    <option value="es-CU-BelkysNeural">Belkys — ♀</option>
+                </optgroup>
+                <optgroup label="🇨🇷 Costa Rica">
+                    <option value="es-CR-JuanNeural">Juan — ♂</option>
+                    <option value="es-CR-MariaNeural">Maria — ♀</option>
+                </optgroup>
+                <optgroup label="🇵🇦 Panamá">
+                    <option value="es-PA-RobertoNeural">Roberto — ♂</option>
+                    <option value="es-PA-MargaritaNeural">Margarita — ♀</option>
+                </optgroup>
+                <optgroup label="🇸🇻 El Salvador">
+                    <option value="es-SV-RodrigoNeural">Rodrigo — ♂</option>
+                    <option value="es-SV-LorenaNeural">Lorena — ♀</option>
+                </optgroup>
+                <optgroup label="🇬🇹 Guatemala">
+                    <option value="es-GT-AndresNeural">Andres — ♂</option>
+                    <option value="es-GT-MartaNeural">Marta — ♀</option>
+                </optgroup>
+                <optgroup label="🇭🇳 Honduras">
+                    <option value="es-HN-CarlosNeural">Carlos — ♂</option>
+                    <option value="es-HN-KarlaNeural">Karla — ♀</option>
+                </optgroup>
+                <optgroup label="🇳🇮 Nicaragua">
+                    <option value="es-NI-FedericoNeural">Federico — ♂</option>
+                    <option value="es-NI-YolandaNeural">Yolanda — ♀</option>
+                </optgroup>
+                <optgroup label="🇵🇷 Puerto Rico">
+                    <option value="es-PR-VictorNeural">Victor — ♂</option>
+                    <option value="es-PR-KarinaNeural">Karina — ♀</option>
+                </optgroup>
+                <optgroup label="🇬🇶 Guinea Ecuatorial">
+                    <option value="es-GQ-JavierNeural">Javier — ♂</option>
+                    <option value="es-GQ-TeresaNeural">Teresa — ♀</option>
+                </optgroup>
+            </select>
         </div>
 
         <div class="reading-area" style="position:relative;">
@@ -74,7 +174,7 @@
                     </div>
                     Música Ambiental
                 </div>
-                <button type="button" class="ambient-collapse-btn" id="ambient-arrow">▲</button>
+                <button type="button" class="ambient-collapse-btn" id="ambient-arrow">▶</button>
             </div>
             <div class="ambient-body">
 
@@ -209,13 +309,25 @@
         <!-- Capítulos -->
         <div class="sidebar-section">
             <div class="section-label">Capítulos</div>
+            <!-- Chip del capítulo activo (visible cuando el selector está colapsado) -->
+            <div id="chapter-active-chip" style="display:none;align-items:center;gap:6px;
+                 background:var(--surface2);border:1px solid var(--border);border-radius:5px;
+                 padding:5px 9px;cursor:pointer;font-size:0.68rem;font-family:'DM Mono',monospace;
+                 color:var(--text);transition:border-color 0.2s;"
+                 title="Click para cambiar capítulo"
+                 onclick="expandirSelectorCapitulos()"
+                 onmouseover="this.style.borderColor='var(--accent)'"
+                 onmouseout="this.style.borderColor='var(--border)'">
+                <span id="chapter-active-chip-text" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">—</span>
+                <span id="chapter-chip-arrow" style="color:var(--accent);font-size:0.7rem;flex-shrink:0;" title="Click para expandir">▲</span>
+            </div>
             <div id="chapter-selector" style="display:none;">
                 <input type="text" id="chapter-search" placeholder="🔍 Buscar capítulo..."
                        oninput="filtrarCapitulos(this.value)"
                        style="width:100%;margin-bottom:6px;font-size:0.68rem;padding:6px 10px;
                               background:var(--bg);border:1px solid var(--border);border-radius:4px;
                               color:var(--text);font-family:'DM Mono',monospace;outline:none;">
-                <select id="chapters" size="6">
+                <select id="chapters" size="6" ondblclick="colapsarSelectorCapitulos()">
                     <option disabled>— sin capítulos —</option>
                 </select>
             </div>
@@ -232,11 +344,12 @@
                 <div id="imagen-ia-body">
                     <div id="ia-options-body">
                         <div id="ia-prov-body">
-                            <input type="radio" name="img-provider" value="puter" id="prov-puter" onchange="setImageProvider('puter')" checked>
+                            <input type="radio" name="img-provider" value="puter" id="prov-puter" onchange="setImageProvider('puter')">
                             <input type="radio" name="img-provider" value="stability" id="prov-stability" onchange="setImageProvider('stability')">
                             <input type="radio" name="img-provider" value="pollinations" id="prov-pollinations" onchange="setImageProvider('pollinations')">
                             <input type="radio" name="img-provider" value="procedural" id="prov-procedural" onchange="setImageProvider('procedural')">
                             <input type="radio" name="img-provider" value="pixabay" id="prov-pixabay" onchange="setImageProvider('pixabay')">
+                            <input type="radio" name="img-provider" value="picsum" id="prov-picsum" onchange="setImageProvider('picsum')" checked>
                             <div id="puter-panel">
                                 <select id="puter-model" onchange="puterModel=this.value;localStorage.setItem('puter_model',this.value);">
                                     <optgroup label="── GPT Image ──"><option value="gpt-image-1.5">GPT Image 1.5 (recomendado)</option><option value="gpt-image-1">GPT Image 1</option><option value="dall-e-3">DALL-E 3</option></optgroup>
@@ -260,6 +373,7 @@
                             <div id="pollinations-panel"></div>
                             <div id="procedural-panel"></div>
                             <div id="pixabay-video-panel"></div>
+                            <div id="picsum-panel"></div>
                         </div>
                     </div>
                     <div id="img-ia-status-txt"></div>
@@ -419,7 +533,7 @@
         <div id="ai-bg-a" style="position:absolute;inset:0;background-size:cover;background-position:center;opacity:0;transition:opacity 1.2s ease;pointer-events:none;z-index:0;"></div>
         <div id="ai-bg-b" style="position:absolute;inset:0;background-size:cover;background-position:center;opacity:0;transition:opacity 1.2s ease;pointer-events:none;z-index:0;"></div>
         <div id="ai-bg-overlay" style="position:absolute;inset:0;background:rgba(8,7,6,0);transition:background 1s ease;pointer-events:none;z-index:1;"></div>
-        <canvas id="video-canvas" style="position:absolute;inset:0;width:100%;height:100%;z-index:2;pointer-events:none;display:block;"></canvas>
+        <canvas id="video-canvas" style="position:absolute;inset:0;width:100%;height:100%;z-index:2;pointer-events:auto;display:block;cursor:pointer;"></canvas>
 
         <div id="video-progress-wrap">
             <div id="video-progress-track"
@@ -499,7 +613,7 @@
                                white-space:nowrap;transition:color 0.2s,border-color 0.2s;display:flex;align-items:center;gap:3px;"
                         onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
                         onmouseout="if(!document.getElementById('img-prov-menu').classList.contains('open')){this.style.borderColor='var(--border)';this.style.color='var(--text-dim)'}">
-                    🖼 <span id="btn-img-prov-label">Pixabay</span> ▾
+                    🖼 <span id="btn-img-prov-label">Picsum</span> ▾
                 </button>
                 <!-- Menú desplegable -->
                 <div id="img-prov-menu"
@@ -509,13 +623,36 @@
                     <div style="font-size:0.58rem;color:var(--text-dim);letter-spacing:0.05em;text-transform:uppercase;margin-bottom:6px;">Fuente de imágenes</div>
                     <!-- Opciones -->
                     <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:8px;" id="img-prov-options">
-                        <label id="opt-pixabay" class="img-prov-opt img-prov-active"><span class="img-prov-dot"></span> 📷 Pixabay    <small>(fotos reales)</small></label>
+                        <label id="opt-picsum" class="img-prov-opt img-prov-active"><span class="img-prov-dot"></span> 🌄 Picsum      <small>(sin key, gratis)</small></label>
+                        <label id="opt-pexels" class="img-prov-opt"><span class="img-prov-dot"></span> 🖼 Pexels      <small>(fotos HD, gratis)</small></label>
+                        <label id="opt-pixabay" class="img-prov-opt"><span class="img-prov-dot"></span> 📷 Pixabay    <small>(fotos reales)</small></label>
                         <label id="opt-puter" class="img-prov-opt"><span class="img-prov-dot"></span> 🤖 Puter.js   <small>(IA generativa)</small></label>
                         <label id="opt-pollinations" class="img-prov-opt"><span class="img-prov-dot"></span> ✨ Pollinations <small>(IA, gratis)</small></label>
                         <label id="opt-procedural" class="img-prov-opt"><span class="img-prov-dot"></span> 🎨 Procedural  <small>(sin internet)</small></label>
                     </div>
+                    <!-- Panel Pexels key -->
+                    <div id="pexels-key-popover" style="display:none;border-top:1px solid var(--border);padding-top:7px;margin-top:2px;">
+                        <div style="font-size:0.58rem;color:var(--text-dim);margin-bottom:4px;">
+                            🔑 Pexels API Key
+                            <span id="pexels-key-status-video" style="color:var(--accent2);margin-left:4px;"></span>
+                        </div>
+                        <div style="display:flex;gap:4px;">
+                            <input type="password" id="pexels-key-input-video" placeholder="tu-api-key-pexels"
+                                   style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:4px;
+                                          color:var(--text);font-family:'DM Mono',monospace;font-size:0.6rem;
+                                          padding:4px 6px;outline:none;min-width:0;">
+                            <button type="button" onclick="guardarPexelsKeyVideo()"
+                                    style="background:var(--accent2);border:none;border-radius:4px;color:var(--bg);
+                                           font-family:'DM Mono',monospace;font-size:0.6rem;padding:4px 8px;cursor:pointer;flex-shrink:0;">
+                                OK
+                            </button>
+                        </div>
+                        <div style="font-size:0.52rem;color:var(--text-dim);margin-top:4px;line-height:1.3;">
+                            Key gratuita en <a href="https://www.pexels.com/api/key/" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none;">pexels.com/api/key</a>
+                        </div>
+                    </div>
                     <!-- Panel Pixabay key -->
-                    <div id="pixabay-key-popover" style="border-top:1px solid var(--border);padding-top:7px;margin-top:2px;">
+                    <div id="pixabay-key-popover" style="display:none;border-top:1px solid var(--border);padding-top:7px;margin-top:2px;">
                         <div style="font-size:0.58rem;color:var(--text-dim);margin-bottom:4px;">
                             🔑 Pixabay API Key
                             <span id="pixabay-key-status-video" style="color:var(--accent2);margin-left:4px;"></span>
@@ -606,169 +743,13 @@
     <script src="js/video.js"></script>
     <!-- Imágenes web via Unsplash — carga después de player.js -->
     <script src="js/images.js"></script>
+    <!-- Grabador de video — depende de tts.js, video.js, images.js -->
+    <script src="js/export_video.js"></script>
     <!-- UI: patches y helpers — debe cargarse último -->
     <script src="js/ui.js"></script>
+    <!-- Inicialización de UI — debe cargarse después de ui.js -->
+    <script src="js/init.js"></script>
 
-    <style>
-        /* ── Selector de proveedor de imágenes en video bar ── */
-        .img-prov-opt {
-            display: flex;
-            align-items: center;
-            gap: 7px;
-            font-family: 'DM Mono', monospace;
-            font-size: 0.65rem;
-            color: var(--text-dim);
-            cursor: pointer;
-            padding: 3px 6px;
-            border-radius: 4px;
-            transition: background 0.15s, color 0.15s;
-        }
 
-            .img-prov-opt:hover {
-                background: rgba(255,255,255,0.05);
-                color: var(--text);
-            }
-
-            .img-prov-opt.img-prov-active {
-                color: var(--accent2);
-            }
-
-            .img-prov-opt small {
-                color: var(--text-dim);
-                font-size: 0.56rem;
-                margin-left: auto;
-            }
-
-        .img-prov-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            border: 1.5px solid var(--text-dim);
-            flex-shrink: 0;
-            transition: background 0.15s, border-color 0.15s;
-        }
-
-        .img-prov-active .img-prov-dot {
-            background: var(--accent2);
-            border-color: var(--accent2);
-        }
-
-        #img-prov-menu.open {
-            display: block !important;
-        }
-
-        #video-music-menu.open {
-            display: block !important;
-        }
-    </style>
-
-    <script>
-        // ── Lógica del selector de proveedor de imágenes en video bar ──
-        (function () {
-            // Proveedores disponibles: label, key, panel popover id
-            const PROVS = [
-                { key: 'pixabay', label: 'Pixabay', optId: 'opt-pixabay', panelId: 'pixabay-key-popover' },
-                { key: 'puter', label: 'Puter.js', optId: 'opt-puter', panelId: 'puter-key-popover' },
-                { key: 'pollinations', label: 'Pollinations', optId: 'opt-pollinations', panelId: null },
-                { key: 'procedural', label: 'Procedural', optId: 'opt-procedural', panelId: null },
-            ];
-
-            function _activarProv(key) {
-                // Actualizar radio oculto
-                const radio = document.getElementById('prov-' + key);
-                if (radio) { radio.checked = true; radio.dispatchEvent(new Event('change')); }
-
-                // Actualizar estilos de labels
-                PROVS.forEach(p => {
-                    const el = document.getElementById(p.optId);
-                    if (el) el.classList.toggle('img-prov-active', p.key === key);
-                });
-
-                // Actualizar label del botón
-                const prov = PROVS.find(p => p.key === key);
-                const lblEl = document.getElementById('btn-img-prov-label');
-                if (lblEl && prov) lblEl.textContent = prov.label;
-
-                // Mostrar/ocultar paneles de key
-                PROVS.forEach(p => {
-                    if (p.panelId) {
-                        const panel = document.getElementById(p.panelId);
-                        if (panel) panel.style.display = p.key === key ? 'block' : 'none';
-                    }
-                });
-
-                // Actualizar estado en el status del popover
-                const statusEl = document.getElementById('img-prov-status-pop');
-                if (statusEl) statusEl.textContent = '';
-            }
-
-            window._toggleImgProvMenu = function () {
-                const menu = document.getElementById('img-prov-menu');
-                const btn = document.getElementById('btn-img-prov');
-                const isOpen = menu.classList.toggle('open');
-                if (btn) {
-                    btn.style.borderColor = isOpen ? 'var(--accent2)' : 'var(--border)';
-                    btn.style.color = isOpen ? 'var(--accent2)' : 'var(--text-dim)';
-                }
-            };
-
-            // ── Music popup ──
-            window._toggleMusicMenu = function () {
-                const menu = document.getElementById('video-music-menu');
-                const btn = document.getElementById('kbtn-music-popup');
-                const isOpen = menu.classList.toggle('open');
-                menu.style.display = isOpen ? 'block' : 'none';
-                if (btn) {
-                    btn.style.borderColor = isOpen ? 'var(--accent2)' : 'var(--border)';
-                    btn.style.color = isOpen ? 'var(--accent2)' : 'var(--text-dim)';
-                }
-            };
-
-            document.addEventListener('click', function (e) {
-                // Close img-prov-menu
-                const wrapper = document.getElementById('img-prov-wrapper');
-                if (wrapper && !wrapper.contains(e.target)) {
-                    const menu = document.getElementById('img-prov-menu');
-                    const btn = document.getElementById('btn-img-prov');
-                    if (menu) menu.classList.remove('open');
-                    if (btn) { btn.style.borderColor = 'var(--border)'; btn.style.color = 'var(--text-dim)'; }
-                }
-                // Close music-menu
-                const mwrapper = document.getElementById('video-music-wrapper');
-                if (mwrapper && !mwrapper.contains(e.target)) {
-                    const mmenu = document.getElementById('video-music-menu');
-                    const mbtn = document.getElementById('kbtn-music-popup');
-                    if (mmenu) { mmenu.classList.remove('open'); mmenu.style.display = 'none'; }
-                    if (mbtn) { mbtn.style.borderColor = 'var(--border)'; mbtn.style.color = 'var(--text-dim)'; }
-                }
-            });
-
-            // Asignar click a cada opción
-            document.addEventListener('DOMContentLoaded', function () {
-                PROVS.forEach(p => {
-                    const el = document.getElementById(p.optId);
-                    if (el) el.addEventListener('click', function (e) {
-                        e.stopPropagation();
-                        _activarProv(p.key);
-                    });
-                });
-
-                // Leer proveedor guardado o usar pixabay como default
-                const saved = localStorage.getItem('img_provider') || 'pixabay';
-                // Override: si estaba en puter/pollinations/procedural, respetar; si no había nada, pixabay
-                _activarProv(saved);
-
-                // Sincronizar modelo Puter
-                const puterModelSaved = localStorage.getItem('puter_model') || 'gpt-image-1.5';
-                const puterModelPop = document.getElementById('puter-model-pop');
-                if (puterModelPop) puterModelPop.value = puterModelSaved;
-
-                // Mostrar estado de key si ya está guardada
-                const pixKey = localStorage.getItem('pixabay_api_key');
-                const statusEl = document.getElementById('pixabay-key-status-video');
-                if (pixKey && statusEl) { statusEl.textContent = '✓'; statusEl.style.color = 'var(--accent2)'; }
-            });
-        })();
-    </script>
 </body>
 </html>

@@ -333,6 +333,8 @@ function seekTTS(event) {
 }
 
 function mainProgressMouseMove(event) {
+    // No procesar si hay un modal de exportación abierto
+    if (document.getElementById('export-modal')) return;
     if (typeof sentences === 'undefined' || sentences.length === 0) return;
     const track = document.getElementById('main-progress-track');
     const tooltip = document.getElementById('main-progress-tooltip');
@@ -341,14 +343,18 @@ function mainProgressMouseMove(event) {
     const pct = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
     const idx = Math.floor(pct * sentences.length);
     const sentence = sentences[idx] || '';
-    tooltip.style.display = 'block';
-    tooltip.style.left = `${event.clientX - rect.left}px`;
+    tooltip.classList.add('visible');
+    // Clamp tooltip so it doesn't overflow left or right edge
+    const tooltipHalf = 120; // approx half of max-width:240px
+    const rawLeft = event.clientX - rect.left;
+    const clampedLeft = Math.max(tooltipHalf, Math.min(rect.width - tooltipHalf, rawLeft));
+    tooltip.style.left = `${clampedLeft}px`;
     tooltip.textContent = sentence.length > 60 ? sentence.slice(0, 57) + '…' : sentence;
 }
 
 function mainProgressMouseLeave() {
     const tooltip = document.getElementById('main-progress-tooltip');
-    if (tooltip) tooltip.style.display = 'none';
+    if (tooltip) tooltip.classList.remove('visible');
 }
 
 // ======================

@@ -1,0 +1,857 @@
+﻿// ═══════════════════════════════════════════════════════════════════
+// FORMATS — Carga de eBooks en múltiples formatos
+// Depende de: main.js (archivosHTML, mostrarNotificacion)
+//             epub.js (cargarCapitulo)
+// Formatos soportados:
+//   .epub   → manejado por epub.js (no duplicado aquí)
+//   .txt    → split por capítulos o bloques de texto
+//   .html   → HTML único como capítulo único
+//   .pdf    → PDF.js (CDN) — extrae texto página a página
+//   .fb2    → XML FictionBook 2 — capítulos por <section>
+//   .fb3    → FictionBook 3 (ZIP con XML interno)
+//   .cbz    → Comic Book ZIP — imágenes secuenciales
+//   .cbr    → Comic Book RAR — imágenes (requiere unrar.js CDN)
+//   .docx   → Word — extrae texto con mammoth.js (CDN)
+//   .rtf    → Rich Text Format — extrae texto limpio
+//   .odt    → OpenDocument Text (ZIP con content.xml)
+//   .mobi   → MOBI/PRC — extracción básica de texto
+//   .azw3   → Kindle Format 8 — extrae HTML interno (KF8) o texto
+// ═══════════════════════════════════════════════════════════════════
+
+// ── CDN dinámico: cargar librería solo cuando se necesita ──
+const _cdnLoaded = {};
+async function _loadScript(id, src) {
+    if (_cdnLoaded[id]) return;
+    return new Promise((resolve, reject) => {
+        if (document.getElementById(id)) { _cdnLoaded[id] = true; resolve(); return; }
+        const s = document.createElement('script');
+        s.id = id; s.src = src;
+        s.onload = () => { _cdnLoaded[id] = true; resolve(); };
+        s.onerror = () => reject(new Error(`No se pudo cargar: ${src}`));
+        document.head.appendChild(s);
+    });
+}
+
+// ── Extensión del archivo ──
+function _ext(filename) {
+    return filename.split('.').pop().toLowerCase();
+}
+
+// ── Poblar selector de capítulos a partir de un array [{title, html}] ──
+function _poblarSelector(capitulos, fileName) {
+    const selector = document.getElementById('chapters');
+    selector.innerHTML = '';
+    capitulos.forEach((cap, i) => {
+        const opt = document.createElement('option');
+        opt.value = cap.id || `__fmt_cap_${i}`;
+        opt.textContent = cap.title || `Capítulo ${i + 1}`;
+        selector.appendChild(opt);
+    });
+
+    // Guardar contenido en archivosHTML (misma estructura que epub.js)
+    capitulos.forEach(cap => {
+        archivosHTML[cap.id || `__fmt_cap_${capitulos.indexOf(cap)}`] = cap.html;
+    });
+
+    window._cargandoProgramaticamente = true;
+    selector.selectedIndex = 0;
+    window._cargandoProgramaticamente = false;
+
+    document.getElementById('chapter-selector').style.display = 'block';
+    document.getElementById('file-name').textContent =
+        `${fileName} (${capitulos.length} ${capitulos.length === 1 ? 'sección' : 'capítulos'})`;
+
+    mostrarNotificacion(`✓ Archivo cargado: ${capitulos.length} sección(es)`);
+    if (capitulos.length > 0) {
+        cargarCapitulo(selector.options[0].value);
+    }
+}
+
+// ── Escapar HTML básico ──
+function _escHtml(t) {
+    return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// ── Texto plano → HTML simple ──
+function _txtToHtml(texto) {
+    const parrafos = texto.split(/\n{2,}/).map(p => p.trim()).filter(p => p.length > 0);
+    return parrafos.map(p => `<p>${_escHtml(p).replace(/\n/g, '<br>')}</p>`).join('\n');
+}
+
+// ══════════════════════════════════════════
+// PARSERS POR FORMATO
+// ══════════════════════════════════════════
+
+// ── TXT ──────────────────────────────────
+// Detecta capítulos por encabezados comunes; si no hay, parte cada N palabras
+async function parseTXT(arrayBuffer) {
+    const decoder = new TextDecoder('utf-8', { fatal: false });
+    const texto = decoder.decode(arrayBuffer).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+    // Patrones de encabezado de capítulo
+    const CAP_RE = /^(?:(?:CHAPTER|CAPÍTULO|CAPITULO|CAP\.?|CH\.?|PARTE?|PART)\s*[\d\w]+|#{1,3}\s.+|\d{1,3}[\.\)]\s+\S.{0,60})$/im;
+    const lineas = texto.split('\n');
+    const cortes = [];
+
+    lineas.forEach((linea, idx) => {
+        if (CAP_RE.test(linea.trim()) && linea.trim().length > 0) {
+            cortes.push(idx);
+        }
+    });
+
+    if (cortes.length >= 2) {
+        // Hay estructura de capítulos detectada
+        const caps = [];
+        cortes.forEach((inicio, ci) => {
+            const fin = cortes[ci + 1] ?? lineas.length;
+            const bloque = lineas.slice(inicio, fin).join('\n').trim();
+            if (bloque.length < 20) return;
+            caps.push({
+                id: `__txt_${ci}`,
+                title: lineas[inicio].trim().slice(0, 80) || `Capítulo ${ci + 1}`,
+                html: _txtToHtml(bloque)
+            });
+        });
+        if (caps.length > 0) return caps;
+    }
+
+    // Sin estructura: dividir cada ~3000 palabras
+    const palabras = texto.split(/\s+/);
+    const CHUNK = 3000;
+    const caps = [];
+    for (let i = 0; i < palabras.length; i += CHUNK) {
+        const bloque = palabras.slice(i, i + CHUNK).join(' ');
+        const num = caps.length + 1;
+        caps.push({
+            id: `__txt_${num}`,
+            title: `Sección ${num}`,
+            html: _txtToHtml(bloque)
+        });
+    }
+    return caps.length > 0 ? caps : [{ id: '__txt_0', title: 'Texto', html: _txtToHtml(texto) }];
+}
+
+// ── HTML / HTM ────────────────────────────
+async function parseHTML(arrayBuffer) {
+    const decoder = new TextDecoder('utf-8', { fatal: false });
+    const html = decoder.decode(arrayBuffer);
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const titulo = doc.querySelector('title')?.textContent?.trim() || 'Documento';
+    return [{ id: '__html_0', title: titulo, html }];
+}
+
+// ── FB2 (FictionBook 2 — XML) ──────────────
+async function parseFB2(arrayBuffer) {
+    const decoder = new TextDecoder('utf-8', { fatal: false });
+    let xml = decoder.decode(arrayBuffer);
+
+    // Algunos FB2 vienen con BOM
+    xml = xml.replace(/^\uFEFF/, '');
+
+    const doc = new DOMParser().parseFromString(xml, 'application/xml');
+    if (doc.querySelector('parsererror')) {
+        // Intentar como text/html como fallback
+        const doc2 = new DOMParser().parseFromString(xml, 'text/html');
+        return [{ id: '__fb2_0', title: 'Documento FB2', html: doc2.body.innerHTML }];
+    }
+
+    const sections = doc.querySelectorAll('body > section, body section');
+    const caps = [];
+
+    sections.forEach((sec, i) => {
+        const titleEl = sec.querySelector(':scope > title');
+        const titulo = titleEl?.textContent?.trim().slice(0, 80) || `Sección ${i + 1}`;
+
+        // Convertir elementos FB2 a HTML legible
+        let html = '';
+        sec.childNodes.forEach(node => {
+            if (node.nodeName === 'title') {
+                html += `<h2>${_escHtml(node.textContent || '')}</h2>`;
+            } else if (node.nodeName === 'p') {
+                html += `<p>${_escHtml(node.textContent || '')}</p>`;
+            } else if (node.nodeName === 'empty-line') {
+                html += '<br>';
+            } else if (node.nodeName === 'subtitle') {
+                html += `<h3>${_escHtml(node.textContent || '')}</h3>`;
+            } else if (node.nodeName === 'poem') {
+                html += `<blockquote>${_escHtml(node.textContent || '')}</blockquote>`;
+            }
+        });
+
+        if (html.trim().length > 0) {
+            caps.push({ id: `__fb2_${i}`, title: titulo, html });
+        }
+    });
+
+    if (caps.length === 0) {
+        // FB2 sin secciones — tratar como texto plano
+        const body = doc.querySelector('body');
+        const texto = body?.textContent || xml;
+        return [{ id: '__fb2_0', title: 'Documento FB2', html: _txtToHtml(texto) }];
+    }
+    return caps;
+}
+
+// ── FB3 (FictionBook 3 — ZIP con XML interno) ──
+async function parseFB3(arrayBuffer) {
+    await _loadScript('jszip-cdn', 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
+    const zip = await JSZip.loadAsync(arrayBuffer);
+    // FB3 tiene un body.xml o similar
+    let xmlContent = null;
+    zip.forEach((path, file) => {
+        if (path.match(/body\.xml$/i) || path.match(/\.fb3$/i) || path.match(/^[^/]+\.xml$/i)) {
+            if (!xmlContent) xmlContent = file.async('text');
+        }
+    });
+    if (!xmlContent) throw new Error('No se encontró contenido XML en FB3');
+    const xml = await xmlContent;
+    const doc = new DOMParser().parseFromString(xml, 'application/xml');
+    const sections = doc.querySelectorAll('section');
+    if (sections.length > 0) {
+        const caps = [];
+        sections.forEach((sec, i) => {
+            const titulo = sec.querySelector('title')?.textContent?.trim().slice(0, 80) || `Sección ${i + 1}`;
+            caps.push({ id: `__fb3_${i}`, title: titulo, html: _txtToHtml(sec.textContent || '') });
+        });
+        return caps;
+    }
+    return [{ id: '__fb3_0', title: 'Documento FB3', html: _txtToHtml(doc.body?.textContent || xml) }];
+}
+
+// ── PDF ───────────────────────────────────
+async function parsePDF(arrayBuffer) {
+    // Cargar PDF.js desde CDN
+    await _loadScript('pdfjs-cdn', 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js');
+
+    const pdfjsLib = window['pdfjs-dist/build/pdf'];
+    if (!pdfjsLib) throw new Error('PDF.js no disponible');
+
+    // Worker
+    if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+        pdfjsLib.GlobalWorkerOptions.workerSrc =
+            'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    }
+
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    const totalPages = pdf.numPages;
+
+    // Agrupar páginas en capítulos de ~10 páginas
+    const PAGES_PER_CAP = 10;
+    const caps = [];
+
+    for (let startPage = 1; startPage <= totalPages; startPage += PAGES_PER_CAP) {
+        const endPage = Math.min(startPage + PAGES_PER_CAP - 1, totalPages);
+        let html = '';
+
+        for (let p = startPage; p <= endPage; p++) {
+            const page = await pdf.getPage(p);
+            const textContent = await page.getTextContent();
+            const pageText = textContent.items.map(item => item.str).join(' ');
+            html += `<p><em style="color:var(--text-dim);font-size:0.65rem">— Página ${p} —</em></p>`;
+            html += _txtToHtml(pageText);
+        }
+
+        const capNum = Math.ceil(startPage / PAGES_PER_CAP);
+        const label = totalPages <= PAGES_PER_CAP
+            ? 'Documento'
+            : `Páginas ${startPage}–${endPage}`;
+
+        caps.push({ id: `__pdf_${capNum}`, title: label, html });
+    }
+
+    return caps.length > 0 ? caps : [{ id: '__pdf_0', title: 'Documento PDF', html: '<p>No se pudo extraer texto del PDF.</p>' }];
+}
+
+// ── DOCX ──────────────────────────────────
+async function parseDOCX(arrayBuffer) {
+    await _loadScript('mammoth-cdn', 'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js');
+
+    const result = await mammoth.convertToHtml({ arrayBuffer });
+    const html = result.value;
+
+    if (!html || html.trim().length === 0) {
+        throw new Error('No se pudo extraer texto del DOCX');
+    }
+
+    // Dividir por encabezados h1/h2 para crear capítulos
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const headings = doc.querySelectorAll('h1, h2');
+
+    if (headings.length < 2) {
+        // Sin estructura: documento único
+        return [{ id: '__docx_0', title: 'Documento', html }];
+    }
+
+    const caps = [];
+    headings.forEach((h, i) => {
+        const titulo = h.textContent.trim().slice(0, 80);
+        let capHtml = h.outerHTML;
+        let sibling = h.nextElementSibling;
+        while (sibling && !['H1', 'H2'].includes(sibling.tagName)) {
+            capHtml += sibling.outerHTML;
+            sibling = sibling.nextElementSibling;
+        }
+        if (capHtml.length > 30) {
+            caps.push({ id: `__docx_${i}`, title: titulo || `Sección ${i + 1}`, html: capHtml });
+        }
+    });
+
+    return caps.length > 0 ? caps : [{ id: '__docx_0', title: 'Documento', html }];
+}
+
+// ── RTF ───────────────────────────────────
+async function parseRTF(arrayBuffer) {
+    const decoder = new TextDecoder('latin1', { fatal: false });
+    const rtf = decoder.decode(arrayBuffer);
+
+    // Parser RTF básico: eliminar control words y extraer texto
+    let texto = rtf
+        .replace(/\\([a-z]+)(-?\d*) ?/gi, (m, cmd) => {
+            if (cmd === 'par' || cmd === 'line') return '\n';
+            if (cmd === 'tab') return '\t';
+            return '';
+        })
+        .replace(/[{}]/g, '')
+        .replace(/\\\*/g, '')
+        .replace(/\\[^a-z]/gi, '')
+        .replace(/\\'([0-9a-f]{2})/gi, (m, hex) => {
+            try { return decodeURIComponent('%' + hex); } catch { return ''; }
+        })
+        .replace(/\r?\n\r?\n+/g, '\n\n')
+        .trim();
+
+    // Dividir por capítulos si los hay
+    return parseTXT(new TextEncoder().encode(texto).buffer);
+}
+
+// ── ODT (OpenDocument Text) ───────────────
+async function parseODT(arrayBuffer) {
+    await _loadScript('jszip-cdn', 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
+    const zip = await JSZip.loadAsync(arrayBuffer);
+    const contentFile = zip.file('content.xml');
+    if (!contentFile) throw new Error('No se encontró content.xml en el ODT');
+
+    const xml = await contentFile.async('text');
+    const doc = new DOMParser().parseFromString(xml, 'application/xml');
+
+    // Extraer párrafos y encabezados
+    const elements = doc.querySelectorAll('text|p, text|h');
+    let texto = '';
+    elements.forEach(el => {
+        const t = el.textContent.trim();
+        if (t) texto += t + '\n\n';
+    });
+
+    return parseTXT(new TextEncoder().encode(texto).buffer);
+}
+
+// ── MOBI / PRC ────────────────────────────
+// MOBI es un formato binario propietario; se extrae lo que sea legible
+async function parseMOBI(arrayBuffer) {
+    const bytes = new Uint8Array(arrayBuffer);
+    const decoder = new TextDecoder('utf-8', { fatal: false });
+
+    // Buscar texto legible extrayendo strings de caracteres imprimibles
+    let texto = '';
+    let bloque = '';
+    for (let i = 0; i < bytes.length; i++) {
+        const c = bytes[i];
+        if ((c >= 0x20 && c < 0x7F) || c === 0x0A || c === 0x0D) {
+            bloque += String.fromCharCode(c);
+        } else {
+            if (bloque.length > 40) texto += bloque + '\n';
+            bloque = '';
+        }
+    }
+    if (bloque.length > 40) texto += bloque;
+
+    // Limpiar tags HTML residuales del MOBI
+    texto = texto
+        .replace(/<[^>]{0,200}>/g, ' ')
+        .replace(/&[a-z]{2,6};/g, ' ')
+        .replace(/[ \t]{3,}/g, ' ')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+
+    if (texto.length < 100) {
+        throw new Error('No se pudo extraer texto del MOBI. Convierte a EPUB para mejores resultados.');
+    }
+
+    return parseTXT(new TextEncoder().encode(texto).buffer);
+}
+
+// ── AZW3 / KF8 (Kindle Format 8) ──────────
+// Estructura PalmDB:
+//   0x00  32b  nombre del libro
+//   0x4C   2b  numRec (número de registros)
+//   0x4E   numRec*8b  [offset u32 BE, attrs u32 BE] por registro
+//
+// El registro 0 es el "PalmDOC header" (16 bytes) + "MOBI header" (desde byte 16).
+// El MOBI header empieza con el magic "MOBI" en el byte 16 del registro 0.
+//
+// Para AZW3 con KF8: existe un registro especial "BOUNDARY" que separa el
+// MOBI2 clásico del bloque KF8. El KF8 tiene su propio header (también con "MOBI")
+// pero el tipo de contenido (offset 0x60 en el MOBI header) es 0x101 en vez de 0x002.
+//
+// DRM: si el byte de cifrado en el PalmDOC header (offset 12) es != 0, el contenido
+// está cifrado y no es posible extraer texto sin la clave DRM.
+
+async function parseAZW3(arrayBuffer) {
+    const bytes = new Uint8Array(arrayBuffer);
+    const view = new DataView(arrayBuffer);
+    const utf8 = new TextDecoder('utf-8', { fatal: false });
+
+    if (bytes.length < 0x50) throw new Error('Archivo AZW3/MOBI demasiado pequeño');
+
+    // ── 1. Leer lista de registros del PalmDB ──
+    const numRec = view.getUint16(0x4C, false);
+    if (numRec < 1) throw new Error('PalmDB sin registros');
+
+    const recOffsets = [];
+    for (let i = 0; i < numRec; i++) {
+        recOffsets.push(view.getUint32(0x4E + i * 8, false));
+    }
+    recOffsets.push(bytes.length); // sentinel final
+
+    function getRecord(idx) {
+        if (idx < 0 || idx >= numRec) return null;
+        const s = recOffsets[idx];
+        const e = recOffsets[idx + 1];
+        if (s >= bytes.length || s >= e) return null;
+        return bytes.slice(s, Math.min(e, bytes.length));
+    }
+
+    // ── 2. Verificar el PalmDOC header en el registro 0 ──
+    // Registro 0: [compression u16][unused u16][textLength u32][textRecCount u16][recSize u16][encryption u16][unused2 u16]
+    const rec0 = getRecord(0);
+    if (!rec0 || rec0.length < 16) throw new Error('Registro 0 inválido');
+
+    const rec0View = new DataView(rec0.buffer, rec0.byteOffset, rec0.byteLength);
+    const compression = rec0View.getUint16(0, false);  // 1=raw, 2=PalmDOC, 17480=HUFF/CDIC
+    const textRecCount = rec0View.getUint16(8, false); // número de registros de texto
+    const encryption = rec0View.getUint16(12, false); // 0=sin DRM, 1=DRM old, 2=DRM
+
+    // ── 3. Verificar DRM ──
+    if (encryption !== 0) {
+        throw new Error(
+            '⚠ Este archivo tiene DRM (protección de copia de Amazon).\n' +
+            'Para leerlo necesitás eliminarlo primero con una herramienta como Calibre + DeDRM plugin.'
+        );
+    }
+
+    // ── 4. Leer el MOBI header (siempre en offset 16 del registro 0) ──
+    function leerMobiHeader(rec) {
+        if (!rec || rec.length < 20) return null;
+        const v = new DataView(rec.buffer, rec.byteOffset, rec.byteLength);
+        const mag = String.fromCharCode(rec[16], rec[17], rec[18], rec[19]);
+        if (mag !== 'MOBI') return null;
+        const mobiLen = v.getUint32(20, false);           // longitud del MOBI header
+        const mobiType = v.getUint32(24, false);           // tipo: 2=MOBI, 257=KF8
+        const encoding = v.getUint32(28, false);           // 1252=latin1, 65001=utf8
+        const firstNonText = v.getUint16(8, false);           // primer rec no-texto (= textRecCount + 1)
+        // EXTH flag: bit 6 de offset 0x80 relativo al rec
+        const fullLen = 16 + mobiLen;
+        let hasEXTH = false;
+        if (rec.length > fullLen + 4) {
+            const exthMag = String.fromCharCode(rec[fullLen], rec[fullLen + 1], rec[fullLen + 2], rec[fullLen + 3]);
+            hasEXTH = exthMag === 'EXTH';
+        }
+        return { mobiType, encoding, firstNonText, fullLen, hasEXTH };
+    }
+
+    const mobiInfo = leerMobiHeader(rec0);
+    if (!mobiInfo) throw new Error('[azw3] No se encontró cabecera MOBI en el registro 0');
+
+    // ── 5. Buscar bloque KF8 (BOUNDARY) ──
+    // En AZW3 dual (MOBI + KF8), existe un registro con el texto "BOUNDARY"
+    let kf8HeaderIdx = -1;
+    for (let i = 1; i < numRec; i++) {
+        const rec = getRecord(i);
+        if (rec && rec.length >= 8) {
+            const tag = String.fromCharCode(...rec.slice(0, 8));
+            if (tag.startsWith('BOUNDARY')) {
+                // El header KF8 está en el siguiente registro
+                kf8HeaderIdx = i + 1;
+                break;
+            }
+        }
+    }
+
+    // Decidir qué base usar: KF8 si existe, si no MOBI clásico
+    let baseHeaderIdx, baseRec1st;
+    if (kf8HeaderIdx >= 0 && kf8HeaderIdx < numRec) {
+        const kf8Rec = getRecord(kf8HeaderIdx);
+        const kf8Info = leerMobiHeader(kf8Rec);
+        if (kf8Info && kf8Info.mobiType === 257) {
+            // KF8 válido
+            baseHeaderIdx = kf8HeaderIdx;
+            baseRec1st = kf8HeaderIdx + 1;
+            console.log('[azw3] Usando bloque KF8');
+        } else {
+            baseHeaderIdx = 0;
+            baseRec1st = 1;
+            console.log('[azw3] KF8 encontrado pero inválido, usando MOBI clásico');
+        }
+    } else {
+        baseHeaderIdx = 0;
+        baseRec1st = 1;
+        console.log('[azw3] Sin BOUNDARY, usando MOBI clásico');
+    }
+
+    // Re-leer info del header base elegido
+    const baseRec = getRecord(baseHeaderIdx);
+    const baseView = new DataView(baseRec.buffer, baseRec.byteOffset, baseRec.byteLength);
+    const baseComp = baseView.getUint16(0, false);
+    const baseTxtRec = baseView.getUint16(8, false);
+    const baseEnc = baseView.getUint32(28, false); // encoding: 65001=utf8, 1252=latin1
+
+    const decoder = baseEnc === 1252
+        ? new TextDecoder('windows-1252', { fatal: false })
+        : new TextDecoder('utf-8', { fatal: false });
+
+    // ── 6. Descompresor PalmDOC ──
+    function decompressPalmDOC(data) {
+        const out = [];
+        let i = 0;
+        while (i < data.length) {
+            const c = data[i++];
+            if (c === 0x00) {
+                out.push(0);
+            } else if (c <= 0x08) {
+                for (let j = 0; j < c && i < data.length; j++) out.push(data[i++]);
+            } else if (c <= 0x7F) {
+                out.push(c);
+            } else if (c <= 0xBF) {
+                if (i >= data.length) break;
+                const next = data[i++];
+                const dist = ((c << 8 | next) >> 3) & 0x7FF;
+                const len = (next & 0x07) + 3;
+                const base = out.length - dist;
+                for (let j = 0; j < len; j++) out.push(base + j >= 0 ? (out[base + j] ?? 0x20) : 0x20);
+            } else {
+                out.push(0x20);
+                out.push(c ^ 0x80);
+            }
+        }
+        return new Uint8Array(out);
+    }
+
+    // ── 7. Extraer registros de texto ──
+    let htmlCompleto = '';
+    const maxRec = Math.min(baseTxtRec, 500); // límite de seguridad
+
+    for (let r = 0; r < maxRec; r++) {
+        const rec = getRecord(baseRec1st + r);
+        if (!rec) continue;
+
+        // Calcular trailing bytes a ignorar (último byte del registro indica cuántos bytes extra hay al final)
+        const trailingSize = rec.length > 0 ? (rec[rec.length - 1] & 0x03) + 1 : 0;
+        const usable = rec.slice(0, Math.max(0, rec.length - trailingSize));
+
+        let data = usable;
+        if (baseComp === 2) {
+            try { data = decompressPalmDOC(usable); } catch (e) { data = usable; }
+        }
+
+        htmlCompleto += decoder.decode(data);
+    }
+
+    if (!htmlCompleto.trim()) {
+        throw new Error('[azw3] No se pudo extraer contenido. El archivo puede estar dañado o usar compresión HUFF/CDIC no soportada.');
+    }
+
+    // ── 8. Limpiar y parsear HTML ──
+    // Los MOBI/AZW3 usan filepos anchors y tags propios de Kindle — limpiarlos
+    htmlCompleto = htmlCompleto
+        .replace(/<mbp:pagebreak[^>]*>/gi, '\n<!-- pagebreak -->\n')
+        .replace(/<a\s+filepos=[^>]*>\s*<\/a>/gi, '')
+        .replace(/<guide>[\s\S]*?<\/guide>/gi, '');
+
+    const esHTML = /<(p|div|html|body|h[1-6]|span)\b/i.test(htmlCompleto);
+
+    if (esHTML) {
+        const doc = new DOMParser().parseFromString(htmlCompleto, 'text/html');
+
+        // Limpiar scripts, styles y nodos inútiles
+        doc.querySelectorAll('script, style, [filepos]').forEach(el => el.remove());
+
+        // Intentar dividir por encabezados o comentarios pagebreak
+        const headings = Array.from(doc.querySelectorAll('h1, h2, h3'));
+
+        if (headings.length >= 2) {
+            const caps = [];
+            headings.forEach((h, i) => {
+                const titulo = h.textContent.trim().slice(0, 80) || `Capítulo ${i + 1}`;
+                let capHtml = h.outerHTML;
+                let sib = h.nextElementSibling;
+                let limit = 0;
+                while (sib && limit++ < 300) {
+                    if (sib.matches('h1,h2,h3')) break;
+                    capHtml += sib.outerHTML;
+                    sib = sib.nextElementSibling;
+                }
+                if (capHtml.replace(/<[^>]+>/g, '').trim().length > 30) {
+                    caps.push({ id: `__azw3_${i}`, title: titulo, html: capHtml });
+                }
+            });
+            if (caps.length > 0) {
+                console.log(`[azw3] ✓ ${caps.length} capítulos extraídos vía headings`);
+                return caps;
+            }
+        }
+
+        // Sin headings: extraer todo el texto y dividir como TXT
+        const textoLimpio = doc.body?.textContent || htmlCompleto.replace(/<[^>]+>/g, ' ');
+        console.log('[azw3] Sin headings — dividiendo como texto plano');
+        return parseTXT(new TextEncoder().encode(textoLimpio).buffer);
+    }
+
+    // Texto plano directo
+    return parseTXT(new TextEncoder().encode(htmlCompleto).buffer);
+}
+
+
+async function parseCBZ(arrayBuffer) {
+    await _loadScript('jszip-cdn', 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
+    const zip = await JSZip.loadAsync(arrayBuffer);
+
+    const imagenes = [];
+    zip.forEach((path, file) => {
+        if (path.match(/\.(jpg|jpeg|png|gif|webp|avif)$/i) && !path.includes('__MACOSX')) {
+            imagenes.push({ path, file });
+        }
+    });
+
+    imagenes.sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true }));
+
+    if (imagenes.length === 0) throw new Error('No se encontraron imágenes en el CBZ');
+
+    // Agrupar páginas de ~10 en 10 como capítulos
+    const PAGES_PER_CAP = 10;
+    const caps = [];
+
+    for (let i = 0; i < imagenes.length; i += PAGES_PER_CAP) {
+        const grupo = imagenes.slice(i, i + PAGES_PER_CAP);
+        const htmlParts = await Promise.all(grupo.map(async ({ path, file }) => {
+            const blob = await file.async('blob');
+            const url = URL.createObjectURL(blob);
+            const pageNum = imagenes.indexOf({ path, file }) !== -1
+                ? imagenes.findIndex(img => img.path === path) + 1
+                : i + grupo.indexOf({ path, file }) + 1;
+            return `<div style="text-align:center;margin:12px 0;">
+                <img src="${url}" alt="Página ${pageNum}" 
+                     style="max-width:100%;max-height:90vh;border-radius:4px;box-shadow:0 2px 12px rgba(0,0,0,0.4);">
+                <div style="color:var(--text-dim);font-size:0.6rem;margin-top:4px;">${path.split('/').pop()}</div>
+            </div>`;
+        }));
+
+        const capNum = Math.floor(i / PAGES_PER_CAP) + 1;
+        const label = imagenes.length <= PAGES_PER_CAP
+            ? 'Cómic'
+            : `Páginas ${i + 1}–${Math.min(i + PAGES_PER_CAP, imagenes.length)}`;
+
+        caps.push({ id: `__cbz_${capNum}`, title: label, html: htmlParts.join('\n') });
+    }
+
+    return caps;
+}
+
+// ── CBR (Comic Book RAR) ──────────────────
+// RAR requiere una librería especial; notificar al usuario si no está disponible
+async function parseCBR(arrayBuffer) {
+    // Intentar con libarchive.js si está disponible
+    if (typeof window.Archive !== 'undefined') {
+        // libarchive.js API
+        const archive = await window.Archive.open(new File([arrayBuffer], 'book.cbr'));
+        const entries = await archive.extractFiles();
+        const imagenes = Object.entries(entries)
+            .filter(([name]) => name.match(/\.(jpg|jpeg|png|gif|webp)$/i))
+            .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }));
+
+        if (imagenes.length === 0) throw new Error('No se encontraron imágenes en el CBR');
+
+        const PAGES_PER_CAP = 10;
+        const caps = [];
+        for (let i = 0; i < imagenes.length; i += PAGES_PER_CAP) {
+            const grupo = imagenes.slice(i, i + PAGES_PER_CAP);
+            const htmlParts = grupo.map(([name, data]) => {
+                const blob = new Blob([data]);
+                const url = URL.createObjectURL(blob);
+                return `<div style="text-align:center;margin:12px 0;">
+                    <img src="${url}" alt="${name}"
+                         style="max-width:100%;max-height:90vh;border-radius:4px;box-shadow:0 2px 12px rgba(0,0,0,0.4);">
+                </div>`;
+            });
+            const capNum = Math.floor(i / PAGES_PER_CAP) + 1;
+            caps.push({
+                id: `__cbr_${capNum}`,
+                title: imagenes.length <= PAGES_PER_CAP ? 'Cómic' : `Páginas ${i + 1}–${Math.min(i + PAGES_PER_CAP, imagenes.length)}`,
+                html: htmlParts.join('\n')
+            });
+        }
+        return caps;
+    }
+
+    // Sin soporte RAR — sugerir conversión
+    throw new Error(
+        'Los archivos CBR (RAR) requieren conversión previa.\n' +
+        'Sugerencia: renombralo a .cbz si el contenido es ZIP, ' +
+        'o usa una herramienta como Calibre para convertirlo.'
+    );
+}
+
+// ══════════════════════════════════════════
+// DISPATCHER PRINCIPAL
+// ══════════════════════════════════════════
+
+const FORMAT_PARSERS = {
+    txt: parseTXT,
+    html: parseHTML,
+    htm: parseHTML,
+    pdf: parsePDF,
+    fb2: parseFB2,
+    fb3: parseFB3,
+    docx: parseDOCX,
+    rtf: parseRTF,
+    odt: parseODT,
+    mobi: parseMOBI,
+    prc: parseMOBI,
+    azw3: parseAZW3,
+    azw: parseAZW3,
+    cbz: parseCBZ,
+    cbr: parseCBR,
+};
+
+const FORMAT_LABELS = {
+    txt: 'Texto plano (.txt)',
+    html: 'HTML (.html/.htm)',
+    htm: 'HTML (.html/.htm)',
+    pdf: 'PDF (.pdf)',
+    fb2: 'FictionBook 2 (.fb2)',
+    fb3: 'FictionBook 3 (.fb3)',
+    docx: 'Word (.docx)',
+    rtf: 'Rich Text (.rtf)',
+    odt: 'OpenDocument (.odt)',
+    mobi: 'MOBI (.mobi)',
+    prc: 'MOBI/PRC (.prc)',
+    azw3: 'Kindle KF8 (.azw3)',
+    azw: 'Kindle (.azw)',
+    cbz: 'Comic ZIP (.cbz)',
+    cbr: 'Comic RAR (.cbr)',
+    epub: 'EPUB (.epub)',
+};
+
+async function cargarFormatoAlternativo(file) {
+    const ext = _ext(file.name);
+
+    if (ext === 'epub') {
+        // Delegar a epub.js disparando el evento change artificialmente
+        const input = document.getElementById('epub-file');
+        if (input) {
+            const dt = new DataTransfer();
+            dt.items.add(file);
+            input.files = dt.files;
+            input.dispatchEvent(new Event('change'));
+        }
+        return;
+    }
+
+    const parser = FORMAT_PARSERS[ext];
+    if (!parser) {
+        mostrarNotificacion(`⚠ Formato .${ext} no soportado`);
+        return;
+    }
+
+    try {
+        document.getElementById('file-name').textContent = `Cargando ${FORMAT_LABELS[ext] || ext}...`;
+
+        // Limpiar estado anterior
+        if (typeof detenerTTS === 'function') detenerTTS();
+        Object.keys(archivosHTML).forEach(k => delete archivosHTML[k]);
+
+        const arrayBuffer = await file.arrayBuffer();
+        const capitulos = await parser(arrayBuffer);
+
+        if (!capitulos || capitulos.length === 0) {
+            throw new Error('No se encontró contenido en el archivo');
+        }
+
+        _poblarSelector(capitulos, file.name);
+
+    } catch (err) {
+        console.error(`[formats] Error cargando ${ext}:`, err);
+        document.getElementById('file-name').textContent = 'Error al cargar';
+        mostrarNotificacion(`⚠ ${err.message || 'Error al cargar el archivo'}`);
+    }
+}
+
+// ══════════════════════════════════════════
+// EXTENSIÓN DEL INPUT EXISTENTE
+// ══════════════════════════════════════════
+// Escucha el mismo input #epub-file y desvía formatos no-EPUB antes de que
+// los maneje el listener de epub.js. Se registra en la fase de captura
+// para tener prioridad.
+
+document.addEventListener('DOMContentLoaded', () => {
+    const input = document.getElementById('epub-file');
+    if (!input) return;
+
+    // Ampliar el atributo accept para mostrar todos los formatos en el diálogo
+    const allExts = Object.keys(FORMAT_PARSERS).map(e => `.${e}`).join(',');
+    input.setAttribute('accept', `.epub,${allExts}`);
+
+    // Capturar el evento antes de que lo maneje epub.js
+    input.addEventListener('change', async function (e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        const ext = _ext(file.name);
+        if (ext !== 'epub') {
+            e.stopImmediatePropagation(); // evitar que epub.js lo intente procesar
+            await cargarFormatoAlternativo(file);
+            // Resetear input para permitir cargar el mismo archivo dos veces
+            this.value = '';
+        }
+        // Si es epub, epub.js lo maneja normalmente
+    }, true); // true = fase de captura (ejecuta antes que epub.js)
+});
+
+// ══════════════════════════════════════════
+// SOPORTE DE DRAG & DROP (opcional)
+// Se activa si hay un elemento #drop-zone en el HTML
+// ══════════════════════════════════════════
+
+document.addEventListener('DOMContentLoaded', () => {
+    const dropZone = document.getElementById('drop-zone') || document.body;
+
+    dropZone.addEventListener('dragover', e => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+        dropZone.classList.add('drag-active');
+    });
+
+    dropZone.addEventListener('dragleave', e => {
+        if (!dropZone.contains(e.relatedTarget)) {
+            dropZone.classList.remove('drag-active');
+        }
+    });
+
+    dropZone.addEventListener('drop', async e => {
+        e.preventDefault();
+        dropZone.classList.remove('drag-active');
+        const file = e.dataTransfer.files[0];
+        if (!file) return;
+        const ext = _ext(file.name);
+        if (!FORMAT_PARSERS[ext] && ext !== 'epub') {
+            mostrarNotificacion(`⚠ Formato .${ext} no soportado. Formatos aceptados: epub, ${Object.keys(FORMAT_PARSERS).join(', ')}`);
+            return;
+        }
+        await cargarFormatoAlternativo(file);
+    });
+});
+
+// ══════════════════════════════════════════
+// EXPORTAR PARA USO EXTERNO (opcional)
+// ══════════════════════════════════════════
+window.cargarFormatoAlternativo = cargarFormatoAlternativo;
+window.FORMAT_PARSERS = FORMAT_PARSERS;
+window.FORMAT_LABELS = FORMAT_LABELS;

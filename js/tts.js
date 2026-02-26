@@ -5,6 +5,20 @@
 // ═══════════════════════════════════════
 
 // ─── MOTOR TTS — API LOCAL (XTTS v2) ───
+// Voz Edge TTS activa — se puede cambiar desde la UI
+let _edgeTtsVoice = localStorage.getItem('edge_tts_voice') || 'es-MX-JorgeNeural';
+
+function setEdgeTtsVoice(voice) {
+    _edgeTtsVoice = voice;
+    localStorage.setItem('edge_tts_voice', voice);
+    const sel = document.getElementById('edge-voice-select');
+    if (sel && sel.value !== voice) sel.value = voice;
+    // Sincronizar también el select del modal de exportación si está abierto
+    const selExp = document.getElementById('exp-voice-select');
+    if (selExp && selExp.value !== voice) selExp.value = voice;
+    mostrarNotificacion('✓ Voz: ' + voice.split('-').slice(2).join('-'));
+}
+
 async function verificarServidorTTS() {
     try {
         const response = await fetch(`${TTS_API_URL}/health`, {
@@ -16,7 +30,13 @@ async function verificarServidorTTS() {
             const data = await response.json();
             servidorTTSDisponible = true;
             console.log('✅ Servidor TTS local disponible:', data);
-            mostrarNotificacion('🎤 TTS Local (XTTS v2) disponible');
+            mostrarNotificacion('🎤 TTS Local (' + (data.engine || 'edge-tts') + ') disponible');
+            // Mostrar selector de voz del servidor, ocultar el del browser
+            const _evs = document.getElementById('edge-voice-select');
+            if (_evs) { _evs.style.display = ''; _evs.value = _edgeTtsVoice; }
+            const _bvs = document.getElementById('voice-select');
+            if (_bvs) _bvs.style.display = 'none';
+
             return true;
         }
     } catch (error) {
@@ -26,38 +46,54 @@ async function verificarServidorTTS() {
     return false;
 }
 
-// Generar audio usando la API local
-async function generarAudioLocal(texto) {
+// Generar audio usando la API local.
+// IMPORTANTE: NO modifica servidorTTSDisponible — los errores transitorios
+// (timeout, frase vacía, red momentánea) no deben apagar el motor globalmente.
+// Solo verificarServidorTTS() puede cambiar ese flag.
+async function generarAudioLocal(texto, { silencioso = false } = {}) {
     try {
         const response = await fetch(`${TTS_API_URL}/tts`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                text: texto,
-                language: 'es'
-            })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: texto, voice: _edgeTtsVoice })
         });
 
-        if (!response.ok) {
-            throw new Error('Error en la respuesta del servidor TTS');
-        }
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
         const audioBlob = await response.blob();
-        const audioUrl = URL.createObjectURL(audioBlob);
-
-        return audioUrl;
+        return URL.createObjectURL(audioBlob);
     } catch (error) {
-        console.error('Error al generar audio local:', error);
-        mostrarNotificacion('⚠️ Error en TTS local, usando TTS del navegador');
-        servidorTTSDisponible = false;
+        console.error('[TTS] Error al generar audio local:', error);
+        if (!silencioso) mostrarNotificacion('⚠️ Error puntual en TTS local');
+        // NO se desactiva servidorTTSDisponible — puede ser error transitorio
         return null;
     }
 }
 
-// Reproducir audio con la API local
-async function leerOracionLocal(index) {
+// ─── PRE-FETCH CACHE ───
+// Mapa index → Promise<audioUrl|null> para oraciones pre-generadas en background.
+// Se limpia al detener/iniciar TTS para liberar URLs de objeto.
+const _ttsAudioCache = new Map();
+
+function _preFetchOracion(index) {
+    if (index < 0 || index >= sentences.length) return;
+    if (_ttsAudioCache.has(index)) return;
+    // No pre-fetch mientras hay una exportación en curso (el servidor está ocupado)
+    if (typeof _expCancelled !== 'undefined' && window._exportEnCurso) return;
+    const promise = generarAudioLocal(sentences[index], { silencioso: true }).catch(() => null);
+    _ttsAudioCache.set(index, promise);
+}
+
+async function _limpiarTTSCache() {
+    for (const [, promise] of _ttsAudioCache) {
+        const url = await promise.catch(() => null);
+        if (url) URL.revokeObjectURL(url);
+    }
+    _ttsAudioCache.clear();
+}
+
+// Reproducir audio con la API local — con pre-fetch lookahead de 2 oraciones
+async function leerOracionLocal(index, audioUrlPreGenerada) {
     if (index >= sentences.length) {
         detenerTTS();
         mostrarNotificacion('Lectura completada');
@@ -66,32 +102,45 @@ async function leerOracionLocal(index) {
 
     currentSentenceIndex = index;
     actualizarProgreso();
+    resaltarOracion(index);
     if (typeof actualizarSlideAI === 'function') actualizarSlideAI(index);
-    // ── Smart image rotation every N sentences ──
     if (typeof smartRotCheck === 'function') smartRotCheck(index);
 
-    const texto = sentences[index];
-    mostrarNotificacion(`Generando audio ${index + 1}/${sentences.length}...`);
+    // Arrancar pre-fetch de las 2 siguientes oraciones inmediatamente
+    _preFetchOracion(index + 1);
+    _preFetchOracion(index + 2);
 
-    const audioUrl = await generarAudioLocal(texto);
+    // Obtener audio: usar el pre-generado si viene, sacar de cache, o generar ahora
+    let audioUrl = audioUrlPreGenerada ?? null;
+    if (!audioUrl) {
+        if (_ttsAudioCache.has(index)) {
+            // Ya estaba en vuelo desde un pre-fetch anterior — esperar
+            audioUrl = await _ttsAudioCache.get(index);
+        } else {
+            // Primera oración o cache miss: generar ahora
+            mostrarNotificacion(`Generando audio ${index + 1}/${sentences.length}...`);
+            _preFetchOracion(index);
+            audioUrl = await _ttsAudioCache.get(index);
+        }
+    }
+    _ttsAudioCache.delete(index); // liberar entrada una vez que tenemos la URL
 
     if (!audioUrl) {
-        // Fallback al TTS del navegador
         leerOracion(index);
         return;
     }
 
     audioActual = new Audio(audioUrl);
 
-    // Aplicar configuración de volumen
+    if (typeof _rec_connectAudioElement === 'function') {
+        _rec_connectAudioElement(audioActual);
+    }
+
     audioActual.volume = parseFloat(document.getElementById('volume-control').value) / 100;
 
-    // Capturar el token de sesión actual: si detenerTTS() se llama antes de que este
-    // callback dispare, el token habrá cambiado y el onended no hará nada (evita race condition)
     const miSesionTTS = _ttsSessionToken;
-    audioActual.onended = function () {
+    audioActual.onended = async function () {
         URL.revokeObjectURL(audioUrl);
-        // Verificar que la sesión TTS sigue siendo la misma (no se llamó detenerTTS() entretanto)
         if (miSesionTTS !== _ttsSessionToken) return;
         if (isReading && !isPaused) {
             const next = index + 1;
@@ -99,7 +148,13 @@ async function leerOracionLocal(index) {
                 detenerTTS();
                 _avanzarSiguienteCapituloAuto();
             } else {
-                leerOracionLocal(next);
+                // Pasar el audio ya pre-generado directamente para eliminar la pausa
+                let nextUrl = null;
+                if (_ttsAudioCache.has(next)) {
+                    nextUrl = await _ttsAudioCache.get(next);
+                    _ttsAudioCache.delete(next);
+                }
+                leerOracionLocal(next, nextUrl);
             }
         }
     };
@@ -107,7 +162,6 @@ async function leerOracionLocal(index) {
     audioActual.onerror = function (e) {
         console.error('Error al reproducir audio:', e);
         URL.revokeObjectURL(audioUrl);
-        // Fallback al TTS del navegador
         leerOracion(index);
     };
 
@@ -192,10 +246,22 @@ function dividirEnOraciones(texto) {
         oraciones.forEach(o => todasLasOraciones.push(o));
     });
 
-    // Limpiar: quitar espacios y comillas sueltas al inicio (preservar — de diálogo)
+    // Limpiar: quitar espacios y TODOS los tipos de comillas sueltas al inicio y final
     return todasLasOraciones
-        .map(o => o.trim().replace(/^[\s\u2018\u2019\u201C\u201D\u00AB\u00BB\'\u2013-]+/, '').trimStart())
-        .filter(o => o.length > 0);
+        .map(o => o.trim()
+            // Quitar comillas y símbolos al INICIO (incluyendo " recto U+0022 y todas las tipográficas)
+            .replace(/^[\s\u0022\u2018\u2019\u201C\u201D\u00AB\u00BB\'\u2013\u2014\-]+/, '')
+            // Quitar comillas y símbolos al FINAL también
+            .replace(/[\s\u0022\u2018\u2019\u201C\u201D\u00AB\u00BB\u2013]+$/, '')
+            .trimStart()
+        )
+        // Descartar oraciones que son solo símbolos o tienen menos de 2 caracteres reales
+        .filter(o => {
+            if (o.length === 0) return false;
+            // Eliminar si el contenido real (letras/dígitos) es menor a 2 caracteres
+            const soloTexto = o.replace(/[^\p{L}\p{N}]/gu, '');
+            return soloTexto.length >= 2;
+        });
 }
 
 // ─── TTS ENGINE — estado, progreso, highlight ───
@@ -205,6 +271,7 @@ function actualizarEstadoTTS(estado) {
     const btnPause = document.getElementById('btn-pause');
     const btnResume = document.getElementById('btn-resume');
     const btnStop = document.getElementById('btn-stop');
+    const kBtn = document.getElementById('kbtn-playpause');
 
     switch (estado) {
         case 'reproduciendo':
@@ -213,6 +280,7 @@ function actualizarEstadoTTS(estado) {
             btnPlay.disabled = false;
             btnPlay.textContent = '⏸';
             btnStop.disabled = false;
+            if (kBtn) { kBtn.innerHTML = '⏸'; kBtn.classList.remove('paused'); }
             break;
         case 'pausado':
             statusEl.textContent = '⏸️ En pausa';
@@ -220,6 +288,7 @@ function actualizarEstadoTTS(estado) {
             btnPlay.disabled = false;
             btnPlay.textContent = '▶';
             btnStop.disabled = false;
+            if (kBtn) { kBtn.innerHTML = '&#9654;'; kBtn.classList.add('paused'); }
             break;
         case 'detenido':
             statusEl.textContent = '⏹️ Detenido';
@@ -227,6 +296,7 @@ function actualizarEstadoTTS(estado) {
             btnPlay.disabled = false;
             btnPlay.textContent = '▶';
             btnStop.disabled = true;
+            if (kBtn) { kBtn.innerHTML = '&#9654;'; kBtn.classList.remove('paused'); }
             break;
     }
 }
@@ -362,14 +432,10 @@ function iniciarTTS() {
         abrirvideo();
     }
 
-    // Usar API local si está disponible
-    if (servidorTTSDisponible) {
-        mostrarNotificacion('🎤 Usando TTS Local (XTTS v2)');
-        leerOracionLocal(0);
-    } else {
-        mostrarNotificacion('🔊 Usando TTS del navegador');
-        leerOracion(0);
-    }
+    // Siempre usar TTS del navegador para reproducción en vivo.
+    // XTTS (leerOracionLocal) queda reservado exclusivamente para exportar video.
+    mostrarNotificacion('🔊 Reproduciendo...');
+    leerOracion(0);
 }
 
 // Envuelve cada oración en un <span> para resaltarla durante el TTS
@@ -401,16 +467,7 @@ function envolverOracionesEnSpans(contenedor, oraciones) {
 
 // ─── TTS ENGINE — pausa, reanuda, detiene, auto-siguiente capítulo ───
 function pausarTTS() {
-    if (servidorTTSDisponible && audioActual) {
-        // Pausar audio local
-        if (!audioActual.paused) {
-            audioActual.pause();
-            isPaused = true;
-            actualizarEstadoTTS('pausado');
-            mostrarNotificacion('Lectura pausada');
-        }
-    } else if (synth.speaking && !synth.paused) {
-        // Pausar TTS del navegador
+    if (synth.speaking && !synth.paused) {
         synth.pause();
         isPaused = true;
         actualizarEstadoTTS('pausado');
@@ -419,31 +476,24 @@ function pausarTTS() {
 }
 
 function reanudarTTS() {
-    if (servidorTTSDisponible && audioActual) {
-        if (audioActual.paused) {
-            audioActual.play();
-            isPaused = false;
-            actualizarEstadoTTS('reproduciendo');
-        }
-    } else {
-        // Chrome tiene un bug con synth.resume() — relanzar desde la oración actual
-        // Guardar índice ANTES de cancel() porque cancel() puede disparar onend
-        const indiceActual = currentSentenceIndex;
-        isPaused = false;
-        isReading = true;
-        synth.cancel();
-        // Pequeño delay para que Chrome procese el cancel antes de hablar
-        setTimeout(() => {
-            currentSentenceIndex = indiceActual;
-            actualizarEstadoTTS('reproduciendo');
-            leerOracion(indiceActual);
-        }, 150);
-    }
+    // Chrome tiene un bug con synth.resume() — relanzar desde la oración actual
+    const indiceActual = currentSentenceIndex;
+    isPaused = false;
+    isReading = true;
+    synth.cancel();
+    setTimeout(() => {
+        currentSentenceIndex = indiceActual;
+        actualizarEstadoTTS('reproduciendo');
+        leerOracion(indiceActual);
+    }, 150);
 }
 
 function detenerTTS() {
     // Invalidar cualquier onended pendiente antes de detener
     _ttsSessionToken++;
+
+    // Limpiar cache de pre-fetch (libera URLs de objeto pendientes en background)
+    _limpiarTTSCache();
 
     // Detener audio local si existe
     if (audioActual) {
@@ -488,12 +538,42 @@ async function _avanzarSiguienteCapituloAuto() {
         return;
     }
 
-    const siguienteRuta = opts[idx + 1].value;
-
     // Solo avanzar automáticamente si estamos en modo video
     const enModoVideo = typeof videoActive !== 'undefined' && videoActive;
     if (!enModoVideo) {
         mostrarNotificacion('✓ Capítulo finalizado');
+        return;
+    }
+
+    // Buscar el siguiente capítulo con contenido textual real (saltear vacíos)
+    let siguienteIdx = idx + 1;
+    let siguienteRuta = null;
+    while (siguienteIdx < opts.length) {
+        const ruta = opts[siguienteIdx].value;
+        // Verificar si el capítulo tiene texto real
+        let tieneContenido = false;
+        if (typeof archivosHTML !== 'undefined' && archivosHTML[ruta]) {
+            try {
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(archivosHTML[ruta], 'text/html');
+                const cuerpo = doc.body.cloneNode(true);
+                cuerpo.querySelectorAll('script,style,nav,header,footer').forEach(e => e.remove());
+                const textoRaw = cuerpo.textContent.trim();
+                tieneContenido = textoRaw.length > 80; // más de 80 chars = capítulo real
+            } catch (e) { tieneContenido = true; } // si hay error, intentar de todos modos
+        } else {
+            tieneContenido = true; // no podemos verificar, asumir que tiene contenido
+        }
+        if (tieneContenido) {
+            siguienteRuta = ruta;
+            break;
+        }
+        console.log(`[autoNext] Capítulo vacío saltado: ${opts[siguienteIdx].text}`);
+        siguienteIdx++;
+    }
+
+    if (!siguienteRuta) {
+        mostrarNotificacion('✓ Lectura completada');
         return;
     }
 
@@ -504,120 +584,21 @@ async function _avanzarSiguienteCapituloAuto() {
     sel.value = siguienteRuta;
     window._cargandoProgramaticamente = false;
 
-    // Actualizar título e índice en el visor
-    const optSig = opts[idx + 1];
+    // Actualizar título en header, visor, chip del selector colapsado e índice
+    const optSig = opts[siguienteIdx];
     if (optSig) {
+        const label = optSig.textContent.trim();
         const titleEl = document.getElementById('current-chapter-title');
-        if (titleEl) titleEl.textContent = optSig.textContent;
+        if (titleEl) titleEl.textContent = label;
         const capEl = document.getElementById('kp-chapter');
-        if (capEl) capEl.textContent = optSig.textContent;
+        if (capEl) capEl.textContent = label;
+        // Actualizar el chip del selector colapsado
+        const chipText = document.getElementById('chapter-active-chip-text');
+        if (chipText) chipText.textContent = label;
     }
     if (typeof actualizarIndicevideo === 'function') actualizarIndicevideo();
 
     // Cargar y reproducir — marcar como navegación intencional para auto-play
     window._navegacionIntencionada = true;
     await cargarCapitulo(siguienteRuta);
-}
-
-
-// ═══════════════════════════════════════
-// GRABACIÓN DE AUDIO (TTS + Música)
-// ═══════════════════════════════════════
-
-// GRABACIÓN DE AUDIO (TTS + Música)
-// ═══════════════════════════════════════
-
-let mediaRecorder = null;
-let grabacionChunks = [];
-let grabando = false;
-let destinationNode = null;
-let audioCtxGrab = null;
-
-async function toggleGrabacion() {
-    if (grabando) {
-        detenerGrabacion();
-    } else {
-        iniciarGrabacion();
-    }
-}
-
-async function iniciarGrabacion() {
-    try {
-        // Crear AudioContext compartido para mezclar TTS + música
-        audioCtxGrab = getAudioCtx();
-
-        const dest = audioCtxGrab.createMediaStreamDestination();
-        destinationNode = dest;
-
-        // Conectar música ambiental al stream de grabación
-        // Guard: ambientGainNode puede ser null si player.js no cargó o no hay música activa
-        if (typeof ambientGainNode !== 'undefined' && ambientGainNode) {
-            ambientGainNode.connect(dest);
-        }
-
-        // Para TTS del navegador necesitamos capturar el audio del sistema
-        // Usamos un approach mixto: capturamos pantalla con audio del sistema
-        let stream;
-        try {
-            stream = await navigator.mediaDevices.getDisplayMedia({
-                video: false,
-                audio: { systemAudio: 'include' }
-            });
-            // Mezclar con la música del AudioContext
-            const sysSource = audioCtxGrab.createMediaStreamSource(stream);
-            sysSource.connect(dest);
-        } catch (e) {
-            // Fallback: solo audio del AudioContext (música sin TTS si no hay permiso)
-            stream = dest.stream;
-            mostrarNotificacion('⚠ Solo se grabará la música (permite audio del sistema para incluir voz)');
-        }
-
-        // Combinar streams
-        const tracks = [...dest.stream.getTracks()];
-        if (stream && stream.getAudioTracks) {
-            stream.getAudioTracks().forEach(t => tracks.push(t));
-        }
-        const combinedStream = new MediaStream(tracks);
-
-        grabacionChunks = [];
-        mediaRecorder = new MediaRecorder(combinedStream, { mimeType: 'audio/webm' });
-        mediaRecorder.ondataavailable = e => { if (e.data.size > 0) grabacionChunks.push(e.data); };
-        mediaRecorder.onstop = descargarAudio;
-        mediaRecorder.start(100);
-
-        grabando = true;
-        const btn = document.getElementById('btn-rec-audio');
-        btn.classList.add('recording');
-        btn.querySelector('#rec-dot').textContent = '⏹';
-        btn.childNodes[1].textContent = ' Detener grabación';
-        mostrarNotificacion('🔴 Grabando...');
-
-    } catch (e) {
-        console.error('Error al iniciar grabación:', e);
-        mostrarNotificacion('⚠ Error al iniciar grabación');
-    }
-}
-
-function detenerGrabacion() {
-    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-        mediaRecorder.stop();
-    }
-    grabando = false;
-    const btn = document.getElementById('btn-rec-audio');
-    btn.classList.remove('recording');
-    btn.querySelector('#rec-dot').textContent = '⏺';
-    btn.childNodes[1].textContent = ' Grabar audio';
-    mostrarNotificacion('💾 Procesando audio...');
-}
-
-function descargarAudio() {
-    const blob = new Blob(grabacionChunks, { type: 'audio/webm' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    const capitulo = document.getElementById('current-chapter-title').textContent || 'lectura';
-    a.download = `${capitulo.replace(/[^a-zA-Z0-9]/g, '_')}_audio.webm`;
-    a.click();
-    URL.revokeObjectURL(url);
-    mostrarNotificacion('✓ Audio descargado');
 }
