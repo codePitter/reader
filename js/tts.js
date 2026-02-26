@@ -67,6 +67,8 @@ async function leerOracionLocal(index) {
     currentSentenceIndex = index;
     actualizarProgreso();
     if (typeof actualizarSlideAI === 'function') actualizarSlideAI(index);
+    // ── Smart image rotation every N sentences ──
+    if (typeof smartRotCheck === 'function') smartRotCheck(index);
 
     const texto = sentences[index];
     mostrarNotificacion(`Generando audio ${index + 1}/${sentences.length}...`);
@@ -267,6 +269,8 @@ function leerOracion(index) {
     actualizarProgreso();
     resaltarOracion(index);
     if (typeof actualizarSlideAI === 'function') actualizarSlideAI(index);
+    // ── Smart image rotation every N sentences ──
+    if (typeof smartRotCheck === 'function') smartRotCheck(index);
 
     utterance = new SpeechSynthesisUtterance(sentences[index]);
 
@@ -327,6 +331,8 @@ function iniciarTTS() {
     currentSentenceIndex = 0;
     isReading = true;
     isPaused = false;
+    // ── Activar rotación inteligente de imágenes ──
+    if (typeof iniciarSmartRot === 'function') iniciarSmartRot();
 
     // Envolver cada oración en un <span> para poder resaltarla
     envolverOracionesEnSpans(contenido, sentences);
@@ -453,6 +459,9 @@ function detenerTTS() {
     isPaused = false;
     currentSentenceIndex = 0;
     actualizarEstadoTTS('detenido');
+    // ── Detener rotación inteligente de imágenes ──
+    if (typeof detenerSmartRot === 'function') detenerSmartRot();
+    if (typeof limpiarReaderBg === 'function') limpiarReaderBg();
     document.getElementById('progress-fill').style.width = '0%';
     // Quitar resaltado
     document.querySelectorAll('.tts-sentence').forEach(el => el.classList.remove('tts-active'));

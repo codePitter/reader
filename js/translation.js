@@ -244,17 +244,45 @@ ${bloque}`;
 // independientemente del humanizador IA, como primera y última línea de defensa
 function _sanitizarParaTTS(texto) {
     return texto
-        .replace(/\*\*([^*]+)\*\*/g, '$1')          // **negrita** → texto
+        // ── Markdown / negrita / cursiva ──
+        .replace(/\*\*([^*]+)\*\*/g, '$1')           // **negrita** → texto
         .replace(/\*([^*]+)\*/g, '$1')               // *cursiva* → texto
-        .replace(/^#{1,6}\s+/gm, '')                 // encabezados markdown
+        .replace(/^#{1,6}\s+/gm, '')                 // ## encabezados markdown
+        .replace(/_([^_]+)_/g, '$1')                 // _énfasis_ markdown
+
+        // ── Comillas → guión de diálogo ──
         .replace(/"([^"]+)"/g, '—$1')               // "diálogo" → —diálogo
         .replace(/\u201C([^\u201D]+)\u201D/g, '—$1') // "diálogo" tipográfico
-        .replace(/\u2018([^\u2019]+)\u2019/g, '$1')  // 'comillas simples' tipográficas
-        .replace(/ \| /g, ', ')                      // pipe → coma
-        .replace(/_([^_]+)_/g, '$1')                 // _énfasis_ markdown
-        .replace(/\*+/g, '')                         // asteriscos sueltos restantes
-        .replace(/  +/g, ' ')                        // espacios dobles
-        .replace(/\n{3,}/g, '\n\n')                  // saltos múltiples
+        .replace(/\u2018([^\u2019]+)\u2019/g, '$1')  // 'comillas simples'
+        .replace(/\u00AB([^\u00BB]+)\u00BB/g, '—$1') // «guillemets» → —diálogo
+
+        // ── Corchetes: stats [1200/6000] → "1200 de 6000", notas [1] → vacío ──
+        .replace(/\[(\d+)\]/g, '')
+        .replace(/\[(\d[\d,]*)\s*\/\s*(\d[\d,]*)\]/g, ' $1 de $2 ')
+        .replace(/\[([^\]]{1,60})\]/g, '$1')
+        .replace(/\[([^\]]{61,})\]/g, '')
+
+        // ── Paréntesis cortos → conservar sin paréntesis, largos → eliminar ──
+        .replace(/\(([^)]{1,80})\)/g, (m, c) => /^[A-Z]{2,}$/.test(c.trim()) ? '' : `, ${c},`)
+        .replace(/\([^)]{81,}\)/g, '')
+
+        // ── Símbolos sueltos problemáticos para TTS ──
+        .replace(/\*+/g, '')                          // asteriscos sueltos
+        .replace(/#{1,6}/g, '')                       // # sueltos
+        .replace(/[`´¨~^]/g, '')                      // backticks y diacríticos especiales
+        .replace(/\u2026/g, '... ')                   // … → tres puntos
+        .replace(/—{2,}/g, '—')                       // —— múltiples → uno
+        .replace(/-{3,}/g, '—')                       // --- → guión largo
+        .replace(/\/{2,}/g, ' ')                      // // → espacio
+        .replace(/\\+/g, ' ')                         // \ → espacio
+        .replace(/ \| /g, ', ')                       // pipe espaciado → coma
+        .replace(/\|/g, ' ')                          // pipe suelto → espacio
+        .replace(/<[^>]+>/g, '')                      // tags HTML residuales
+        .replace(/&[a-z]+;/gi, ' ')                   // entidades HTML
+
+        // ── Espaciado y saltos ──
+        .replace(/  +/g, ' ')
+        .replace(/\n{3,}/g, '\n\n')
         .trim();
 }
 
@@ -703,6 +731,10 @@ async function _preTradducirCapitulo(ruta) {
                 texto = await naturalizarTextoParaTTS(texto);
                 if (miToken !== _bgCancelToken) return;
             }
+            // ── Sanitización local SIEMPRE — elimina símbolos problemáticos
+            // independientemente de si el humanizador IA está activo o no ──
+            console.log(`🧹 [BG] Sanitizando símbolos: ${nombre}`);
+            texto = _sanitizarParaTTS(texto);
         } finally {
             _traduccionEnBackground = false;
         }

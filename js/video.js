@@ -152,10 +152,8 @@ function abrirvideo() {
         // Si ya hay sentences cargadas, solicitar inmediatamente; si no, esperar
         const hayTexto = typeof sentences !== 'undefined' && sentences && sentences.length > 0;
         if (hayTexto) {
-            setTimeout(() => {
-                solicitarImagenParaSlot(0);
-                setTimeout(() => solicitarImagenParaSlot(1), 200);
-            }, 30);
+            // Solo solicitar slot 0 al abrir — el smart pool cambia imágenes por frases
+            setTimeout(() => solicitarImagenParaSlot(0), 30);
         }
     }
 
@@ -573,6 +571,29 @@ function getStyleTag() {
     return AI_DEFAULT_STYLE;
 }
 
+// ── Filtro escala de grises para fondos de imagen ──
+let _grayscaleActive = false;
+
+function toggleImageGrayscale() {
+    _grayscaleActive = !_grayscaleActive;
+    const btn = document.getElementById('btn-toggle-grayscale');
+    _aplicarFiltroGrayscale(_grayscaleActive);
+    btn?.classList.toggle('gs-active', _grayscaleActive);
+    if (btn) btn.textContent = _grayscaleActive ? '🎨 Color' : '⬜ B&W';
+}
+
+// Aplica o quita el filtro de grises en todos los contenedores de imagen
+function _aplicarFiltroGrayscale(activo) {
+    const filtro = activo
+        ? 'grayscale(1) brightness(0.82) contrast(1.12)'
+        : 'grayscale(0) brightness(1) contrast(1)';
+    const ids = ['ai-bg-a', 'ai-bg-b', 'reader-bg-a', 'reader-bg-b'];
+    ids.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.filter = filtro;
+    });
+}
+
 function toggleAIImages() {
     aiImagesEnabled = !aiImagesEnabled;
     const btn = document.getElementById('btn-toggle-ai-img');
@@ -586,9 +607,8 @@ function toggleAIImages() {
         aiCurrentSlot = -1;
         aiActivePanel = 'a';
         const slot = getSlotForSentence(typeof currentSentenceIndex !== 'undefined' ? currentSentenceIndex : 0);
+        // Solo el slot actual — smart pool maneja la rotación por frases
         solicitarImagenParaSlot(slot);
-        setTimeout(() => solicitarImagenParaSlot(slot + 1), 800);
-        setTimeout(() => solicitarImagenParaSlot(slot + 2), 1600);
     } else {
         btn.classList.remove('ai-active');
         btn.textContent = '🖼 IA Imágenes';
@@ -1356,11 +1376,11 @@ async function solicitarImagenParaSlot(slot) {
     // ── PASO 2: si hay proveedor real, intentarlo en background y reemplazar si funciona ──
     if (imageProvider === 'procedural') return; // solo procedural, listo
 
-    // Pixabay / Picsum (imágenes web reales — no IA generativa)
+    // Pixabay / Picsum — usa smart pool con scoring y debounce
+    // Pasamos el PROMPT enriquecido (ya tiene escena, personajes, ambiente)
+    // en vez del fragmento crudo — mejora mucho el scoring de afinidad
     if (imageProvider === 'pixabay') {
-        if (typeof buscarYAplicarFondoPixabay === 'function') {
-            buscarYAplicarFondoPixabay(slot, fragmento);
-        }
+        _pixabaySlotDebounced(slot, prompt);
         return;
     }
 
@@ -1441,10 +1461,9 @@ function actualizarSlideAI(sentenceIdx) {
     const slotActual = getSlotForSentence(sentenceIdx);
     solicitarImagenParaSlot(slotActual);
 
-    // Pre-cargar slots siguientes SOLO si el proveedor es lento (no procedural)
-    // Para procedural, el render es instantáneo y pre-cargar causa que la imagen
-    // cambie antes de que el TTS llegue al fragmento correspondiente
-    if (imageProvider !== 'procedural') {
+    // Pre-cargar slots siguientes SOLO para proveedores lentos (IA generativa)
+    // Para pixabay con smart pool no es necesario — la rotación es por frases
+    if (imageProvider !== 'procedural' && imageProvider !== 'pixabay') {
         setTimeout(() => solicitarImagenParaSlot(slotActual + 1), 2000);
         setTimeout(() => solicitarImagenParaSlot(slotActual + 2), 4000);
     }

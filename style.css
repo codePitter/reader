@@ -825,10 +825,7 @@ input[type="text"] {
     z-index: 100;
     overflow: hidden;
     box-shadow: 4px -4px 20px rgba(0,0,0,0.4);
-    transition: opacity 0.5s ease, bottom 0.4s ease;
-    /* Flex column-reverse: header stays at bottom, body grows upward */
-    display: flex;
-    flex-direction: column-reverse;
+    transition: transform 0.4s ease, opacity 0.5s ease, bottom 0.4s ease;
 }
 
     /* Translúcido cuando está reproduciendo */
@@ -845,12 +842,8 @@ input[type="text"] {
         bottom: 104px;
     }
 
-    /* Collapsed: body has zero height (tray closed) */
     #ambient-player.collapsed .ambient-body {
-        max-height: 0 !important;
-        padding-top: 0 !important;
-        padding-bottom: 0 !important;
-        overflow: hidden;
+        display: none;
     }
 
 .ambient-header {
@@ -860,11 +853,8 @@ input[type="text"] {
     padding: 10px 14px;
     cursor: pointer;
     background: var(--surface2);
-    /* Border now on TOP since header is visually at bottom */
-    border-top: 1px solid var(--border);
-    border-bottom: none;
+    border-bottom: 1px solid var(--border);
     user-select: none;
-    flex-shrink: 0;
 }
 
 .ambient-header-left {
@@ -951,9 +941,6 @@ input[type="text"] {
 
 .ambient-body {
     padding: 14px;
-    max-height: 600px; /* large enough for content */
-    overflow: hidden;
-    transition: max-height 0.45s cubic-bezier(0.4, 0, 0.2, 1), padding 0.45s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .ambient-genres {
@@ -3092,4 +3079,25 @@ input[type="text"] {
     font-family: 'DM Mono',monospace;
     font-size: 0.65rem;
     color: var(--text-dim);
+}
+
+/* ── Filtro de escala de grises para imágenes de fondo ── */
+.grayscale-bg #ai-bg-a,
+.grayscale-bg #ai-bg-b,
+.grayscale-bg #reader-bg-a,
+.grayscale-bg #reader-bg-b {
+    filter: grayscale(1) brightness(0.85) contrast(1.1);
+    transition: filter 0.6s ease, opacity 1.8s ease;
+}
+
+/* Sin filtro: transición suave al quitar */
+#ai-bg-a, #ai-bg-b, #reader-bg-a, #reader-bg-b {
+    filter: grayscale(0) brightness(1) contrast(1);
+    transition: filter 0.6s ease, opacity 1.8s ease;
+}
+
+#btn-toggle-grayscale.gs-active {
+    border-color: var(--text-dim) !important;
+    color: var(--text) !important;
+    background: rgba(255,255,255,0.06) !important;
 }

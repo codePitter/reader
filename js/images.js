@@ -108,6 +108,32 @@ function construirQueryImagen(universo, textoCapitulo = '') {
 // BÚSQUEDA EN PIXABAY
 // ═══════════════════════════════════════
 
+// Wrapper para búsquedas del smart pool: añade términos de exclusión al query
+async function _buscarSinPersonas(query, page, perPage) {
+    // Pixabay no soporta exclusión directa por categoría en la API gratuita,
+    // pero podemos appender términos negativos y usar category=backgrounds
+    const safeQuery = query + ' -person -people -portrait';
+    const url = new URL(PIXABAY_API_BASE);
+    url.searchParams.set('key', _pixabayKey);
+    url.searchParams.set('q', safeQuery);
+    url.searchParams.set('image_type', 'photo');
+    url.searchParams.set('orientation', 'horizontal');
+    url.searchParams.set('safesearch', 'true');
+    url.searchParams.set('per_page', perPage);
+    url.searchParams.set('page', page);
+    url.searchParams.set('min_width', '1280');
+    url.searchParams.set('order', 'popular');
+    // category=backgrounds filtra hacia fondos/paisajes
+    url.searchParams.set('category', 'backgrounds');
+    try {
+        const res = await fetch(url.toString());
+        if (!res.ok) return { hits: [] };
+        return await res.json();
+    } catch (e) {
+        return { hits: [] };
+    }
+}
+
 async function buscarImagenesPixabay(query, page = 1, perPage = 12) {
     if (!_pixabayKey) {
         throw new Error('NO_KEY');
@@ -287,29 +313,10 @@ function detenerAutoRotacionFondo() {
 
 function _aplicarSiguienteFondoWeb() {
     if (_autoRotPool.length === 0) return;
-
     const url = _autoRotPool[_autoRotPoolIdx % _autoRotPool.length];
     _autoRotPoolIdx++;
-
-    // Si el video overlay usa mostrarImagenEnPanel (video.js), lo usamos
-    if (typeof mostrarImagenEnPanel === 'function' &&
-        typeof aiImagesEnabled !== 'undefined' && !aiImagesEnabled) {
-        // Simulamos slot -1 (especial para imágenes web)
-        mostrarImagenEnPanel(-1, url);
-    } else {
-        // Fallback: aplicar directamente en los divs ai-bg-a/b
-        const panelA = document.getElementById('ai-bg-a');
-        const panelB = document.getElementById('ai-bg-b');
-        const overlay = document.getElementById('ai-bg-overlay');
-        if (panelA) {
-            panelA.style.backgroundImage = `url("${url}")`;
-            panelA.style.backgroundSize = 'cover';
-            panelA.style.backgroundPosition = 'center';
-            panelA.style.opacity = '1';
-        }
-        if (panelB) panelB.style.opacity = '0';
-        if (overlay) overlay.style.background = 'rgba(8,7,6,0.45)';
-    }
+    // Reutilizar la función unificada con crossfade
+    _aplicarUrlImagen(url);
 }
 
 // Se llama desde video.js cuando se activa el modo video
@@ -774,4 +781,470 @@ function guardarPixabayKeyVideo() {
     // Limpiar pool para que se recargue con la nueva key
     _pixabayPoolShared = [];
     if (typeof precalentarPoolPixabay === 'function') precalentarPoolPixabay();
+}
+// ═══════════════════════════════════════════════════════════════════
+// SISTEMA INTELIGENTE DE IMÁGENES
+// Pool grande (200 imgs) persistido en localStorage, scoring por tags
+// y rotación automática cada N frases durante el TTS
+// ═══════════════════════════════════════════════════════════════════
+
+// ─── SMART POOL ───
+const SMART_POOL_KEY = 'pixabay_smart_pool';
+const SMART_POOL_TTL = 24 * 60 * 60 * 1000; // 24 horas en ms
+const SMART_POOL_SIZE = 1500;                 // ~7 queries × 200 imgs + filtrado
+const SMART_ROT_EVERY = 25;                   // cambiar imagen cada N frases
+
+let _smartPool = [];   // [{ url, tags, query }] — cargado desde localStorage o API
+let _smartPoolLoaded = false;
+let _smartRotSentence = 0;    // última frase en la que se rotó
+let _smartRotActive = false;
+
+// ─── PERSISTENCIA ───
+function _saveSmartPool() {
+    try {
+        const payload = { ts: Date.now(), pool: _smartPool };
+        localStorage.setItem(SMART_POOL_KEY, JSON.stringify(payload));
+    } catch (e) { console.warn('[smartPool] localStorage lleno:', e.message); }
+}
+
+function _loadSmartPool() {
+    try {
+        const raw = localStorage.getItem(SMART_POOL_KEY);
+        if (!raw) return false;
+        const { ts, pool } = JSON.parse(raw);
+        if (Date.now() - ts > SMART_POOL_TTL) return false;   // expirado
+        if (!Array.isArray(pool) || pool.length === 0) return false;
+        _smartPool = pool;
+        _smartPoolLoaded = true;
+        console.log(`[smartPool] Cargado desde localStorage: ${pool.length} imágenes`);
+        return true;
+    } catch (e) { return false; }
+}
+
+// ─── FILTRO DE PERSONAS ───
+// Tags de Pixabay que indican presencia de seres humanos
+const _HUMAN_TAGS = new Set([
+    // Personas directas
+    'person', 'people', 'man', 'woman', 'girl', 'boy', 'child', 'children', 'baby',
+    'human', 'face', 'portrait', 'crowd', 'couple', 'family', 'adult', 'teenager',
+    'selfie', 'model', 'athlete', 'player', 'soldier', 'monk', 'student', 'worker',
+    // Partes del cuerpo
+    'hands', 'body', 'skin', 'hair', 'eye', 'eyes', 'smile', 'lips', 'nose', 'mouth',
+    // Siluetas y figuras (capturan "hooded figure", etc.)
+    'silhouette', 'shadow person', 'figure', 'hood', 'costume', 'dress', 'suit',
+    // Lifestyle/moda
+    'fashion', 'lifestyle', 'makeup', 'beauty', 'fitness', 'yoga', 'meditation',
+    // Grupos
+    'team', 'group', 'meeting', 'office', 'business', 'wedding', 'party'
+]);
+
+function _tienePersonas(tagsStr) {
+    return tagsStr.split(',').map(t => t.trim()).some(t => _HUMAN_TAGS.has(t));
+}
+
+// ─── CONSTRUCCIÓN DEL POOL ───
+// Hace múltiples queries (una por universo + queries del universo actual)
+// para llenar el pool con variedad y guardar en localStorage
+async function construirSmartPool(forzar = false) {
+    if (_smartPoolLoaded && !forzar) return;
+    if (!_pixabayKey) {
+        // Sin key: usar Picsum con metadatos ficticios
+        _smartPool = generarUrlsPicsum(60).map((url, i) => ({
+            url,
+            tags: ['ambient', 'nature', 'landscape'],
+            query: 'picsum'
+        }));
+        _smartPoolLoaded = true;
+        return;
+    }
+
+    // Intentar desde localStorage primero
+    if (!forzar && _loadSmartPool()) return;
+
+    const universo = (typeof aiDetectedUniverse !== 'undefined' && aiDetectedUniverse)
+        ? aiDetectedUniverse : '_default';
+
+    // Todas las queries: universo actual + todos los demás universos + genéricas
+    // Cada query se pagina (hasta 3 páginas × 200 imgs = 600 por query)
+    const universoQueries = UNIVERSE_IMAGE_QUERIES[universo] || UNIVERSE_IMAGE_QUERIES._default;
+    const otrosUniversos = Object.entries(UNIVERSE_IMAGE_QUERIES)
+        .filter(([k]) => k !== universo && k !== '_default')
+        .flatMap(([, qs]) => qs.slice(0, 2));  // 2 queries de cada universo extra
+    const genericas = UNIVERSE_IMAGE_QUERIES._default;
+
+    const queries = [...new Set([...universoQueries, ...otrosUniversos, ...genericas])];
+
+    const poolTemp = [];
+    const seenIds = new Set();
+    let requestCount = 0;
+    const MAX_REQUESTS = 25;  // techo conservador: 25 × 200 = 5000 candidatos
+
+    console.log(`[smartPool] Construyendo pool · ${queries.length} queries · universo: ${universo}`);
+
+    for (const query of queries) {
+        if (poolTemp.length >= SMART_POOL_SIZE) break;
+        if (requestCount >= MAX_REQUESTS) break;
+
+        // Pedir 200 por página (máximo Pixabay), hasta 3 páginas por query
+        for (let page = 1; page <= 3; page++) {
+            if (poolTemp.length >= SMART_POOL_SIZE) break;
+            if (requestCount >= MAX_REQUESTS) break;
+            try {
+                const data = await _buscarSinPersonas(query, page, 200);
+                requestCount++;
+                const hits = data.hits || [];
+                if (hits.length === 0) break;  // sin más páginas
+
+                for (const hit of hits) {
+                    if (seenIds.has(hit.id)) continue;
+                    const hitTags = (hit.tags || '').toLowerCase();
+                    if (_tienePersonas(hitTags)) continue;  // filtrar personas
+                    seenIds.add(hit.id);
+                    poolTemp.push({
+                        url: hit.largeImageURL || hit.webformatURL,
+                        tags: hitTags.split(',').map(t => t.trim()).filter(Boolean),
+                        query: query
+                    });
+                }
+                console.log(`[smartPool] ${query} p${page}: +${hits.length} candidatos → ${poolTemp.length} en pool`);
+
+                // Pequeña pausa entre páginas para no saturar la API
+                if (page < 3 && poolTemp.length < SMART_POOL_SIZE) {
+                    await new Promise(r => setTimeout(r, 120));
+                }
+            } catch (e) {
+                console.warn(`[smartPool] "${query}" p${page} falló:`, e.message);
+                break;
+            }
+        }
+    }
+    console.log(`[smartPool] Construido: ${poolTemp.length} imgs limpias · ${requestCount} requests usados`);
+
+    if (poolTemp.length > 0) {
+        _smartPool = poolTemp;
+        _smartPoolLoaded = true;
+        _saveSmartPool();
+        console.log(`[smartPool] Pool construido: ${_smartPool.length} imágenes`);
+    }
+}
+
+// ─── SCORING POR AFINIDAD ───
+// Extrae keywords del fragmento de texto y las compara con los tags de cada imagen
+function _generarNgramas(palabras, n) {
+    const ngramas = [];
+    for (let i = 0; i <= palabras.length - n; i++) {
+        ngramas.push(palabras.slice(i, i + n).join(' '));
+    }
+    return ngramas;
+}
+
+function _scorearImagen(img, fragmento, universo) {
+    let score = 0;
+
+    const STOPWORDS = new Set([
+        'the', 'a', 'an', 'of', 'in', 'to', 'and', 'or', 'but', 'is', 'was', 'were', 'he', 'she', 'it',
+        'they', 'his', 'her', 'their', 'this', 'that', 'with', 'for', 'on', 'at', 'by', 'from',
+        'very', 'some', 'into', 'have', 'been', 'would', 'could', 'should', 'will', 'just',
+        'el', 'la', 'los', 'las', 'de', 'del', 'en', 'un', 'una', 'con', 'por', 'para', 'se', 'que',
+        'su', 'sus', 'lo', 'le', 'al', 'y', 'o', 'no', 'si', 'me', 'te', 'nos', 'es', 'era', 'fue'
+    ]);
+
+    const promptLower = fragmento.toLowerCase();
+
+    // Palabras limpias del prompt
+    const palabras = promptLower
+        .replace(/[^a-záéíóúüña-z\s]/gi, ' ')
+        .split(/\s+/)
+        .filter(w => w.length > 2 && !STOPWORDS.has(w));
+
+    // Generar bigramas y trigramas del prompt
+    // Ej: "dark stone floor" → ["dark stone", "stone floor", "dark stone floor"]
+    const bigramas = _generarNgramas(palabras, 2);
+    const trigramas = _generarNgramas(palabras, 3);
+
+    for (const tag of img.tags) {
+        if (!tag || tag.length < 2) continue;
+
+        // +6 trigrama exacto con el tag  (máxima afinidad)
+        if (trigramas.some(t => t === tag || tag.includes(t))) { score += 6; continue; }
+
+        // +4 bigrama exacto con el tag
+        if (bigramas.some(b => b === tag || tag.includes(b))) { score += 4; continue; }
+
+        // +3 tag aparece literalmente en el prompt completo
+        if (promptLower.includes(tag)) { score += 3; continue; }
+
+        // +2 palabra exacta del prompt = tag
+        if (palabras.some(p => p === tag)) { score += 2; continue; }
+
+        // +1 match parcial (uno contiene al otro)
+        if (palabras.some(p => tag.includes(p) || p.includes(tag))) score += 1;
+    }
+
+    // +3 si el query base de la imagen pertenece al universo actual
+    const universoPalabras = (UNIVERSE_IMAGE_QUERIES[universo] || []).join(' ').toLowerCase();
+    if (img.query && universoPalabras.includes(img.query.split(' ')[0])) score += 3;
+
+    // +1 por tag del universo que aparece en los tags
+    const UNIVERSE_TAGS = {
+        fantasy_epic: ['fantasy', 'dragon', 'castle', 'magic', 'medieval', 'dark', 'forest', 'mystical'],
+        cultivation: ['chinese', 'mountain', 'fog', 'zen', 'temple', 'bamboo', 'asia', 'misty'],
+        sci_fi: ['futuristic', 'space', 'neon', 'cyberpunk', 'galaxy', 'technology', 'circuit'],
+        romance: ['romantic', 'flowers', 'sunset', 'couple', 'cozy', 'soft', 'bokeh'],
+        thriller: ['dark', 'alley', 'rain', 'night', 'mysterious', 'abandoned', 'noir', 'storm'],
+        horror: ['haunted', 'cemetery', 'gothic', 'eerie', 'shadows', 'darkness', 'abandoned'],
+        adventure: ['mountain', 'jungle', 'desert', 'ocean', 'ruins', 'exploration', 'horizon'],
+        drama: ['cinematic', 'portrait', 'rain', 'golden', 'melancholy', 'journey'],
+        _default: ['library', 'book', 'vintage', 'manuscript', 'reading', 'literary']
+    };
+    const univTags = UNIVERSE_TAGS[universo] || UNIVERSE_TAGS._default;
+    for (const utag of univTags) {
+        if (img.tags.includes(utag)) score += 1;
+    }
+
+    return score;
+}
+
+// Devuelve la URL de la imagen más afín al fragmento dado
+function seleccionarImagenAfin(fragmento) {
+    if (_smartPool.length === 0) return null;
+    const universo = (typeof aiDetectedUniverse !== 'undefined' && aiDetectedUniverse)
+        ? aiDetectedUniverse : '_default';
+
+    // Evaluar todo el pool — el scorer es O(n × tags) y es rápido incluso a 1500 imgs
+    // No usar muestra aleatoria — con pool grande queremos el mejor match real
+    const muestra = _smartPool;
+
+    let mejorScore = -1;
+    let mejorImg = muestra[0];
+    // Evitar repetir la última imagen mostrada
+    const urlAnterior = _smartPool._lastShown || '';
+
+    for (const img of muestra) {
+        if (img.url === urlAnterior) continue;  // skip la misma
+        const s = _scorearImagen(img, fragmento, universo);
+        if (s > mejorScore) {
+            mejorScore = s;
+            mejorImg = img;
+        }
+    }
+
+    if (mejorImg) _smartPool._lastShown = mejorImg.url;
+    console.log(`[smartPool] Score: ${mejorScore} · tags: [${(mejorImg?.tags || []).slice(0, 4).join(', ')}] · query: ${mejorImg?.query || '?'}`);
+    return mejorImg ? mejorImg.url : null;
+}
+
+// ─── ROTACIÓN POR FRASES (hook para TTS) ───
+// Llamar desde leerOracion / leerOracionLocal en cada frase
+
+function smartRotCheck(sentenceIndex) {
+    if (!_smartRotActive) return;
+    if (_smartPool.length === 0) return;
+
+    // Cambiar imagen cada SMART_ROT_EVERY frases
+    if (sentenceIndex === 0 || sentenceIndex - _smartRotSentence >= SMART_ROT_EVERY) {
+        _smartRotSentence = sentenceIndex;
+
+        // Obtener el fragmento de texto alrededor de las frases actuales
+        const desde = Math.max(0, sentenceIndex - 2);
+        const hasta = Math.min((typeof sentences !== 'undefined' ? sentences.length : 0) - 1, sentenceIndex + 5);
+        const fragmento = (typeof sentences !== 'undefined')
+            ? sentences.slice(desde, hasta + 1).join(' ')
+            : '';
+
+        const url = seleccionarImagenAfin(fragmento);
+        if (!url) return;
+
+        _aplicarUrlImagen(url);
+        console.log(`[smartPool] Imagen rotada en frase ${sentenceIndex} (score-based)`);
+    }
+}
+
+// ── Toggle de fondo en lector: controlado por #toggle-reader-bg ──
+let _readerBgEnabled = false;
+
+function toggleReaderBg(enabled) {
+    _readerBgEnabled = enabled;
+    if (!enabled) {
+        limpiarReaderBg();
+    } else {
+        // Si el smart pool ya tiene imágenes, mostrar una ahora
+        if (_smartPool.length > 0) {
+            const fragmento = (typeof sentences !== 'undefined' && sentences.length > 0)
+                ? sentences.slice(0, 5).join(' ') : '';
+            const url = seleccionarImagenAfin(fragmento);
+            if (url) _aplicarUrlImagenLector(url);
+        } else {
+            construirSmartPool().then(() => {
+                const url = seleccionarImagenAfin('');
+                if (url) _aplicarUrlImagenLector(url);
+            });
+        }
+    }
+}
+
+// Aplica URL solo en el lector (con crossfade A/B)
+function _aplicarUrlImagenLector(url) {
+    if (!_readerBgEnabled) return;
+    const reading = document.getElementById('reading-area');
+    if (reading) reading.classList.add('has-reader-bg');
+    _crossfadeLayer('reader-bg-a', 'reader-bg-b', url);
+}
+
+// Aplica la URL a todos los contenedores de imagen activos
+// Usa crossfade A/B para transición suave en ambos contextos
+function _aplicarUrlImagen(url) {
+    const isVideoOpen = typeof videoActive !== 'undefined' && videoActive;
+
+    if (isVideoOpen) {
+        // ── Modo video: usar ai-bg-a/b con crossfade ──
+        if (typeof mostrarImagenEnPanel === 'function' &&
+            typeof aiImagesEnabled !== 'undefined' && !aiImagesEnabled) {
+            mostrarImagenEnPanel(-1, url);
+        } else {
+            _crossfadeLayer('ai-bg-a', 'ai-bg-b', url);
+        }
+    } else {
+        // ── Lector principal: respetar toggle ──
+        _aplicarUrlImagenLector(url);
+    }
+}
+
+// Crossfade entre dos capas A/B
+function _crossfadeLayer(idA, idB, url) {
+    const layerA = document.getElementById(idA);
+    const layerB = document.getElementById(idB);
+    if (!layerA || !layerB) return;
+
+    // Determinar cuál está visible ahora
+    const aVisible = parseFloat(layerA.style.opacity || 0) > 0.5;
+    const incoming = aVisible ? layerB : layerA;
+    const outgoing = aVisible ? layerA : layerB;
+
+    // Precargar imagen antes de mostrarla
+    const img = new Image();
+    const _applyBg = (el, url) => {
+        el.style.backgroundImage = `url("${url}")`;
+        el.style.backgroundSize = 'cover';
+        el.style.backgroundPosition = 'center';
+        // Re-aplicar filtro de grises si está activo
+        if (typeof _grayscaleActive !== 'undefined' && _grayscaleActive) {
+            el.style.filter = 'grayscale(1) brightness(0.82) contrast(1.12)';
+        }
+    };
+    img.onload = () => {
+        _applyBg(incoming, url);
+        incoming.style.opacity = '1';
+        outgoing.style.opacity = '0';
+    };
+    img.onerror = () => {
+        _applyBg(incoming, url);
+        incoming.style.opacity = '1';
+        outgoing.style.opacity = '0';
+    };
+    img.src = url;
+}
+
+// ─── API PÚBLICA ───
+
+// Llama esto al iniciar TTS para activar rotación por frases
+function iniciarSmartRot() {
+    _smartRotActive = true;
+    _smartRotSentence = -SMART_ROT_EVERY; // forzar cambio en frase 0
+    // Asegurarse de tener el pool
+    if (!_smartPoolLoaded) {
+        construirSmartPool().then(() => {
+            // Mostrar la primera imagen inmediatamente
+            smartRotCheck(0);
+        });
+    } else {
+        smartRotCheck(0);
+    }
+}
+
+// Llama esto al detener TTS
+function detenerSmartRot() {
+    _smartRotActive = false;
+}
+
+// Forzar reconstrucción del pool (cuando cambia el universo detectado)
+function refrescarSmartPool() {
+    _smartPoolLoaded = false;
+    localStorage.removeItem(SMART_POOL_KEY);
+    construirSmartPool(true);
+}
+
+// ─── DEBOUNCE PARA SLOTS PIXABAY ───
+// Múltiples solicitarImagenParaSlot() pueden llegar en ráfaga al abrir el visor.
+// Este debounce colapsa todas las llamadas rápidas en una sola, usando el
+// fragmento del último slot solicitado para el scoring.
+let _pixabayDebounceTimer = null;
+let _pixabayDebounceFragment = '';
+
+function _pixabaySlotDebounced(slot, fragmento) {
+    // Acumular el fragmento (el último slot tiene el contexto más adelantado)
+    if (fragmento) _pixabayDebounceFragment = fragmento;
+
+    clearTimeout(_pixabayDebounceTimer);
+    _pixabayDebounceTimer = setTimeout(() => {
+        _pixabayDebounceTimer = null;
+        _aplicarPixabaySmart(_pixabayDebounceFragment);
+        _pixabayDebounceFragment = '';
+    }, 350);  // esperar 350ms para que lleguen todas las llamadas de la ráfaga
+}
+
+function _aplicarPixabaySmart(fragmento) {
+    if (_smartPool.length > 0) {
+        const url = seleccionarImagenAfin(fragmento);
+        if (url) {
+            console.log(`[smartPool] Prompt→imagen · "${fragmento.slice(0, 55)}"`);
+            if (typeof mostrarImagenEnPanel === 'function') {
+                mostrarImagenEnPanel(-1, url);
+            } else {
+                _crossfadeLayer('ai-bg-a', 'ai-bg-b', url);
+            }
+        }
+    } else if (_pixabayPoolShared.length > 0) {
+        // Fallback al pool viejo si el smart pool no está listo aún
+        const url = _pixabayPoolShared[_pixabayPoolSharedIdx % _pixabayPoolShared.length];
+        _pixabayPoolSharedIdx++;
+        if (typeof mostrarImagenEnPanel === 'function') {
+            mostrarImagenEnPanel(-1, url);
+        }
+    } else {
+        // Sin pool todavía — construir y luego mostrar
+        construirSmartPool().then(() => _aplicarPixabaySmart(fragmento));
+    }
+}
+
+// Inicializar: limpiar pool viejo (puede tener personas, sin filtros)
+// y reconstruir en background con los filtros actuales
+(function () {
+    try {
+        const raw = localStorage.getItem('pixabay_smart_pool');
+        if (raw) {
+            const { ts, pool } = JSON.parse(raw);
+            // Si el pool tiene imágenes con tags de personas → invalidar
+            const tieneSucios = Array.isArray(pool) && pool.some(img =>
+                Array.isArray(img.tags) && img.tags.some(t => _HUMAN_TAGS.has(t))
+            );
+            // También invalidar si es muy viejo (>2h) para recoger filtro -person
+            const esViejo = Date.now() - ts > 2 * 60 * 60 * 1000;
+            if (tieneSucios || esViejo) {
+                localStorage.removeItem('pixabay_smart_pool');
+                console.log('[smartPool] Pool invalidado — reconstruyendo con filtros...');
+            }
+        }
+    } catch (e) { }
+    _loadSmartPool();
+})();
+
+// Limpiar fondos del lector principal (llamar al detener TTS o cambiar capítulo)
+function limpiarReaderBg() {
+    const a = document.getElementById('reader-bg-a');
+    const b = document.getElementById('reader-bg-b');
+    if (a) a.style.opacity = '0';
+    if (b) b.style.opacity = '0';
+    const reading = document.getElementById('reading-area');
+    if (reading) reading.classList.remove('has-reader-bg');
 }
