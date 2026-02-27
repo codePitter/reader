@@ -476,35 +476,63 @@ async function _buscarEnOpenverse(query, page = 1) {
     }
 }
 
+// Timestamp del último intento fallido — evita reintentos en cada frase
+let _openverseLastFailTs = 0;
+const _OPENVERSE_RETRY_COOLDOWN = 60000; // 1 min entre reintentos fallidos
+
 async function _cargarPoolOpenverse(promptVisual = '') {
     if (_openversePoolCargando || _openversePoolListo) return;
+
+    // Cooldown: si el último intento falló hace menos de 1 min, no reintentar
+    const ahora = Date.now();
+    if (_openverseLastFailTs && (ahora - _openverseLastFailTs) < _OPENVERSE_RETRY_COOLDOWN) {
+        console.log(`[img] ⏳ Openverse cooldown activo — ${Math.round((_OPENVERSE_RETRY_COOLDOWN - (ahora - _openverseLastFailTs)) / 1000)}s restantes`);
+        return;
+    }
+
     _openversePoolCargando = true;
 
     const universo = (typeof aiDetectedUniverse !== 'undefined' && aiDetectedUniverse)
         ? aiDetectedUniverse : '_default';
-    // Usar queries cortas específicas para Openverse en lugar de UNIVERSE_IMAGE_QUERIES
-    // (que son multi-palabra y dan 0 resultados en el índice Elasticsearch de Openverse)
     const queries = OPENVERSE_QUERIES[universo] || OPENVERSE_QUERIES._default;
+    // Fallback: si las queries del universo fallan, usar _default
+    const queriesFallback = OPENVERSE_QUERIES._default;
 
     console.log(`[img] 🚀 Openverse pool · universo="${universo}" · queries:`, queries.slice(0, 3));
 
     const urls = [];
-    // Solo 2 requests para no agotar el límite anónimo (100/día, 5/hora)
-    const queriesToFetch = queries.slice(0, 2);
+
+    // Intentar hasta 3 queries del universo (en vez de 2)
+    const queriesToFetch = queries.slice(0, 3);
     for (const q of queriesToFetch) {
-        const page = Math.floor(Math.random() * 5) + 1; // páginas 1-5 para variedad
+        const page = Math.floor(Math.random() * 5) + 1;
         const results = await _buscarEnOpenverse(q, page);
         results.forEach(r => { if (r.urlFull) urls.push(r.urlFull); });
         console.log(`[img]   └─ "${q}" p${page} → ${results.length} imgs · acum: ${urls.length}`);
+        if (urls.length >= 15) break; // suficientes, no gastar más cuota
+    }
+
+    // Si el universo no dio resultados, intentar con queries _default como fallback
+    if (urls.length === 0 && universo !== '_default') {
+        console.warn(`[img] ⚠ Openverse: queries del universo sin resultados — intentando _default`);
+        for (const q of queriesFallback.slice(0, 2)) {
+            const page = Math.floor(Math.random() * 3) + 1;
+            const results = await _buscarEnOpenverse(q, page);
+            results.forEach(r => { if (r.urlFull) urls.push(r.urlFull); });
+            console.log(`[img]   └─ [fallback] "${q}" p${page} → ${results.length} imgs · acum: ${urls.length}`);
+            if (urls.length >= 10) break;
+        }
     }
 
     if (urls.length > 0) {
         _openversePool = _shuffleArray(urls);
         _openversePoolIdx = 0;
         _openversePoolListo = true;
+        _openverseLastFailTs = 0; // resetear cooldown
         console.log(`[img] ✓ Openverse pool listo · ${_openversePool.length} imgs`);
     } else {
-        console.warn(`[img] ⚠ Openverse pool vacío — fallback a Picsum`);
+        _openverseLastFailTs = Date.now(); // activar cooldown
+        console.warn(`[img] ⚠ Openverse pool vacío — usando Picsum · próximo reintento en ${_OPENVERSE_RETRY_COOLDOWN / 1000}s`);
     }
     _openversePoolCargando = false;
 }
@@ -1631,7 +1659,7 @@ function actualizarPoolPixabayConPrompt(promptVisual) {
 // ═══════════════════════════════════════════════════════════════
 // GENERACIÓN DE QUERIES VÍA CLAUDE API
 // Cuando el universo detectado es un nombre propio (ej: "Shadow Slave webnovel")
-// y no está en los diccionarios estáticos, Claude genera queries visuales específicas.
+// y no está en los diccionarios estáticos, Claude genera queries visuales Y musicales.
 // Resultado cacheado en localStorage para no repetir la llamada.
 // ═══════════════════════════════════════════════════════════════
 
@@ -1641,7 +1669,6 @@ async function _generarQueriesConClaude(universo) {
     if (cached) {
         try {
             const cachedData = JSON.parse(cached);
-            // Formato nuevo: { imageQueries, freesoundQueries }
             const imageQueries = cachedData.imageQueries || (Array.isArray(cachedData) ? cachedData : null);
             const freesoundQueries = cachedData.freesoundQueries || null;
             if (Array.isArray(imageQueries) && imageQueries.length > 0) {
@@ -1736,20 +1763,20 @@ Rules for freesoundQueries (Freesound — 3-5 words each):
     }
 }
 
-// Llamar cuando aiDetectedUniverse cambia — permite recargar el pool
-// sin necesidad de un promptVisual (usa las queries del universo directamente)
+// Llamar cuando aiDetectedUniverse cambia — permite recargar el pool.
+// Es async para esperar a que Claude genere las queries ANTES de cargar los pools.
 async function notificarUniversoDetectado(universo) {
     if (!universo) return;
     console.log(`[img] 🌍 Universo detectado: "${universo}" — recargando pool del proveedor activo`);
 
-    // Si el universo no está en los diccionarios estáticos, generar queries con Claude
+    // Si el universo no está en los diccionarios estáticos, pedir queries a Claude
     const esUniversoConocido = universo in OPENVERSE_QUERIES || universo in UNIVERSE_IMAGE_QUERIES;
     if (!esUniversoConocido) {
         const queries = await _generarQueriesConClaude(universo);
         if (queries) {
-            mostrarNotificacion(`🤖 Queries visuales generadas para "${universo}"`);
+            mostrarNotificacion(`🤖 Queries generadas para "${universo}"`);
         } else {
-            // Fallback: mapear por keywords del nombre del universo a un género conocido
+            // Sin API key o error: fallback por keywords del nombre
             const nombreLower = universo.toLowerCase();
             let generoFallback = '_default';
             if (/shadow|dark|nightmare|horror|eldritch|demon|curse/.test(nombreLower)) generoFallback = 'horror';
@@ -1758,23 +1785,24 @@ async function notificarUniversoDetectado(universo) {
             else if (/space|star|galaxy|cyber|sci/.test(nombreLower)) generoFallback = 'sci_fi';
             else if (/romance|love|heart/.test(nombreLower)) generoFallback = 'romance';
             else if (/adventure|quest|journey/.test(nombreLower)) generoFallback = 'adventure';
-
             OPENVERSE_QUERIES[universo] = OPENVERSE_QUERIES[generoFallback];
             UNIVERSE_IMAGE_QUERIES[universo] = UNIVERSE_IMAGE_QUERIES[generoFallback];
             console.log(`[img] 🔀 Universo "${universo}" → fallback a género "${generoFallback}"`);
         }
     }
 
+    // Ahora que las queries están listas, cargar los pools
     if (_imageProvider === 'pixabay' && _pixabayKey) {
         _pixabayPoolListo = false;
         _pixabayPoolShared = [];
         _pixabayPoolIdx = 0;
-        _cargarPoolPixabay(); // usará aiDetectedUniverse que ya está seteado
+        _cargarPoolPixabay();
     }
     if (_imageProvider === 'openverse') {
         _openversePoolListo = false;
         _openversePool = [];
         _openversePoolIdx = 0;
+        _openverseLastFailTs = 0; // resetear cooldown al cambiar de universo
         _cargarPoolOpenverse();
     }
     if (_imageProvider === 'unsplash' && _unsplashKey) {
@@ -1783,31 +1811,30 @@ async function notificarUniversoDetectado(universo) {
         _unsplashPoolIdx = 0;
         _cargarPoolUnsplash();
     }
-    // Reconstruir el smart pool (definido en video.js)
+
+    // Reconstruir smart pool y precalentar Pixabay
     if (typeof refrescarSmartPool === 'function') refrescarSmartPool();
-    // Precalentar Pixabay si aplica
     if (typeof precalentarPoolPixabay === 'function') precalentarPoolPixabay();
 
-    // ── Música ambiental: ahora que UNIVERSE_CONFIG tiene las freesoundQueries listas ──
+    // ── Música: ahora que UNIVERSE_CONFIG tiene las freesoundQueries listas ──
     const univConfig = UNIVERSE_CONFIG[universo];
     const ambientCfg = univConfig?.ambient;
     if (ambientCfg && typeof selectGenre === 'function') {
         const genre = ambientCfg.defaultGenre || 'mystery';
         const label = ambientCfg.label || universo;
         if (!ambientGenre) {
-            // Limpiar cache para forzar búsqueda con las nuevas queries
             const ck = `__universe__${universo}`;
             if (typeof _lastFreesoundResults !== 'undefined') delete _lastFreesoundResults[ck];
             selectGenre(genre).then(() => {
                 const trackGenreEl = document.getElementById('ambient-track-genre');
                 if (trackGenreEl) trackGenreEl.textContent = `${label} · auto`;
             });
-            console.log(`🎵 [img] Música iniciada para universo "${universo}" con queries de Claude`);
+            console.log(`🎵 [img] Música iniciada para universo "${universo}"`);
         } else {
-            // Ya hay género activo — solo invalidar cache para que la próxima pista use las nuevas queries
+            // Ya hay género — invalidar cache para que la próxima pista use las nuevas queries
             const ck = `__universe__${universo}`;
             if (typeof _lastFreesoundResults !== 'undefined') delete _lastFreesoundResults[ck];
-            console.log(`🎵 [img] Cache de Freesound invalidado — próxima pista usará queries de "${universo}"`);
+            console.log(`🎵 [img] Cache Freesound invalidado — próxima pista usará queries de "${universo}"`);
         }
     }
 }

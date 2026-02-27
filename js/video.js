@@ -447,16 +447,13 @@ function detectarUniverso() {
             aiDetectedUniverse = val;
             console.log(`📚 Universo detectado: ${val}`);
             mostrarNotificacion(`📚 Universo: ${val}`);
-            // notificarUniversoDetectado es async: si el universo no tiene queries estáticas,
-            // espera a que Claude las genere ANTES de cargar el pool.
-            // precalentarPoolPixabay y refrescarSmartPool se invocan al final de
-            // notificarUniversoDetectado, una vez que las queries ya están listas.
+            // notificarUniversoDetectado es async: espera a que Claude genere las queries
+            // ANTES de cargar los pools de imágenes y disparar la música.
+            // precalentarPoolPixabay, refrescarSmartPool y selectGenre se invocan
+            // al final de notificarUniversoDetectado, cuando todo ya está listo.
             if (typeof notificarUniversoDetectado === 'function') {
                 notificarUniversoDetectado(val);
             }
-
-            // La música también se inicia desde notificarUniversoDetectado,
-            // después de que Claude haya generado las freesoundQueries del universo.
             break;
         }
     }
