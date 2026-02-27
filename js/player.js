@@ -579,14 +579,30 @@ async function buscarEnFreesound(genre, subtono) {
 
     // Cache por clave compuesta (universo + género)
     const cacheKey = univAmbient ? `__universe__${aiDetectedUniverse}` : genre;
-    if (_lastFreesoundResults[cacheKey] && _lastFreesoundResults[cacheKey].length > 1) {
+
+    // Caché de queries fallidas: evitar reintentar el mismo query que ya dio 0 resultados
+    if (!window._freesoundFailedQueries) window._freesoundFailedQueries = new Set();
+
+    // Servir desde caché si hay al menos 1 track disponible
+    if (_lastFreesoundResults[cacheKey] && _lastFreesoundResults[cacheKey].length > 0) {
         const pool = _lastFreesoundResults[cacheKey];
         const pick = _weightedPickByRating(pool);
         console.log(`🎵 [Freesound] Sirviendo desde caché (${pool.length} tracks) → "${pick.name}" (${Math.round(pick.duration)}s, ★${pick.rating?.toFixed(1) ?? '?'})`);
         return pick;
     }
 
-    const query = encodeURIComponent(queryStr);
+    // Elegir query que no haya fallado antes; si todas fallaron, limpiar historial y reintentar
+    const queriesDisponibles = queries.filter(q => !window._freesoundFailedQueries.has(q));
+    const queryPool = queriesDisponibles.length > 0 ? queriesDisponibles : queries;
+    if (queriesDisponibles.length === 0) {
+        console.log('🎵 [Freesound] Todas las queries fallaron antes — limpiando historial');
+        window._freesoundFailedQueries.clear();
+    }
+    const queryStr2 = queryPool[Math.floor(Math.random() * queryPool.length)];
+    if (queryStr2 !== queryStr) console.log(`🎵 [Freesound] Query ajustada (evitando fallida) → "${queryStr2}"`);
+    const queryFinal = queryStr2;
+
+    const query = encodeURIComponent(queryFinal);
     const url = `https://freesound.org/apiv2/search/text/?query=${query}&filter=duration:[60 TO 90]&fields=name,previews,duration,avg_rating&page_size=20&sort=rating_desc&token=${freesoundApiKey}`;
 
     console.log(`🎵 [Freesound] Buscando en API...`);
@@ -611,7 +627,8 @@ async function buscarEnFreesound(genre, subtono) {
             console.log(`🎵 [Freesound] Tras filtro rating ≥3: ${good.length} tracks aptos`);
 
             if (good.length === 0) {
-                console.warn(`🎵 [Freesound] Pool vacío para "${genre}" con query "${queryStr}" — fallback a local`);
+                console.warn(`🎵 [Freesound] Pool vacío para "${genre}" con query "${queryFinal}" — marcando como fallida`);
+                window._freesoundFailedQueries.add(queryFinal);
                 return null;
             }
 
@@ -620,7 +637,8 @@ async function buscarEnFreesound(genre, subtono) {
             console.log(`🎵 [Freesound] ✓ Track elegido → "${pick.name}" (${Math.round(pick.duration)}s, ★${pick.rating?.toFixed(1) ?? '?'})`);
             return pick;
         } else {
-            console.warn(`🎵 [Freesound] Sin resultados para "${queryStr}"`);
+            console.warn(`🎵 [Freesound] Sin resultados para "${queryFinal}" — marcando como fallida`);
+            window._freesoundFailedQueries.add(queryFinal);
         }
     } catch (e) {
         console.error('🎵 [Freesound] Error de red o parsing:', e.message);
@@ -673,9 +691,14 @@ async function playAmbient(genre) {
         if (track) {
             console.log(`🎵 [Player] Reproduciendo desde Freesound: "${track.name}"`);
             freesoundAudio = new Audio(track.url);
-            freesoundAudio.loop = true;
+            freesoundAudio.loop = false;
             freesoundAudio.volume = ambientVolume;
             freesoundAudio.crossOrigin = 'anonymous';
+            // Auto-avanzar al siguiente track al terminar
+            freesoundAudio.onended = () => {
+                console.log('🎵 [Player] Track terminado — cargando siguiente automáticamente');
+                siguienteTrack();
+            };
             freesoundAudio.play().then(() => {
                 ambientPlaying = true;
                 document.getElementById('ambient-play-btn').textContent = '⏸';
@@ -769,7 +792,30 @@ function toggleAmbientPlay() {
 
 async function siguienteTrack() {
     if (!ambientGenre) return;
-    stopAmbient();
+
+    const esFreesoundActivo = freesoundAudio && !freesoundAudio.ended && !freesoundAudio.paused;
+    const audioYaTerminado = freesoundAudio && freesoundAudio.ended;
+    const esProcedural = ambientPlaying && ambientNodes.length > 0 && !freesoundAudio;
+
+    // Si hay un track de Freesound reproduciéndose, NO interrumpir —
+    // dejarlo terminar solo; el onended se encargará de llamar siguienteTrack().
+    if (esFreesoundActivo) {
+        console.log('🎵 [Player] siguienteTrack ignorado — Freesound activo, dejando terminar');
+        return;
+    }
+
+    if (audioYaTerminado) {
+        // Track terminó naturalmente (llamada desde onended): solo limpiar ref
+        freesoundAudio = null;
+        ambientPlaying = false;
+    } else if (esProcedural) {
+        // Track procedural: sí detener y reemplazar
+        console.log('🎵 [Player] siguienteTrack — deteniendo generador procedural');
+        stopAmbient();
+    } else {
+        // Cualquier otro estado (paused, etc): detener limpio
+        stopAmbient();
+    }
 
     // La caché puede estar bajo la key del universo o del género — limpiar la correcta
     const cacheKey = (typeof aiDetectedUniverse !== 'undefined' && aiDetectedUniverse)
@@ -777,9 +823,14 @@ async function siguienteTrack() {
         : ambientGenre;
 
     if (_lastFreesoundResults[cacheKey]) {
-        // Eliminar el track actual del pool (el primero) para garantizar variedad
-        _lastFreesoundResults[cacheKey].shift();
-        if (_lastFreesoundResults[cacheKey].length === 0) {
+        // Rotar el pool: mover el primer track al final para garantizar variedad
+        // sin destruir el pool (evita requests innecesarios cuando queda 1 solo track)
+        const pool = _lastFreesoundResults[cacheKey];
+        if (pool.length > 1) {
+            pool.push(pool.shift());
+        }
+        // Solo limpiar si el pool está realmente vacío
+        if (pool.length === 0) {
             delete _lastFreesoundResults[cacheKey];
         }
     }

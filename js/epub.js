@@ -191,6 +191,15 @@ document.getElementById('epub-file').addEventListener('change', async function (
             cargarCapitulo(archivosOrdenados[0]);
         }
 
+        // ── Detección de universo automática al cargar el EPUB ──
+        // Se ejecuta tras un pequeño delay para que file-name y current-chapter-title
+        // ya estén actualizados en el DOM antes de que detectarUniverso los lea
+        setTimeout(() => {
+            if (typeof detectarUniverso === 'function') {
+                detectarUniverso();
+            }
+        }, 800);
+
     } catch (error) {
         console.error('Error al cargar EPUB:', error);
         document.getElementById('file-name').textContent = 'Error al cargar';

@@ -11,19 +11,43 @@
 
 (function () {
     const PROVS = [
-        { key: 'picsum', label: 'Picsum', optId: 'opt-picsum', panelId: null },
+        { key: 'picsum', label: 'Picsum', optId: 'opt-picsum', panelId: 'picsum-freq-popover' },
         { key: 'pexels', label: 'Pexels', optId: 'opt-pexels', panelId: 'pexels-key-popover' },
         { key: 'unsplash', label: 'Unsplash', optId: 'opt-unsplash', panelId: null },
         { key: 'pixabay', label: 'Pixabay', optId: 'opt-pixabay', panelId: 'pixabay-key-popover' },
+        { key: 'openverse', label: 'Openverse', optId: 'opt-openverse', panelId: 'openverse-key-popover' },
         { key: 'puter', label: 'Puter.js', optId: 'opt-puter', panelId: 'puter-key-popover' },
-        { key: 'pollinations', label: 'Pollinations', optId: 'opt-pollinations', panelId: null },
-        { key: 'procedural', label: 'Procedural', optId: 'opt-procedural', panelId: null },
+        { key: 'pollinations', label: 'Pollinations', optId: 'opt-pollinations', panelId: 'pollinations-freq-popover' },
+        { key: 'procedural', label: 'Procedural', optId: 'opt-procedural', panelId: 'procedural-freq-popover' },
     ];
+
+    // IDs de los inputs de frecuencia por proveedor (en el popup)
+    const FREQ_INPUT_IDS = {
+        picsum: 'freq-picsum-pop',
+        pexels: 'freq-pexels-pop',
+        pixabay: 'freq-pixabay-pop',
+        openverse: 'freq-openverse-pop',
+        puter: 'freq-puter-pop',
+        pollinations: 'freq-pollinations-pop',
+        procedural: 'freq-procedural-pop',
+    };
 
     function _activarProv(key) {
         // Actualizar radio oculto
         const radio = document.getElementById('prov-' + key);
         if (radio) { radio.checked = true; radio.dispatchEvent(new Event('change')); }
+
+        // ── Sincronizar con images.js (_imageProvider + pool) ──
+        // Solo proveedores soportados por images.js; puter/pollinations/procedural
+        // son manejados por video.js y no deben tocar _imageProvider.
+        const _webProvs = new Set(['pixabay', 'pexels', 'picsum', 'unsplash', 'openverse']);
+        if (_webProvs.has(key)) {
+            if (typeof cambiarProveedorImagenes === 'function') {
+                cambiarProveedorImagenes(key);
+            } else {
+                localStorage.setItem('image_provider', key);
+            }
+        }
 
         // Actualizar estilos de labels
         PROVS.forEach(p => {
@@ -36,13 +60,22 @@
         const lblEl = document.getElementById('btn-img-prov-label');
         if (lblEl && prov) lblEl.textContent = prov.label;
 
-        // Mostrar/ocultar paneles de key
+        // Mostrar/ocultar paneles de configuración
         PROVS.forEach(p => {
             if (p.panelId) {
                 const panel = document.getElementById(p.panelId);
                 if (panel) panel.style.display = p.key === key ? 'block' : 'none';
             }
         });
+
+        // Poblar el input de frecuencia del proveedor activo con su valor guardado
+        const freqInputId = FREQ_INPUT_IDS[key];
+        if (freqInputId) {
+            const freqEl = document.getElementById(freqInputId);
+            if (freqEl && typeof _getChangeEvery === 'function') {
+                freqEl.value = _getChangeEvery(key);
+            }
+        }
 
         // Limpiar status del popover
         const statusEl = document.getElementById('img-prov-status-pop');
@@ -99,8 +132,8 @@
         });
 
         // Leer proveedor guardado — Pixabay como default.
-        // Si hay un provider de IA guardado, limpiarlo y forzar pixabay.
-        const _webProvs = new Set(['pixabay', 'pexels', 'picsum', 'unsplash', 'procedural']);
+        // Si hay un provider de IA guardado, limpiarlo y forzar picsum.
+        const _webProvs = new Set(['pixabay', 'pexels', 'picsum', 'unsplash', 'openverse', 'procedural']);
         const _rawProv = localStorage.getItem('image_provider');
         if (_rawProv && !_webProvs.has(_rawProv)) localStorage.removeItem('image_provider');
         const savedProv = (_rawProv && _webProvs.has(_rawProv)) ? _rawProv : 'picsum';

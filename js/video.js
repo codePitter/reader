@@ -139,11 +139,8 @@ function abrirvideo() {
         const btn = document.getElementById('btn-toggle-ai-img');
         if (btn) { btn.classList.add('ai-active'); btn.textContent = '🖼 IA ON'; }
     }
-    // Precalentar pool de imágenes web si ese proveedor está seleccionado
-    if ((imageProvider === 'pixabay' || imageProvider === 'pexels') && typeof precalentarPoolPixabay === 'function') {
-        precalentarPoolPixabay();
-    }
     // Siempre reconstruir el slot map (puede haber cambiado de capítulo)
+    // NOTA: precalentarPoolPixabay se llama DENTRO de detectarUniverso, después de conocer el universo
     if (aiImagesEnabled) {
         detectarUniverso();
         buildAiSlotMap();
@@ -450,35 +447,23 @@ function detectarUniverso() {
             aiDetectedUniverse = val;
             console.log(`📚 Universo detectado: ${val}`);
             mostrarNotificacion(`📚 Universo: ${val}`);
-            // Reconstruir el smart pool de imágenes con queries del universo detectado
-            if (typeof refrescarSmartPool === 'function') {
-                refrescarSmartPool();
+            // notificarUniversoDetectado es async: si el universo no tiene queries estáticas,
+            // espera a que Claude las genere ANTES de cargar el pool.
+            // precalentarPoolPixabay y refrescarSmartPool se invocan al final de
+            // notificarUniversoDetectado, una vez que las queries ya están listas.
+            if (typeof notificarUniversoDetectado === 'function') {
+                notificarUniversoDetectado(val);
             }
 
-            // ── Auto-aplicar género musical del universo ──
-            const univConfig = UNIVERSE_CONFIG[val];
-            const ambientCfg = univConfig?.ambient;
-            if (ambientCfg) {
-                const genre = ambientCfg.defaultGenre;
-                const label = ambientCfg.label || val;
-                // Activar género si no hay uno ya activo manualmente
-                if (!ambientGenre) {
-                    selectGenre(genre).then(() => {
-                        // Mostrar el label del universo en vez del género genérico
-                        const trackGenreEl = document.getElementById('ambient-track-genre');
-                        if (trackGenreEl) trackGenreEl.textContent = `${label} · auto`;
-                    });
-                    console.log(`🎵 Música auto-detectada para universo: ${genre} (${label})`);
-                } else {
-                    // Ya hay género activo — solo invalidar cache de Freesound
-                    // para que la próxima canción use queries del universo
-                    const cacheKey = `__universe__${val}`;
-                    delete _lastFreesoundResults[cacheKey];
-                    console.log(`🎵 Universo activo — próxima pista de Freesound usará queries de "${val}"`);
-                }
-            }
+            // La música también se inicia desde notificarUniversoDetectado,
+            // después de que Claude haya generado las freesoundQueries del universo.
             break;
         }
+    }
+    // Si no se detectó universo, no cargar pool con _default — esperar a que el usuario
+    // seleccione un capítulo con universo reconocible o lo cargue manualmente
+    if (!aiDetectedUniverse) {
+        console.log('📚 Sin universo reconocido — pool de imágenes no se precalienta');
     }
 }
 

@@ -18,6 +18,15 @@ let _pexelsKey = localStorage.getItem('pexels_api_key') || '0eYJYF7CXXnjo9fOuyYv
 const UNSPLASH_API_BASE = 'https://api.unsplash.com/';
 let _unsplashKey = localStorage.getItem('unsplash_api_key') || '';
 
+// ─── OPENVERSE CONFIG ───
+// API pública sin key para primeras requests (800M imágenes CC)
+// Docs: https://api.openverse.org/v1/
+const OPENVERSE_API_BASE = 'https://api.openverse.org/v1/images/';
+let _openversePool = [];
+let _openversePoolIdx = 0;
+let _openversePoolListo = false;
+let _openversePoolCargando = false;
+
 // ─── POOL UNSPLASH ───
 let _unsplashPool = [];
 let _unsplashPoolIdx = 0;
@@ -42,72 +51,88 @@ const AUTO_ROT_INTERVAL = 18000; // ms entre cambios de fondo (18 s)
 
 // ═══════════════════════════════════════
 // MAPEO UNIVERSO → QUERIES PIXABAY
+// Queries escritas como escenas visuales concretas (no conceptos abstractos)
 // ═══════════════════════════════════════
 
 const UNIVERSE_IMAGE_QUERIES = {
     fantasy_epic: [
-        'epic fantasy landscape',
-        'medieval castle dark',
-        'fantasy forest magical',
-        'ancient ruins mystical',
-        'dark fantasy dungeon'
+        'ancient stone castle fog mountains',
+        'dark enchanted forest mist path',
+        'ruined temple overgrown jungle stone',
+        'dramatic storm sky mountain kingdom',
+        'glowing crystal cave underground depth'
     ],
     cultivation: [
-        'chinese mountain misty',
-        'zen nature serene asia',
-        'ancient temple fog asia',
-        'bamboo forest morning',
-        'traditional chinese landscape'
+        'misty mountain peaks clouds bamboo',
+        'ancient wooden pagoda fog sunrise',
+        'bamboo forest morning light mist',
+        'stone steps mountain temple ancient',
+        'waterfall cliff rock zen nature'
     ],
     sci_fi: [
-        'futuristic city neon',
-        'space galaxy stars',
-        'cyberpunk street night',
-        'technology abstract circuit',
-        'space station cosmos'
+        'futuristic city night rain neon reflection',
+        'dark space station corridor metal lights',
+        'galaxy nebula stars deep space',
+        'cyberpunk alley rain neon glowing',
+        'alien landscape barren planet horizon'
     ],
     romance: [
-        'romantic sunset couple',
-        'soft flowers bokeh light',
-        'cozy cafe warm',
-        'autumn park leaves',
-        'ocean sunrise pastel'
+        'golden hour field flowers soft light',
+        'rainy window cafe warm bokeh night',
+        'cherry blossom park pathway spring',
+        'sunset beach water reflection soft',
+        'autumn leaves park bench empty warm'
     ],
     thriller: [
-        'dark alley rainy night',
-        'mysterious fog city',
-        'abandoned building moody',
-        'storm lightning dramatic',
-        'noir dark corridor'
+        'dark alley rain night wet pavement',
+        'empty corridor shadows building interior',
+        'storm lightning dramatic dark clouds',
+        'abandoned warehouse interior dark',
+        'fog city street night empty'
     ],
     horror: [
-        'dark haunted forest',
-        'abandoned house fog',
-        'cemetery gothic night',
-        'dark shadows horror',
-        'eerie tunnel darkness'
+        'dark fog forest dead trees path',
+        'abandoned decayed mansion exterior night',
+        'empty dark corridor flickering light',
+        'cemetery fog night stone crosses',
+        'dark basement door shadow underground'
     ],
     adventure: [
-        'epic mountain summit',
-        'jungle exploration tropical',
-        'desert dunes sunset',
-        'ocean voyage horizon',
-        'ancient ruins adventure'
+        'dramatic mountain summit clouds aerial',
+        'jungle dense canopy tropical mist',
+        'desert sand dunes sunset horizon',
+        'ocean cliff dramatic wave coast',
+        'ancient stone ruins overgrown forest'
     ],
     drama: [
-        'cinematic portrait dramatic',
-        'rain window melancholy',
-        'golden hour landscape',
-        'black white portrait',
-        'empty road journey'
+        'rain drops window glass city blur',
+        'empty park bench autumn leaves fog',
+        'dramatic overcast sky empty road',
+        'old wooden door stone wall aged',
+        'golden hour empty field melancholy'
     ],
     _default: [
-        'library books vintage',
-        'old book pages texture',
-        'reading nook cozy',
-        'ancient manuscript ink',
-        'bookshelf literary'
+        'old leather book pages texture vintage',
+        'library shelves books warm candlelight',
+        'ancient manuscript parchment ink aged',
+        'reading nook armchair lamp warm cozy',
+        'wooden desk books scattered morning light'
     ]
+};
+
+// ─── Color palette por universo (parámetro Pixabay) ───
+// Valores válidos: grayscale, transparent, red, orange, yellow, green,
+//                  turquoise, blue, lilac, pink, white, gray, black, brown
+const UNIVERSE_COLOR_HINTS = {
+    fantasy_epic: 'blue',
+    cultivation: 'green',
+    sci_fi: 'blue',
+    romance: 'orange',
+    thriller: 'gray',
+    horror: 'black',
+    adventure: 'brown',
+    drama: 'gray',
+    _default: 'brown'
 };
 
 // ═══════════════════════════════════════
@@ -116,7 +141,9 @@ const UNIVERSE_IMAGE_QUERIES = {
 
 function construirQueryImagen(universo, textoCapitulo = '') {
     const queries = UNIVERSE_IMAGE_QUERIES[universo] || UNIVERSE_IMAGE_QUERIES._default;
-    const baseQuery = queries[_imgActualIndex % queries.length];
+    // Rotación con offset aleatorio para evitar siempre empezar por la misma
+    const offset = Math.floor(Math.random() * queries.length);
+    const baseQuery = queries[(_imgActualIndex + offset) % queries.length];
     _imgActualIndex++;
     return baseQuery;
 }
@@ -160,6 +187,15 @@ async function _buscarSinPersonas(query, page, perPage) {
     // El filtrado real de personas se hace POST-FETCH con _filtrarSinPersonas().
     // Pedimos más imágenes de las necesarias para compensar las descartadas.
     const overFetch = Math.min(perPage * 2, 200); // pedir el doble, máx 200
+
+    // Randomizar página (1–3) para evitar siempre las mismas top-N imágenes
+    const randomPage = page === 1 ? Math.floor(Math.random() * 3) + 1 : page;
+
+    // Color hint según universo detectado
+    const universo = (typeof aiDetectedUniverse !== 'undefined' && aiDetectedUniverse)
+        ? aiDetectedUniverse : '_default';
+    const colorHint = UNIVERSE_COLOR_HINTS[universo] || '';
+
     const url = new URL(PIXABAY_API_BASE);
     url.searchParams.set('key', _pixabayKey);
     url.searchParams.set('q', query);
@@ -167,17 +203,29 @@ async function _buscarSinPersonas(query, page, perPage) {
     url.searchParams.set('orientation', 'horizontal');
     url.searchParams.set('safesearch', 'true');
     url.searchParams.set('per_page', overFetch);
-    url.searchParams.set('page', page);
+    url.searchParams.set('page', randomPage);
     url.searchParams.set('min_width', '1280');
     url.searchParams.set('order', 'popular');
     url.searchParams.set('category', 'backgrounds');
+    if (colorHint) url.searchParams.set('colors', colorHint);
 
-    console.log(`[img] 🔍 Pixabay request · query="${query}" · per_page=${overFetch} · page=${page}`);
+    console.log(`[img] 🔍 Pixabay request · query="${query}" · page=${randomPage} · colors=${colorHint || 'none'} · per_page=${overFetch}`);
 
     try {
         const res = await fetch(url.toString());
         if (!res.ok) {
             console.warn(`[img] ⚠ Pixabay HTTP ${res.status} para query="${query}"`);
+            // Fallback: reintentar sin el filtro de color si falla
+            if (colorHint) {
+                console.log(`[img] 🔄 Reintentando sin filtro de color...`);
+                url.searchParams.delete('colors');
+                const res2 = await fetch(url.toString());
+                if (!res2.ok) return { hits: [] };
+                const data2 = await res2.json();
+                const filtrados2 = _filtrarSinPersonas(data2.hits || []);
+                console.log(`[img] ✓ Reintento sin color · recibidas:${data2.hits?.length || 0} · filtradas:${filtrados2.length}`);
+                return { hits: filtrados2 };
+            }
             return { hits: [] };
         }
         const data = await res.json();
@@ -370,6 +418,105 @@ function _siguienteUrlUnsplash() {
 }
 
 // ═══════════════════════════════════════
+// OPENVERSE — API pública CC, sin key
+// 800M+ imágenes libres de derechos
+// ═══════════════════════════════════════
+
+// Queries cortas por universo para Openverse (Elasticsearch token matching — 1-2 palabras)
+// Queries largas tipo "old leather book pages texture vintage" devuelven 0 resultados
+// porque Openverse indexa title/tags y rara vez tienen esa combinación exacta de tokens
+const OPENVERSE_QUERIES = {
+    fantasy_epic: ['castle', 'forest', 'ruins', 'mountain', 'fog', 'cliff', 'stone'],
+    cultivation: ['mountain', 'waterfall', 'bamboo', 'mist', 'temple', 'landscape'],
+    sci_fi: ['city night', 'space', 'galaxy', 'neon', 'technology', 'industrial'],
+    romance: ['sunset', 'flowers', 'park', 'golden hour', 'autumn', 'beach'],
+    thriller: ['rain', 'dark alley', 'fog', 'storm', 'abandoned', 'shadow'],
+    horror: ['forest', 'dark', 'cemetery', 'fog', 'ruins', 'storm'],
+    adventure: ['mountain', 'jungle', 'desert', 'ocean', 'cliff', 'landscape'],
+    drama: ['rain', 'window', 'bench', 'autumn', 'overcast', 'road'],
+    _default: ['library', 'books', 'landscape', 'nature', 'architecture', 'sky']
+};
+
+async function _buscarEnOpenverse(query, page = 1) {
+    const url = new URL(OPENVERSE_API_BASE);
+    url.searchParams.set('q', query);
+    url.searchParams.set('page_size', '20');
+    url.searchParams.set('page', page);
+    // Sin license_type: muchas imágenes no tienen este metadato y quedan excluidas
+    // Sin aspect_ratio: el filtro reduce demasiado los resultados en Openverse
+    // Sin source: ampliar el índice mejora los resultados notablemente
+    url.searchParams.set('extension', 'jpg');  // solo JPG para calidad consistente
+
+    console.log(`[img] 🔍 Openverse request · query="${query}" · page=${page}`);
+    try {
+        const res = await fetch(url.toString(), {
+            headers: { 'Accept': 'application/json' }
+        });
+        if (!res.ok) {
+            console.warn(`[img] ⚠ Openverse HTTP ${res.status}`);
+            return [];
+        }
+        const data = await res.json();
+        // Sin filtro de width: Openverse raramente tiene ese metadato disponible
+        const results = (data.results || [])
+            .map(r => ({
+                id: r.id,
+                urlFull: r.url,
+                urlSmall: r.thumbnail || r.url,
+                autor: r.creator || 'Openverse CC',
+                tags: r.title || query,
+                pageUrl: r.foreign_landing_url || r.url,
+                fuente: 'Openverse'
+            }));
+        console.log(`[img] ✓ Openverse · ${results.length} imgs para "${query}"`);
+        return results;
+    } catch (e) {
+        console.warn(`[img] ⚠ Openverse error:`, e.message);
+        return [];
+    }
+}
+
+async function _cargarPoolOpenverse(promptVisual = '') {
+    if (_openversePoolCargando || _openversePoolListo) return;
+    _openversePoolCargando = true;
+
+    const universo = (typeof aiDetectedUniverse !== 'undefined' && aiDetectedUniverse)
+        ? aiDetectedUniverse : '_default';
+    // Usar queries cortas específicas para Openverse en lugar de UNIVERSE_IMAGE_QUERIES
+    // (que son multi-palabra y dan 0 resultados en el índice Elasticsearch de Openverse)
+    const queries = OPENVERSE_QUERIES[universo] || OPENVERSE_QUERIES._default;
+
+    console.log(`[img] 🚀 Openverse pool · universo="${universo}" · queries:`, queries.slice(0, 3));
+
+    const urls = [];
+    // Solo 2 requests para no agotar el límite anónimo (100/día, 5/hora)
+    const queriesToFetch = queries.slice(0, 2);
+    for (const q of queriesToFetch) {
+        const page = Math.floor(Math.random() * 5) + 1; // páginas 1-5 para variedad
+        const results = await _buscarEnOpenverse(q, page);
+        results.forEach(r => { if (r.urlFull) urls.push(r.urlFull); });
+        console.log(`[img]   └─ "${q}" p${page} → ${results.length} imgs · acum: ${urls.length}`);
+    }
+
+    if (urls.length > 0) {
+        _openversePool = _shuffleArray(urls);
+        _openversePoolIdx = 0;
+        _openversePoolListo = true;
+        console.log(`[img] ✓ Openverse pool listo · ${_openversePool.length} imgs`);
+    } else {
+        console.warn(`[img] ⚠ Openverse pool vacío — fallback a Picsum`);
+    }
+    _openversePoolCargando = false;
+}
+
+function _siguienteUrlOpenverse() {
+    if (_openversePool.length === 0) return null;
+    const url = _openversePool[_openversePoolIdx % _openversePool.length];
+    _openversePoolIdx++;
+    return url;
+}
+
+// ═══════════════════════════════════════
 // FALLBACK: PICSUM PHOTOS (sin key)
 // Genera URLs directas, sin fetch necesario
 // ═══════════════════════════════════════
@@ -418,53 +565,67 @@ async function _ejecutarBusqueda(query, page) {
     _imgCargando = true;
     _mostrarEstadoCarga(true, query);
 
+    // ── Helper: extraer query genérica (últimas 1-2 palabras) ──
+    const _queryGenerica = (q) => q.split(' ').slice(-2).join(' ');
+
     try {
-        // ── Elegir proveedor ──
         const proveedorActivo = _imageProvider;
 
         if (proveedorActivo === 'pexels' && _pexelsKey) {
-            // ── Pexels ──
-            const data = await buscarImagenesPexels(query, page, 12);
-            const fotos = data.hits || [];
+            // ── Pexels con fallback en cadena ──
+            let data = await buscarImagenesPexels(query, page, 12);
+            let fotos = data.hits || [];
 
             if (fotos.length === 0) {
-                _mostrarError('Sin resultados en Pexels. Probá otra búsqueda.');
-                return;
+                const queryGen = _queryGenerica(query);
+                console.log(`[img] 🔄 Pexels sin resultados para "${query}" → fallback genérico "${queryGen}"`);
+                data = await buscarImagenesPexels(queryGen, 1, 12);
+                fotos = data.hits || [];
+            }
+
+            if (fotos.length === 0) {
+                console.warn(`[img] ⚠ Pexels sin resultados tras fallback — usando Picsum`);
+                const urls = generarUrlsPicsum(9);
+                fotos = urls.map((url, i) => ({ id: `picsum-${i}`, urlSmall: url, urlFull: url, urlThumb: url, autor: 'Picsum', tags: query, pageUrl: 'https://picsum.photos', fuente: 'Picsum' }));
             }
 
             _imgResultados = fotos;
             renderizarGaleriaImagenes(fotos, query);
-            mostrarNotificacion(`✓ ${fotos.length} imágenes encontradas · Pexels`);
-
+            mostrarNotificacion(`✓ ${fotos.length} imágenes · ${fotos[0]?.fuente || 'Pexels'}`);
             _autoRotPool = fotos.map(f => f.urlFull);
             _autoRotPoolIdx = 0;
 
         } else if (proveedorActivo === 'pixabay' && _pixabayKey) {
-            // ── Pixabay ──
-            const data = await buscarImagenesPixabay(query, page, 12);
-            _imgResultados = data.hits || [];
+            // ── Pixabay con fallback en cadena ──
+            let data = await buscarImagenesPixabay(query, page, 12);
+            let rawHits = data.hits || [];
 
-            if (_imgResultados.length === 0) {
-                _mostrarError('Sin resultados. Probá otra búsqueda.');
+            if (rawHits.length === 0) {
+                const queryGen = _queryGenerica(query);
+                console.log(`[img] 🔄 Pixabay sin resultados para "${query}" → fallback genérico "${queryGen}"`);
+                data = await buscarImagenesPixabay(queryGen, 1, 12);
+                rawHits = data.hits || [];
+            }
+
+            if (rawHits.length === 0) {
+                console.warn(`[img] ⚠ Pixabay sin resultados tras fallback — usando Picsum`);
+                const urls = generarUrlsPicsum(9);
+                const fotos = urls.map((url, i) => ({ id: `picsum-${i}`, urlSmall: url, urlFull: url, urlThumb: url, autor: 'Picsum', tags: query, pageUrl: 'https://picsum.photos', fuente: 'Picsum' }));
+                _imgResultados = fotos;
+                renderizarGaleriaImagenes(fotos, `${query} (Picsum)`);
+                _autoRotPool = urls;
+                _autoRotPoolIdx = 0;
                 return;
             }
 
-            // Convertir al formato interno normalizado
-            const fotos = _imgResultados.map(h => ({
-                id: h.id,
-                urlSmall: h.webformatURL,
-                urlFull: h.largeImageURL,
-                urlThumb: h.previewURL,
-                autor: h.user,
-                tags: h.tags,
-                pageUrl: h.pageURL,
-                fuente: 'Pixabay'
+            _imgResultados = rawHits;
+            const fotos = rawHits.map(h => ({
+                id: h.id, urlSmall: h.webformatURL, urlFull: h.largeImageURL,
+                urlThumb: h.previewURL, autor: h.user, tags: h.tags,
+                pageUrl: h.pageURL, fuente: 'Pixabay'
             }));
-
             renderizarGaleriaImagenes(fotos, query);
-            mostrarNotificacion(`✓ ${fotos.length} imágenes encontradas · Pixabay`);
-
-            // Cargar pool para auto-rotación en video
+            mostrarNotificacion(`✓ ${fotos.length} imágenes · Pixabay`);
             _autoRotPool = fotos.map(f => f.urlFull);
             _autoRotPoolIdx = 0;
 
@@ -472,37 +633,26 @@ async function _ejecutarBusqueda(query, page) {
             // ── Fallback: Picsum (sin key) ──
             const urls = generarUrlsPicsum(9);
             const fotos = urls.map((url, i) => ({
-                id: `picsum-${i}`,
-                urlSmall: url.replace('1920/1080', '400/300'),
-                urlFull: url,
-                urlThumb: url.replace('1920/1080', '200/150'),
-                autor: 'Picsum Photos',
-                tags: query,
-                pageUrl: 'https://picsum.photos',
-                fuente: 'Picsum'
+                id: `picsum-${i}`, urlSmall: url.replace('1920/1080', '400/300'),
+                urlFull: url, urlThumb: url.replace('1920/1080', '200/150'),
+                autor: 'Picsum Photos', tags: query,
+                pageUrl: 'https://picsum.photos', fuente: 'Picsum'
             }));
-
             _imgResultados = fotos;
             renderizarGaleriaImagenes(fotos, `${query} (Picsum — sin key)`);
             mostrarNotificacion(`✓ Imágenes aleatorias · Picsum`);
-
             _autoRotPool = urls;
             _autoRotPoolIdx = 0;
         }
 
     } catch (err) {
         if (err.message === 'NO_KEY') {
-            // Silenciosamente usar Picsum
             const urls = generarUrlsPicsum(9);
             const fotos = urls.map((url, i) => ({
-                id: `picsum-${i}`,
-                urlSmall: url.replace('1920/1080', '400/300'),
-                urlFull: url,
-                urlThumb: url.replace('1920/1080', '200/150'),
-                autor: 'Picsum Photos',
-                tags: query,
-                pageUrl: 'https://picsum.photos',
-                fuente: 'Picsum'
+                id: `picsum-${i}`, urlSmall: url.replace('1920/1080', '400/300'),
+                urlFull: url, urlThumb: url.replace('1920/1080', '200/150'),
+                autor: 'Picsum Photos', tags: query,
+                pageUrl: 'https://picsum.photos', fuente: 'Picsum'
             }));
             _imgResultados = fotos;
             renderizarGaleriaImagenes(fotos, `${query} (Picsum)`);
@@ -843,11 +993,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (statusVideo) { statusVideo.textContent = '✓'; statusVideo.style.color = 'var(--accent2)'; }
     }
 
-    // Pre-cargar pool Pixabay si es el proveedor activo
-    if (_imageProvider === 'pixabay' && _pixabayKey) {
-        _cargarPoolPixabay();
-    }
-    // Inicializar pool Picsum siempre (sin requests, instantáneo)
+    // NO pre-cargar pool al inicio — el universo aún no está detectado.
+    // El pool se cargará en detectarUniverso() (video.js) una vez conocido el universo.
+    // Picsum no necesita requests, se inicializa siempre como fallback.
     _inicializarPoolPicsum();
 
     // Enter en input de búsqueda
@@ -868,7 +1016,23 @@ function _renderizarPanelKey() {
     const pexelsOk = !!_pexelsKey;
     const pixabayOk = !!_pixabayKey;
 
-    // Selector de proveedor + config de keys
+    // Helper: mini input de frecuencia reutilizable por proveedor
+    const _freqInput = (prov) => {
+        const val = _getChangeEvery(prov);
+        return `
+            <div style="display:flex;align-items:center;gap:6px;margin-top:5px;">
+                <label style="font-size:0.54rem;color:var(--text-dim);white-space:nowrap;">⏱ Cambiar cada</label>
+                <input type="number" min="1" max="200" value="${val}"
+                    id="freq-input-${prov}"
+                    onblur="guardarFrecuenciaImagen('${prov}', this)"
+                    onkeydown="if(event.key==='Enter') guardarFrecuenciaImagen('${prov}', this)"
+                    style="width:42px;background:var(--bg);border:1px solid var(--border);border-radius:4px;
+                           color:var(--text);font-family:'DM Mono',monospace;font-size:0.62rem;
+                           padding:3px 5px;outline:none;text-align:center;">
+                <label style="font-size:0.54rem;color:var(--text-dim);">frases</label>
+            </div>`;
+    };
+
     galeria.innerHTML = `
         <div style="padding:6px 0;">
             <!-- Selector de proveedor -->
@@ -890,10 +1054,15 @@ function _renderizarPanelKey() {
                         style="flex:1;font-family:'DM Mono',monospace;font-size:0.58rem;padding:4px 6px;border-radius:4px;cursor:pointer;transition:all 0.2s;border:1px solid var(--border);background:${_imageProvider === 'picsum' ? 'var(--accent2)' : 'var(--bg-3)'};color:${_imageProvider === 'picsum' ? 'var(--bg)' : 'var(--text-dim)'};">
                         Picsum
                     </button>
+                    <button type="button" id="btn-prov-openverse"
+                        onclick="cambiarProveedorImagenes('openverse')"
+                        style="flex:1;font-family:'DM Mono',monospace;font-size:0.58rem;padding:4px 6px;border-radius:4px;cursor:pointer;transition:all 0.2s;border:1px solid var(--border);background:${_imageProvider === 'openverse' ? 'var(--accent2)' : 'var(--bg-3)'};color:${_imageProvider === 'openverse' ? 'var(--bg)' : 'var(--text-dim)'};">
+                        Openverse
+                    </button>
                 </div>
             </div>
 
-            <!-- Panel key Pexels -->
+            <!-- Panel Pexels -->
             <div id="pexels-key-panel" style="display:${_imageProvider === 'pexels' ? 'block' : 'none'};margin-bottom:6px;">
                 <p style="font-size:0.56rem;color:var(--text-dim);margin-bottom:4px;line-height:1.4;">
                     🔑 Key Pexels
@@ -913,10 +1082,12 @@ function _renderizarPanelKey() {
                     </button>
                 </div>
                 ${pexelsOk ? `<div style="font-size:0.55rem;color:var(--accent2);margin-top:3px;">✓ Key configurada</div>` : ''}
+                ${_freqInput('pexels')}
             </div>
 
-            <!-- Panel key Pixabay -->
-            <div id="pixabay-key-panel" style="display:${_imageProvider === 'pixabay' && !pixabayOk ? 'block' : 'none'};margin-bottom:6px;">
+            <!-- Panel Pixabay -->
+            <div id="pixabay-key-panel" style="display:${_imageProvider === 'pixabay' ? 'block' : 'none'};margin-bottom:6px;">
+                ${!pixabayOk ? `
                 <p style="font-size:0.56rem;color:var(--text-dim);margin-bottom:4px;line-height:1.4;">
                     🔑 Key Pixabay
                     <a href="https://pixabay.com/api/docs/" target="_blank" rel="noopener"
@@ -932,14 +1103,27 @@ function _renderizarPanelKey() {
                                    font-family:'DM Mono',monospace;font-size:0.6rem;padding:5px 8px;cursor:pointer;flex-shrink:0;">
                         OK
                     </button>
-                </div>
+                </div>` : `<div style="font-size:0.55rem;color:var(--accent2);margin-bottom:4px;">✓ Key configurada</div>`}
+                ${_freqInput('pixabay')}
+            </div>
+
+            <!-- Panel Picsum -->
+            <div id="picsum-freq-panel" style="display:${_imageProvider === 'picsum' ? 'block' : 'none'};margin-bottom:6px;">
+                <p style="font-size:0.55rem;color:var(--text-dim);margin-bottom:2px;">Sin API key · imágenes aleatorias</p>
+                ${_freqInput('picsum')}
+            </div>
+
+            <!-- Panel Openverse -->
+            <div id="openverse-freq-panel" style="display:${_imageProvider === 'openverse' ? 'block' : 'none'};margin-bottom:6px;">
+                <p style="font-size:0.55rem;color:var(--text-dim);margin-bottom:2px;">Sin API key · 800M imágenes CC0</p>
+                ${_freqInput('openverse')}
             </div>
 
             <!-- Botón cargar imágenes -->
             <button type="button" onclick="generarImagenesUniverso()"
                     style="width:100%;background:none;border:1px solid var(--border);border-radius:4px;
                            color:var(--text-dim);font-family:'DM Mono',monospace;font-size:0.6rem;
-                           padding:4px 0;cursor:pointer;transition:border-color 0.2s;"
+                           padding:4px 0;cursor:pointer;transition:border-color 0.2s;margin-top:4px;"
                     onmouseover="this.style.borderColor='var(--accent2)'"
                     onmouseout="this.style.borderColor='var(--border)'">
                 📷 Cargar imágenes →
@@ -952,13 +1136,21 @@ function _renderizarPanelKey() {
 function cambiarProveedorImagenes(proveedor) {
     _imageProvider = proveedor;
     localStorage.setItem('image_provider', proveedor);
+    IMAGE_CHANGE_EVERY = _getChangeEvery(proveedor);  // actualizar frecuencia activa
     _renderizarPanelKey();
     mostrarNotificacion(`✓ Proveedor: ${proveedor.charAt(0).toUpperCase() + proveedor.slice(1)}`);
-    // Resetear pool para que se recargue con el nuevo proveedor
-    _pixabayPoolShared = [];
-    _pixabayPoolListo = false;
-    _pixabayPoolIdx = 0;
+    // Resetear pools para recarga con el nuevo proveedor
+    _pixabayPoolShared = []; _pixabayPoolListo = false; _pixabayPoolIdx = 0;
+    _openversePool = []; _openversePoolListo = false; _openversePoolIdx = 0;
+    // Todos los proveedores esperan al universo antes de cargar el pool
+    const _univOk = typeof aiDetectedUniverse !== 'undefined' && aiDetectedUniverse;
+    if (!_univOk) {
+        console.log(`[img] Proveedor "${proveedor}" seleccionado — esperando universo para cargar pool`);
+        return;
+    }
     if (proveedor === 'pixabay' && _pixabayKey) _cargarPoolPixabay();
+    if (proveedor === 'openverse') _cargarPoolOpenverse();
+    if (proveedor === 'unsplash' && _unsplashKey) _cargarPoolUnsplash();
 }
 
 // Guardar key de Pexels
@@ -998,7 +1190,41 @@ function _actualizarBadgeUniverso() {
 //   URLs directas generadas localmente, sin requests.
 // ═══════════════════════════════════════════════════════════════
 
-const IMAGE_CHANGE_EVERY = 20;   // frases entre cada cambio de imagen
+// ─── Frecuencia de cambio de imagen por proveedor (frases entre cada cambio) ───
+// Cada proveedor tiene su propio valor porque tienen costos distintos:
+//   - Pixabay/Unsplash: pool local, cambio frecuente no cuesta requests extra
+//   - Pexels/Openverse: 1 request por cambio, frecuencia más conservadora
+const IMAGE_CHANGE_DEFAULTS = {
+    pixabay: 10,
+    pexels: 20,
+    unsplash: 10,
+    openverse: 15,
+    picsum: 8,
+};
+
+function _getChangeEvery(proveedor) {
+    const key = `img_change_every_${proveedor}`;
+    const saved = parseInt(localStorage.getItem(key), 10);
+    return (!isNaN(saved) && saved >= 1) ? saved : (IMAGE_CHANGE_DEFAULTS[proveedor] || 20);
+}
+
+function _setChangeEvery(proveedor, valor) {
+    const v = Math.max(1, parseInt(valor, 10) || IMAGE_CHANGE_DEFAULTS[proveedor] || 20);
+    localStorage.setItem(`img_change_every_${proveedor}`, v);
+    console.log(`[img] ⚙ Frecuencia "${proveedor}" → cada ${v} frases`);
+    return v;
+}
+
+// Llamada desde el input del panel al hacer blur o presionar Enter
+function guardarFrecuenciaImagen(proveedor, inputEl) {
+    const v = _setChangeEvery(proveedor, inputEl.value);
+    inputEl.value = v;
+    if (_imageProvider === proveedor) IMAGE_CHANGE_EVERY = v;
+    mostrarNotificacion(`✓ ${proveedor}: cada ${v} frases`);
+}
+
+// Valor activo — se recalcula al cambiar proveedor
+let IMAGE_CHANGE_EVERY = _getChangeEvery(_imageProvider);
 
 // ─── Estado general ───
 let _imgSentenceLastChange = -IMAGE_CHANGE_EVERY;  // forzar primer cambio en frase 0
@@ -1196,10 +1422,13 @@ async function _pedirImagen(fragmentoTexto) {
     // ── Pixabay: solo leer del pool ──────────────────────────────
     if (_imageProvider === 'pixabay' && _pixabayKey) {
         if (!_pixabayPoolListo) {
-            console.log('[img] ⏳ Pool Pixabay no listo aún — usando Picsum transitorio');
-            _cargarPoolPixabay();
-            const seed = Math.floor(Math.random() * 500) + 1;
-            return `https://picsum.photos/seed/${seed}/1920/1080`;
+            if (typeof aiDetectedUniverse !== 'undefined' && aiDetectedUniverse) {
+                console.log('[img] ⏳ Pool Pixabay no listo aún — iniciando carga con universo:', aiDetectedUniverse);
+                _cargarPoolPixabay();
+            } else {
+                console.log('[img] ⏳ Pool Pixabay sin universo aún — usando Picsum transitorio');
+            }
+            return _siguienteUrlPicsum();
         }
         const url = _siguienteUrlPixabay();
         if (url) {
@@ -1214,11 +1443,14 @@ async function _pedirImagen(fragmentoTexto) {
 
     // ── Pexels: 1 request por turno ─────────────────────────────
     if (_imageProvider === 'pexels' && _pexelsKey) {
+        if (!aiDetectedUniverse) {
+            console.log('[img] ⏳ Pexels sin universo aún — usando Picsum transitorio');
+            return _siguienteUrlPicsum();
+        }
         if (_imgRequestActivo) return _imgUrlActual || null;
         _imgRequestActivo = true;
 
-        const universo = (typeof aiDetectedUniverse !== 'undefined' && aiDetectedUniverse)
-            ? aiDetectedUniverse : '_default';
+        const universo = aiDetectedUniverse;
         const query = (typeof construirQueryImagen === 'function')
             ? construirQueryImagen(universo, fragmentoTexto)
             : 'landscape nature';
@@ -1245,8 +1477,13 @@ async function _pedirImagen(fragmentoTexto) {
     // ── Unsplash: ciclar pool local ──────────────────────────────
     if (_imageProvider === 'unsplash' && _unsplashKey) {
         if (!_unsplashPoolListo && !_unsplashPoolCargando) {
-            console.log('[img] 🔄 Unsplash pool vacío — iniciando carga');
-            _cargarPoolUnsplash();
+            if (typeof aiDetectedUniverse !== 'undefined' && aiDetectedUniverse) {
+                console.log('[img] 🔄 Unsplash pool vacío — iniciando carga con universo:', aiDetectedUniverse);
+                _cargarPoolUnsplash();
+            } else {
+                console.log('[img] ⏳ Unsplash sin universo aún — usando Picsum transitorio');
+                return _siguienteUrlPicsum();
+            }
         }
         if (_unsplashPoolListo) {
             const url = _siguienteUrlUnsplash();
@@ -1260,6 +1497,29 @@ async function _pedirImagen(fragmentoTexto) {
             }
         }
         // Pool aún no listo — usar Picsum transitorio
+        return _siguienteUrlPicsum();
+    }
+
+    // ── Openverse: ciclar pool local (sin key, CC) ───────────────
+    if (_imageProvider === 'openverse') {
+        if (!_openversePoolListo && !_openversePoolCargando) {
+            if (typeof aiDetectedUniverse !== 'undefined' && aiDetectedUniverse) {
+                console.log('[img] 🔄 Openverse pool vacío — iniciando carga con universo:', aiDetectedUniverse);
+                _cargarPoolOpenverse();
+            } else {
+                console.log('[img] ⏳ Openverse pool vacío pero sin universo aún — usando Picsum transitorio');
+                return _siguienteUrlPicsum();
+            }
+        }
+        if (_openversePoolListo) {
+            const url = _siguienteUrlOpenverse();
+            if (url) {
+                _imgUrlActual = url;
+                if (statusTxt) statusTxt.textContent = `✓ Openverse (${_openversePoolIdx}/${_openversePool.length})`;
+                console.log(`[img] 🖼 Openverse pool · imagen ${_openversePoolIdx}/${_openversePool.length}`);
+                return url;
+            }
+        }
         return _siguienteUrlPicsum();
     }
 
@@ -1283,10 +1543,14 @@ async function smartRotCheck(sentenceIndex) {
     const _dbgKey = _pixabayKey ? `"${_pixabayKey.slice(0, 6)}..."` : 'VACÍA';
     console.log(`[img] ⏱ smartRotCheck · frase ${sentenceIndex} · provider=${_imageProvider} · key=${_dbgKey} · poolListo=${_pixabayPoolListo} · poolSize=${_pixabayPoolShared.length} · cargando=${_pixabayPoolCargando}`);
 
-    // Si Pixabay está activo pero el pool está vacío y no está cargando, forzar carga ahora
+    // Si Pixabay está activo pero el pool está vacío, forzar carga solo si hay universo
     if (_imageProvider === 'pixabay' && _pixabayKey && !_pixabayPoolListo && !_pixabayPoolCargando) {
-        console.log(`[img] 🔄 pool vacío — iniciando _cargarPoolPixabay()`);
-        _cargarPoolPixabay();
+        if (typeof aiDetectedUniverse !== 'undefined' && aiDetectedUniverse) {
+            console.log(`[img] 🔄 pool vacío — iniciando _cargarPoolPixabay() · universo: ${aiDetectedUniverse}`);
+            _cargarPoolPixabay();
+        } else {
+            console.log(`[img] ⏳ pool vacío pero sin universo — esperando detección`);
+        }
     } else if (_imageProvider === 'pixabay' && !_pixabayKey) {
         console.warn(`[img] ❌ Pixabay seleccionado pero _pixabayKey está vacía — ¿guardaste la API key?`);
     }
@@ -1351,6 +1615,200 @@ function actualizarPoolPixabayConPrompt(promptVisual) {
         _unsplashPool = [];
         _unsplashPoolIdx = 0;
         _cargarPoolUnsplash(promptVisual);
+    }
+
+    // Openverse: resetear el pool para que se recargue con el universo correcto
+    // (el pool inicial se cargó con _default antes de que aiDetectedUniverse estuviera disponible)
+    if (_imageProvider === 'openverse') {
+        console.log(`[img] 🔄 Openverse pool reseteado — universo ahora disponible: "${aiDetectedUniverse}"`);
+        _openversePoolListo = false;
+        _openversePool = [];
+        _openversePoolIdx = 0;
+        _cargarPoolOpenverse(promptVisual);
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// GENERACIÓN DE QUERIES VÍA CLAUDE API
+// Cuando el universo detectado es un nombre propio (ej: "Shadow Slave webnovel")
+// y no está en los diccionarios estáticos, Claude genera queries visuales específicas.
+// Resultado cacheado en localStorage para no repetir la llamada.
+// ═══════════════════════════════════════════════════════════════
+
+async function _generarQueriesConClaude(universo) {
+    const cacheKey = `img_queries__${universo.toLowerCase().replace(/\s+/g, '_')}`;
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) {
+        try {
+            const cachedData = JSON.parse(cached);
+            // Formato nuevo: { imageQueries, freesoundQueries }
+            const imageQueries = cachedData.imageQueries || (Array.isArray(cachedData) ? cachedData : null);
+            const freesoundQueries = cachedData.freesoundQueries || null;
+            if (Array.isArray(imageQueries) && imageQueries.length > 0) {
+                console.log(`[img] 🤖 Claude queries (cached) para "${universo}":`, imageQueries);
+                UNIVERSE_IMAGE_QUERIES[universo] = imageQueries.map(q => q + ' cinematic');
+                OPENVERSE_QUERIES[universo] = imageQueries;
+                if (Array.isArray(freesoundQueries) && freesoundQueries.length > 0) {
+                    if (!UNIVERSE_CONFIG[universo]) UNIVERSE_CONFIG[universo] = {};
+                    if (!UNIVERSE_CONFIG[universo].ambient) UNIVERSE_CONFIG[universo].ambient = {};
+                    UNIVERSE_CONFIG[universo].ambient.freesoundQueries = freesoundQueries;
+                    UNIVERSE_CONFIG[universo].ambient.label = universo;
+                }
+                return imageQueries;
+            }
+        } catch (e) { /* ignorar cache corrupto */ }
+    }
+
+    // Usar la misma variable global que translation.js
+    const apiKey = (typeof claudeApiKey !== 'undefined' ? claudeApiKey : '')
+        || localStorage.getItem('claude_api_key') || '';
+    if (!apiKey) {
+        console.warn(`[img] ⚠ Claude API key no disponible — no se pueden generar queries para "${universo}"`);
+        return null;
+    }
+
+    console.log(`[img] 🤖 Generando queries visuales con Claude para universo: "${universo}"…`);
+
+    try {
+        const res = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': apiKey,
+                'anthropic-version': '2023-06-01',
+                'anthropic-dangerous-direct-browser-access': 'true'
+            },
+            body: JSON.stringify({
+                model: 'claude-haiku-4-5-20251001',
+                max_tokens: 300,
+                messages: [{
+                    role: 'user',
+                    content: `You are an expert in fiction and ambient aesthetics. For the fictional universe "${universo}", generate search queries that capture its MOOD and VISUAL STYLE.
+
+Respond ONLY with a valid JSON object (no markdown, no explanation):
+{
+  "imageQueries": ["query1", "query2", "query3", "query4", "query5", "query6"],
+  "freesoundQueries": ["ambient music query1", "ambient music query2", "ambient music query3", "ambient music query4"]
+}
+
+Rules for imageQueries (Openverse/Pixabay — 1-3 words each):
+- Environments, landscapes, atmosphere — no character names or proper nouns
+- Short noun phrases: "dark forest", "ancient ruins", "storm sky"
+
+Rules for freesoundQueries (Freesound — 3-5 words each):
+- Ambient/atmospheric music that fits the universe mood
+- Examples: "dark eldritch ambient drone", "epic fantasy orchestral", "horror tension music"`
+                }]
+            })
+        });
+
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        const text = data.content?.[0]?.text || '';
+        const match = text.match(/\{[\s\S]*?\}/);
+        if (!match) throw new Error('No JSON object in response');
+        const parsed = JSON.parse(match[0]);
+        const imageQueries = parsed.imageQueries;
+        const freesoundQueries = parsed.freesoundQueries;
+        if (!Array.isArray(imageQueries) || imageQueries.length === 0) throw new Error('Empty imageQueries');
+
+        console.log(`[img] 🤖 Claude image queries para "${universo}":`, imageQueries);
+        console.log(`[img] 🤖 Claude freesound queries para "${universo}":`, freesoundQueries);
+        localStorage.setItem(cacheKey, JSON.stringify({ imageQueries, freesoundQueries }));
+
+        // Inyectar image queries en los diccionarios
+        UNIVERSE_IMAGE_QUERIES[universo] = imageQueries.map(q => q + ' cinematic');
+        OPENVERSE_QUERIES[universo] = imageQueries;
+
+        // Inyectar freesoundQueries en UNIVERSE_CONFIG para que player.js las use
+        if (Array.isArray(freesoundQueries) && freesoundQueries.length > 0) {
+            if (!UNIVERSE_CONFIG[universo]) UNIVERSE_CONFIG[universo] = {};
+            if (!UNIVERSE_CONFIG[universo].ambient) UNIVERSE_CONFIG[universo].ambient = {};
+            UNIVERSE_CONFIG[universo].ambient.freesoundQueries = freesoundQueries;
+            UNIVERSE_CONFIG[universo].ambient.label = universo;
+            console.log(`[img] 🎵 freesoundQueries inyectadas en UNIVERSE_CONFIG["${universo}"]`);
+        }
+
+        return imageQueries;
+    } catch (e) {
+        console.warn(`[img] ⚠ Claude query generation falló:`, e.message);
+        return null;
+    }
+}
+
+// Llamar cuando aiDetectedUniverse cambia — permite recargar el pool
+// sin necesidad de un promptVisual (usa las queries del universo directamente)
+async function notificarUniversoDetectado(universo) {
+    if (!universo) return;
+    console.log(`[img] 🌍 Universo detectado: "${universo}" — recargando pool del proveedor activo`);
+
+    // Si el universo no está en los diccionarios estáticos, generar queries con Claude
+    const esUniversoConocido = universo in OPENVERSE_QUERIES || universo in UNIVERSE_IMAGE_QUERIES;
+    if (!esUniversoConocido) {
+        const queries = await _generarQueriesConClaude(universo);
+        if (queries) {
+            mostrarNotificacion(`🤖 Queries visuales generadas para "${universo}"`);
+        } else {
+            // Fallback: mapear por keywords del nombre del universo a un género conocido
+            const nombreLower = universo.toLowerCase();
+            let generoFallback = '_default';
+            if (/shadow|dark|nightmare|horror|eldritch|demon|curse/.test(nombreLower)) generoFallback = 'horror';
+            else if (/slave|war|battle|warrior|sword|knight/.test(nombreLower)) generoFallback = 'fantasy_epic';
+            else if (/cultivat|xianxia|wuxia|immortal|dao/.test(nombreLower)) generoFallback = 'cultivation';
+            else if (/space|star|galaxy|cyber|sci/.test(nombreLower)) generoFallback = 'sci_fi';
+            else if (/romance|love|heart/.test(nombreLower)) generoFallback = 'romance';
+            else if (/adventure|quest|journey/.test(nombreLower)) generoFallback = 'adventure';
+
+            OPENVERSE_QUERIES[universo] = OPENVERSE_QUERIES[generoFallback];
+            UNIVERSE_IMAGE_QUERIES[universo] = UNIVERSE_IMAGE_QUERIES[generoFallback];
+            console.log(`[img] 🔀 Universo "${universo}" → fallback a género "${generoFallback}"`);
+        }
+    }
+
+    if (_imageProvider === 'pixabay' && _pixabayKey) {
+        _pixabayPoolListo = false;
+        _pixabayPoolShared = [];
+        _pixabayPoolIdx = 0;
+        _cargarPoolPixabay(); // usará aiDetectedUniverse que ya está seteado
+    }
+    if (_imageProvider === 'openverse') {
+        _openversePoolListo = false;
+        _openversePool = [];
+        _openversePoolIdx = 0;
+        _cargarPoolOpenverse();
+    }
+    if (_imageProvider === 'unsplash' && _unsplashKey) {
+        _unsplashPoolListo = false;
+        _unsplashPool = [];
+        _unsplashPoolIdx = 0;
+        _cargarPoolUnsplash();
+    }
+    // Reconstruir el smart pool (definido en video.js)
+    if (typeof refrescarSmartPool === 'function') refrescarSmartPool();
+    // Precalentar Pixabay si aplica
+    if (typeof precalentarPoolPixabay === 'function') precalentarPoolPixabay();
+
+    // ── Música ambiental: ahora que UNIVERSE_CONFIG tiene las freesoundQueries listas ──
+    const univConfig = UNIVERSE_CONFIG[universo];
+    const ambientCfg = univConfig?.ambient;
+    if (ambientCfg && typeof selectGenre === 'function') {
+        const genre = ambientCfg.defaultGenre || 'mystery';
+        const label = ambientCfg.label || universo;
+        if (!ambientGenre) {
+            // Limpiar cache para forzar búsqueda con las nuevas queries
+            const ck = `__universe__${universo}`;
+            if (typeof _lastFreesoundResults !== 'undefined') delete _lastFreesoundResults[ck];
+            selectGenre(genre).then(() => {
+                const trackGenreEl = document.getElementById('ambient-track-genre');
+                if (trackGenreEl) trackGenreEl.textContent = `${label} · auto`;
+            });
+            console.log(`🎵 [img] Música iniciada para universo "${universo}" con queries de Claude`);
+        } else {
+            // Ya hay género activo — solo invalidar cache para que la próxima pista use las nuevas queries
+            const ck = `__universe__${universo}`;
+            if (typeof _lastFreesoundResults !== 'undefined') delete _lastFreesoundResults[ck];
+            console.log(`🎵 [img] Cache de Freesound invalidado — próxima pista usará queries de "${universo}"`);
+        }
     }
 }
 

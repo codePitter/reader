@@ -634,18 +634,33 @@
                 <div id="img-prov-menu"
                      style="display:none;position:absolute;bottom:calc(100% + 6px);left:0;
                             background:var(--surface2);border:1px solid var(--border);border-radius:6px;
-                            padding:8px;min-width:200px;z-index:200;box-shadow:0 4px 20px rgba(0,0,0,0.6);">
+                            padding:8px;min-width:220px;z-index:200;box-shadow:0 4px 20px rgba(0,0,0,0.6);">
                     <div style="font-size:0.58rem;color:var(--text-dim);letter-spacing:0.05em;text-transform:uppercase;margin-bottom:6px;">Fuente de imágenes</div>
                     <!-- Opciones -->
                     <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:8px;" id="img-prov-options">
-                        <label id="opt-picsum" class="img-prov-opt img-prov-active"><span class="img-prov-dot"></span> 🌄 Picsum      <small>(sin key, gratis)</small></label>
-                        <label id="opt-pexels" class="img-prov-opt"><span class="img-prov-dot"></span> 🖼 Pexels      <small>(fotos HD, gratis)</small></label>
-                        <label id="opt-pixabay" class="img-prov-opt"><span class="img-prov-dot"></span> 📷 Pixabay    <small>(fotos reales)</small></label>
-                        <label id="opt-puter" class="img-prov-opt"><span class="img-prov-dot"></span> 🤖 Puter.js   <small>(IA generativa)</small></label>
-                        <label id="opt-pollinations" class="img-prov-opt"><span class="img-prov-dot"></span> ✨ Pollinations <small>(IA, gratis)</small></label>
-                        <label id="opt-procedural" class="img-prov-opt"><span class="img-prov-dot"></span> 🎨 Procedural  <small>(sin internet)</small></label>
+                        <label id="opt-picsum" class="img-prov-opt img-prov-active"><span class="img-prov-dot"></span> 🌄 Picsum       <small>(sin key, gratis)</small></label>
+                        <label id="opt-pexels" class="img-prov-opt"><span class="img-prov-dot"></span> 🖼 Pexels        <small>(fotos HD, gratis)</small></label>
+                        <label id="opt-pixabay" class="img-prov-opt"><span class="img-prov-dot"></span> 📷 Pixabay       <small>(fotos reales)</small></label>
+                        <label id="opt-openverse" class="img-prov-opt"><span class="img-prov-dot"></span> 🌐 Openverse     <small>(CC0, sin key)</small></label>
+                        <label id="opt-puter" class="img-prov-opt"><span class="img-prov-dot"></span> 🤖 Puter.js      <small>(IA generativa)</small></label>
+                        <label id="opt-pollinations" class="img-prov-opt"><span class="img-prov-dot"></span> ✨ Pollinations  <small>(IA, gratis)</small></label>
+                        <label id="opt-procedural" class="img-prov-opt"><span class="img-prov-dot"></span> 🎨 Procedural    <small>(sin internet)</small></label>
                     </div>
-                    <!-- Panel Pexels key -->
+
+                    <!-- Helper: fila de frecuencia reutilizable -->
+                    <!-- Picsum frecuencia -->
+                    <div id="picsum-freq-popover" style="display:none;border-top:1px solid var(--border);padding-top:7px;margin-top:2px;">
+                        <div style="font-size:0.56rem;color:var(--text-dim);margin-bottom:5px;">🌄 Sin API key · imágenes aleatorias</div>
+                        <div style="display:flex;align-items:center;gap:6px;">
+                            <span style="font-size:0.54rem;color:var(--text-dim);white-space:nowrap;">⏱ Cambiar cada</span>
+                            <input type="number" min="1" max="200" id="freq-picsum-pop"
+                                   style="width:42px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:'DM Mono',monospace;font-size:0.6rem;padding:3px 5px;outline:none;text-align:center;"
+                                   onblur="guardarFrecuenciaImagen('picsum',this)" onkeydown="if(event.key==='Enter')guardarFrecuenciaImagen('picsum',this)">
+                            <span style="font-size:0.54rem;color:var(--text-dim);">frases</span>
+                        </div>
+                    </div>
+
+                    <!-- Pexels key + frecuencia -->
                     <div id="pexels-key-popover" style="display:none;border-top:1px solid var(--border);padding-top:7px;margin-top:2px;">
                         <div style="font-size:0.58rem;color:var(--text-dim);margin-bottom:4px;">
                             🔑 Pexels API Key
@@ -653,20 +668,25 @@
                         </div>
                         <div style="display:flex;gap:4px;">
                             <input type="password" id="pexels-key-input-video" placeholder="tu-api-key-pexels"
-                                   style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:4px;
-                                          color:var(--text);font-family:'DM Mono',monospace;font-size:0.6rem;
-                                          padding:4px 6px;outline:none;min-width:0;">
+                                   style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:'DM Mono',monospace;font-size:0.6rem;padding:4px 6px;outline:none;min-width:0;">
                             <button type="button" onclick="guardarPexelsKeyVideo()"
-                                    style="background:var(--accent2);border:none;border-radius:4px;color:var(--bg);
-                                           font-family:'DM Mono',monospace;font-size:0.6rem;padding:4px 8px;cursor:pointer;flex-shrink:0;">
+                                    style="background:var(--accent2);border:none;border-radius:4px;color:var(--bg);font-family:'DM Mono',monospace;font-size:0.6rem;padding:4px 8px;cursor:pointer;flex-shrink:0;">
                                 OK
                             </button>
                         </div>
                         <div style="font-size:0.52rem;color:var(--text-dim);margin-top:4px;line-height:1.3;">
                             Key gratuita en <a href="https://www.pexels.com/api/key/" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none;">pexels.com/api/key</a>
                         </div>
+                        <div style="display:flex;align-items:center;gap:6px;margin-top:6px;">
+                            <span style="font-size:0.54rem;color:var(--text-dim);white-space:nowrap;">⏱ Cambiar cada</span>
+                            <input type="number" min="1" max="200" id="freq-pexels-pop"
+                                   style="width:42px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:'DM Mono',monospace;font-size:0.6rem;padding:3px 5px;outline:none;text-align:center;"
+                                   onblur="guardarFrecuenciaImagen('pexels',this)" onkeydown="if(event.key==='Enter')guardarFrecuenciaImagen('pexels',this)">
+                            <span style="font-size:0.54rem;color:var(--text-dim);">frases</span>
+                        </div>
                     </div>
-                    <!-- Panel Pixabay key -->
+
+                    <!-- Pixabay key + frecuencia -->
                     <div id="pixabay-key-popover" style="display:none;border-top:1px solid var(--border);padding-top:7px;margin-top:2px;">
                         <div style="font-size:0.58rem;color:var(--text-dim);margin-bottom:4px;">
                             🔑 Pixabay API Key
@@ -674,12 +694,9 @@
                         </div>
                         <div style="display:flex;gap:4px;">
                             <input type="password" id="pixabay-key-input-video" placeholder="tu-api-key-aquí"
-                                   style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:4px;
-                                          color:var(--text);font-family:'DM Mono',monospace;font-size:0.6rem;
-                                          padding:4px 6px;outline:none;min-width:0;">
+                                   style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:'DM Mono',monospace;font-size:0.6rem;padding:4px 6px;outline:none;min-width:0;">
                             <button type="button" onclick="guardarPixabayKeyVideo()"
-                                    style="background:var(--accent2);border:none;border-radius:4px;color:var(--bg);
-                                           font-family:'DM Mono',monospace;font-size:0.6rem;padding:4px 8px;cursor:pointer;flex-shrink:0;">
+                                    style="background:var(--accent2);border:none;border-radius:4px;color:var(--bg);font-family:'DM Mono',monospace;font-size:0.6rem;padding:4px 8px;cursor:pointer;flex-shrink:0;">
                                 OK
                             </button>
                         </div>
@@ -687,13 +704,32 @@
                             Sin key → fotos aleatorias (Picsum).<br>
                             Key gratis en <a href="https://pixabay.com/api/docs/" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none;">pixabay.com/api/docs</a>
                         </div>
+                        <div style="display:flex;align-items:center;gap:6px;margin-top:6px;">
+                            <span style="font-size:0.54rem;color:var(--text-dim);white-space:nowrap;">⏱ Cambiar cada</span>
+                            <input type="number" min="1" max="200" id="freq-pixabay-pop"
+                                   style="width:42px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:'DM Mono',monospace;font-size:0.6rem;padding:3px 5px;outline:none;text-align:center;"
+                                   onblur="guardarFrecuenciaImagen('pixabay',this)" onkeydown="if(event.key==='Enter')guardarFrecuenciaImagen('pixabay',this)">
+                            <span style="font-size:0.54rem;color:var(--text-dim);">frases</span>
+                        </div>
                     </div>
-                    <!-- Panel Puter model -->
+
+                    <!-- Openverse frecuencia -->
+                    <div id="openverse-key-popover" style="display:none;border-top:1px solid var(--border);padding-top:7px;margin-top:2px;">
+                        <div style="font-size:0.56rem;color:var(--text-dim);margin-bottom:5px;">🌐 Sin API key · 800M imágenes CC0</div>
+                        <div style="display:flex;align-items:center;gap:6px;">
+                            <span style="font-size:0.54rem;color:var(--text-dim);white-space:nowrap;">⏱ Cambiar cada</span>
+                            <input type="number" min="1" max="200" id="freq-openverse-pop"
+                                   style="width:42px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:'DM Mono',monospace;font-size:0.6rem;padding:3px 5px;outline:none;text-align:center;"
+                                   onblur="guardarFrecuenciaImagen('openverse',this)" onkeydown="if(event.key==='Enter')guardarFrecuenciaImagen('openverse',this)">
+                            <span style="font-size:0.54rem;color:var(--text-dim);">frases</span>
+                        </div>
+                    </div>
+
+                    <!-- Puter model + frecuencia -->
                     <div id="puter-key-popover" style="display:none;border-top:1px solid var(--border);padding-top:7px;margin-top:2px;">
                         <div style="font-size:0.58rem;color:var(--text-dim);margin-bottom:4px;">Modelo Puter.js</div>
                         <select id="puter-model-pop" onchange="puterModel=this.value;localStorage.setItem('puter_model',this.value);document.getElementById('puter-model').value=this.value;"
-                                style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:4px;
-                                       color:var(--text);font-family:'DM Mono',monospace;font-size:0.6rem;padding:4px 6px;">
+                                style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:'DM Mono',monospace;font-size:0.6rem;padding:4px 6px;">
                             <option value="gpt-image-1.5">GPT Image 1.5 (recomendado)</option>
                             <option value="gpt-image-1">GPT Image 1</option>
                             <option value="dall-e-3">DALL-E 3</option>
@@ -701,7 +737,39 @@
                             <option value="black-forest-labs/FLUX.1-pro">FLUX.1 Pro</option>
                             <option value="google/imagen-4.0-fast">Imagen 4.0 Fast</option>
                         </select>
+                        <div style="display:flex;align-items:center;gap:6px;margin-top:6px;">
+                            <span style="font-size:0.54rem;color:var(--text-dim);white-space:nowrap;">⏱ Cambiar cada</span>
+                            <input type="number" min="1" max="200" id="freq-puter-pop"
+                                   style="width:42px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:'DM Mono',monospace;font-size:0.6rem;padding:3px 5px;outline:none;text-align:center;"
+                                   onblur="guardarFrecuenciaImagen('puter',this)" onkeydown="if(event.key==='Enter')guardarFrecuenciaImagen('puter',this)">
+                            <span style="font-size:0.54rem;color:var(--text-dim);">frases</span>
+                        </div>
                     </div>
+
+                    <!-- Pollinations frecuencia -->
+                    <div id="pollinations-freq-popover" style="display:none;border-top:1px solid var(--border);padding-top:7px;margin-top:2px;">
+                        <div style="font-size:0.56rem;color:var(--text-dim);margin-bottom:5px;">✨ IA generativa · sin API key</div>
+                        <div style="display:flex;align-items:center;gap:6px;">
+                            <span style="font-size:0.54rem;color:var(--text-dim);white-space:nowrap;">⏱ Cambiar cada</span>
+                            <input type="number" min="1" max="200" id="freq-pollinations-pop"
+                                   style="width:42px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:'DM Mono',monospace;font-size:0.6rem;padding:3px 5px;outline:none;text-align:center;"
+                                   onblur="guardarFrecuenciaImagen('pollinations',this)" onkeydown="if(event.key==='Enter')guardarFrecuenciaImagen('pollinations',this)">
+                            <span style="font-size:0.54rem;color:var(--text-dim);">frases</span>
+                        </div>
+                    </div>
+
+                    <!-- Procedural frecuencia -->
+                    <div id="procedural-freq-popover" style="display:none;border-top:1px solid var(--border);padding-top:7px;margin-top:2px;">
+                        <div style="font-size:0.56rem;color:var(--text-dim);margin-bottom:5px;">🎨 Generado localmente · sin internet</div>
+                        <div style="display:flex;align-items:center;gap:6px;">
+                            <span style="font-size:0.54rem;color:var(--text-dim);white-space:nowrap;">⏱ Cambiar cada</span>
+                            <input type="number" min="1" max="200" id="freq-procedural-pop"
+                                   style="width:42px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:'DM Mono',monospace;font-size:0.6rem;padding:3px 5px;outline:none;text-align:center;"
+                                   onblur="guardarFrecuenciaImagen('procedural',this)" onkeydown="if(event.key==='Enter')guardarFrecuenciaImagen('procedural',this)">
+                            <span style="font-size:0.54rem;color:var(--text-dim);">frases</span>
+                        </div>
+                    </div>
+
                     <div style="font-size:0.52rem;color:var(--text-dim);margin-top:6px;" id="img-prov-status-pop"></div>
                 </div>
             </div>
