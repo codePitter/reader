@@ -1,0 +1,221 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comic Reader</title>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Bebas+Neue&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/comic_reader.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📖</text></svg>">
+</head>
+<body class="fit-width dir-ltr">
+
+<!-- ─── HIDDEN FILE INPUTS ─── -->
+<input type="file" id="file-input" accept="image/*" multiple>
+<input type="file" id="dir-input" webkitdirectory multiple accept="image/*">
+<input type="file" id="zip-input" accept=".zip,.cbz,.cbr">
+
+<!-- ─── NOTIFICATION ─── -->
+<div id="notif"></div>
+
+<!-- ─── ZOOM BADGE ─── -->
+<div id="zoom-badge"></div>
+
+<!-- ─── SETTINGS PANEL ─── -->
+<div id="settings-panel">
+
+    <div class="sp-section">
+        <div class="sp-label">Ajuste de imagen</div>
+        <div class="sp-row">
+            <button class="sp-btn active" id="fit-width-btn"    onclick="setFit('fit-width')">Ancho</button>
+            <button class="sp-btn"        id="fit-height-btn"   onclick="setFit('fit-height')">Alto</button>
+            <button class="sp-btn"        id="fit-original-btn" onclick="setFit('fit-original')">Original</button>
+            <button class="sp-btn"        id="fit-double-btn"   onclick="setFit('fit-double')">Doble</button>
+        </div>
+    </div>
+
+    <div class="sp-section">
+        <div class="sp-label">Dirección de lectura</div>
+        <div class="sp-row">
+            <button class="sp-btn" id="dir-rtl-btn" onclick="setDir('rtl')">RTL ← Manga</button>
+            <button class="sp-btn" id="dir-ltr-btn" onclick="setDir('ltr')">LTR → Cómic</button>
+        </div>
+    </div>
+
+    <div class="sp-section">
+        <div class="sp-label">Espaciado entre páginas</div>
+        <div class="sp-slider-row">
+            <span>0</span>
+            <input type="range" id="gap-slider" min="0" max="32" step="2" value="2"
+                   oninput="setGap(this.value)">
+            <span>32</span>
+            <span class="sp-slider-val" id="gap-val">2px</span>
+        </div>
+    </div>
+
+    <div class="sp-section">
+        <div class="sp-label">Fondo</div>
+        <div class="sp-row">
+            <button class="sp-btn active" onclick="setBg('#050505')">■ Negro</button>
+            <button class="sp-btn"        onclick="setBg('#1a1a1a')">■ Gris</button>
+            <button class="sp-btn"        onclick="setBg('#f5f0eb')">■ Papel</button>
+            <button class="sp-btn"        onclick="setBg('#ffffff')">■ Blanco</button>
+        </div>
+    </div>
+
+    <div class="sp-section">
+        <div class="sp-label">Navegación click</div>
+        <div class="sp-row">
+            <button class="sp-btn active" id="click-nav-on"  onclick="setClickNav(true)">Activo</button>
+            <button class="sp-btn"        id="click-nav-off" onclick="setClickNav(false)">Off</button>
+        </div>
+    </div>
+
+</div>
+
+<!-- ─── TOP BAR ─── -->
+<div id="topbar">
+    <div id="topbar-logo">📖 COMIC</div>
+    <div class="topbar-sep"></div>
+
+    <button class="tb-btn active" id="sidebar-toggle-btn"
+            onclick="toggleSidebar()" title="Capítulos (S)">☰ Capítulos</button>
+
+    <button class="tb-btn" onclick="openFiles()" title="Cargar imágenes">＋ Imágenes</button>
+    <button class="tb-btn" onclick="openDir()"   title="Cargar carpeta">📁 Carpeta</button>
+    <button class="tb-btn" onclick="openZip()"   title="Cargar ZIP / CBZ">📦 ZIP / CBZ</button>
+
+    <div class="topbar-sep"></div>
+    <div id="topbar-title" title="">Sin contenido cargado</div>
+    <div id="topbar-page-info">—</div>
+    <div class="topbar-sep"></div>
+
+    <button class="tb-btn" id="thumb-toggle-btn"
+            onclick="toggleThumbs()" title="Miniaturas (T)">⊞ Miniaturas</button>
+    <button class="tb-btn" id="settings-toggle-btn"
+            onclick="toggleSettings()" title="Ajustes (P)">⚙ Ajustes</button>
+    <button class="tb-btn"
+            onclick="toggleFullscreen()" title="Pantalla completa (F)">⛶ Fullscreen</button>
+</div>
+
+<!-- ─── BODY ─── -->
+<div id="body">
+
+    <!-- SIDEBAR -->
+    <div id="sidebar">
+        <div id="sidebar-inner">
+
+            <div id="sidebar-head">
+                <div id="sidebar-label">Capítulos</div>
+                <div id="search-wrap">
+                    <span id="search-icon">🔍</span>
+                    <input type="text" id="chapter-search"
+                           placeholder="Buscar capítulo…"
+                           oninput="filterChapters(this.value)">
+                </div>
+            </div>
+
+            <div id="chapter-list"></div>
+
+            <div id="sidebar-footer">
+                <div id="sidebar-stats">
+                    <div>Capítulos: <span id="stat-chapters">0</span></div>
+                    <div>Páginas: <span id="stat-pages">0</span></div>
+                    <div>Capítulo actual: <span id="stat-cur">—</span></div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- VIEWER -->
+    <div id="viewer">
+
+        <!-- SUB-NAV -->
+        <div id="subnav">
+            <button class="sn-btn" id="btn-prev"
+                    onclick="prevChapter()" disabled
+                    title="Capítulo anterior (←)">◀</button>
+            <button class="sn-btn" id="btn-prev-page"
+                    onclick="scrollPage(-1)"
+                    title="Subir (↑)">‹ Pág</button>
+
+            <div id="subnav-progress"
+                 onclick="seekProgress(event)"
+                 title="Clic para saltar a capítulo">
+                <div id="subnav-progress-fill"></div>
+                <div id="subnav-progress-thumb"></div>
+            </div>
+
+            <div id="subnav-page-jump">
+                <span>Cap.</span>
+                <input type="number" id="page-jump-input" min="1" value="1"
+                       onchange="jumpToChapter(this.value - 1)"
+                       onkeydown="if(event.key==='Enter') jumpToChapter(this.value - 1)">
+                <span id="page-jump-total">/ 0</span>
+            </div>
+
+            <button class="sn-btn" id="btn-next-page"
+                    onclick="scrollPage(1)"
+                    title="Bajar (↓)">Pág ›</button>
+            <button class="sn-btn" id="btn-next"
+                    onclick="nextChapter()" disabled
+                    title="Capítulo siguiente (→)">▶</button>
+        </div>
+
+        <!-- SCROLL AREA -->
+        <div id="scroll-area">
+
+            <!-- Drop zone -->
+            <div id="drop-zone">
+                <div id="drop-zone-icon">📚</div>
+                <div id="drop-zone-title">Carga tu manga o cómic</div>
+                <div id="drop-zone-sub">
+                    Arrastrá imágenes JPG / PNG / WebP aquí,<br>
+                    o cargá una carpeta o archivo ZIP / CBZ.<br>
+                    Soporte RTL (manga) y LTR (cómic occidental).
+                </div>
+                <div id="drop-zone-buttons">
+                    <button class="dz-btn primary" onclick="openFiles()">Seleccionar imágenes</button>
+                    <button class="dz-btn"          onclick="openDir()">Abrir carpeta</button>
+                    <button class="dz-btn"          onclick="openZip()">Abrir ZIP / CBZ</button>
+                </div>
+            </div>
+
+            <!-- Páginas -->
+            <div id="pages-container" style="display:none;"></div>
+
+            <!-- Loading overlay -->
+            <div id="loading-overlay">
+                <div id="load-progress-wrap">
+                    <div class="spinner"></div>
+                    <div id="load-progress-label">Cargando…</div>
+                    <div id="load-progress-bar-track">
+                        <div id="load-progress-bar"></div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Thumbnail strip -->
+        <div id="thumb-strip"></div>
+
+    </div><!-- /viewer -->
+
+</div><!-- /body -->
+
+<!-- ─── SCRIPTS ───────────────────────────────────────────────────────
+     Orden de carga:
+       1. JSZip          — dependencia externa para ZIP/CBZ
+       2. comic_reader   — define S (estado global), renderizado, nav
+       3. comic_ui       — sidebar, thumbs, settings, notify, loader UI
+       4. comic_loader   — carga de archivos, ZIP, drag&drop (usa todo lo anterior)
+──────────────────────────────────────────────────────────────────── -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="js/comic_reader.js"></script>
+<script src="js/comic_ui.js"></script>
+<script src="js/comic_loader.js"></script>
+
+</body>
+</html>

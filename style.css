@@ -61,6 +61,24 @@ body {
         margin-left: auto;
     }
 
+/* ── Botones de exportación en el top-bar ── */
+.export-btn:disabled {
+    opacity: 0.28;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.export-btn:not(:disabled) {
+    border-color: rgba(200, 169, 110, 0.45);
+    color: #c8a96e;
+}
+
+    .export-btn:not(:disabled):hover {
+        border-color: #c8a96e;
+        color: #c8a96e;
+        background: rgba(200, 169, 110, 0.08);
+    }
+
 .stats-bar {
     display: flex;
     gap: 24px;
@@ -1588,18 +1606,27 @@ input[type="text"] {
     opacity: 0.7;
 }
 
-/* Botón unificado ▶/⏸ */
-.btn-tts-unified {
-    min-width: 32px !important;
-    width: 32px !important;
-    height: 32px !important;
+/* Botón unificado ▶/⏸ y stop — mismas dimensiones, mismo centrado */
+.btn-tts-unified,
+#btn-stop {
+    min-width: 30px !important;
+    width: 30px !important;
+    height: 30px !important;
     padding: 0 !important;
-    font-size: 0.9rem !important;
+    font-size: 0.82rem !important;
+    line-height: 1 !important;
     display: flex !important;
-    align-items: center;
-    justify-content: center;
-    border-radius: 50% !important;
+    align-items: center !important;
+    justify-content: center !important;
     flex-shrink: 0;
+}
+
+.btn-tts-unified {
+    border-radius: 50% !important;
+}
+
+#btn-stop {
+    border-radius: 6px !important;
 }
 
 .tts-control-bar {
@@ -1692,17 +1719,18 @@ input[type="text"] {
         opacity: 0.7;
     }
 
-    /* Botón unificado ▶/⏸ */
-    .btn-tts-unified {
-        min-width: 32px !important;
-        width: 32px !important;
-        height: 32px !important;
+    /* Botón unificado ▶/⏸ y stop */
+    .btn-tts-unified,
+    #btn-stop {
+        min-width: 30px !important;
+        width: 30px !important;
+        height: 30px !important;
         padding: 0 !important;
-        font-size: 0.9rem !important;
+        font-size: 0.82rem !important;
+        line-height: 1 !important;
         display: flex !important;
-        align-items: center;
-        justify-content: center;
-        border-radius: 50% !important;
+        align-items: center !important;
+        justify-content: center !important;
         flex-shrink: 0;
     }
 

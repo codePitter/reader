@@ -189,4 +189,14 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         obs.observe(sel, { attributes: true, attributeFilter: ['style'] });
     }
+
+    // Limpiar caché ambiental al cargar un nuevo archivo (EPUB u otro)
+    const epubInput = document.getElementById('epub-file');
+    if (epubInput) {
+        epubInput.addEventListener('change', () => {
+            if (typeof limpiarCacheAmbiental === 'function') {
+                limpiarCacheAmbiental();
+            }
+        });
+    }
 });

@@ -345,269 +345,208 @@ async function parseODT(arrayBuffer) {
     return parseTXT(new TextEncoder().encode(texto).buffer);
 }
 
-// ── MOBI / PRC ────────────────────────────
-// MOBI es un formato binario propietario; se extrae lo que sea legible
+// ── MOBI / PRC — delega a parseAZW3 (misma estructura PalmDB) ────
 async function parseMOBI(arrayBuffer) {
-    const bytes = new Uint8Array(arrayBuffer);
-    const decoder = new TextDecoder('utf-8', { fatal: false });
-
-    // Buscar texto legible extrayendo strings de caracteres imprimibles
-    let texto = '';
-    let bloque = '';
-    for (let i = 0; i < bytes.length; i++) {
-        const c = bytes[i];
-        if ((c >= 0x20 && c < 0x7F) || c === 0x0A || c === 0x0D) {
-            bloque += String.fromCharCode(c);
-        } else {
-            if (bloque.length > 40) texto += bloque + '\n';
-            bloque = '';
-        }
-    }
-    if (bloque.length > 40) texto += bloque;
-
-    // Limpiar tags HTML residuales del MOBI
-    texto = texto
-        .replace(/<[^>]{0,200}>/g, ' ')
-        .replace(/&[a-z]{2,6};/g, ' ')
-        .replace(/[ \t]{3,}/g, ' ')
-        .replace(/\n{3,}/g, '\n\n')
-        .trim();
-
-    if (texto.length < 100) {
-        throw new Error('No se pudo extraer texto del MOBI. Convierte a EPUB para mejores resultados.');
-    }
-
-    return parseTXT(new TextEncoder().encode(texto).buffer);
+    return parseAZW3(arrayBuffer);
 }
 
-// ── AZW3 / KF8 (Kindle Format 8) ──────────
-// Estructura PalmDB:
-//   0x00  32b  nombre del libro
-//   0x4C   2b  numRec (número de registros)
-//   0x4E   numRec*8b  [offset u32 BE, attrs u32 BE] por registro
+// ── AZW3 / KF8 / MOBI ─────────────────────────────────────────────
+// Usa foliate-js (la librería de referencia open source) para HuffCDIC.
+// foliate-js es el motor detrás del lector GNOME Foliate y es la única
+// implementación JS correcta del decompressor HuffCDIC de Amazon.
 //
-// El registro 0 es el "PalmDOC header" (16 bytes) + "MOBI header" (desde byte 16).
-// El MOBI header empieza con el magic "MOBI" en el byte 16 del registro 0.
-//
-// Para AZW3 con KF8: existe un registro especial "BOUNDARY" que separa el
-// MOBI2 clásico del bloque KF8. El KF8 tiene su propio header (también con "MOBI")
-// pero el tipo de contenido (offset 0x60 en el MOBI header) es 0x101 en vez de 0x002.
-//
-// DRM: si el byte de cifrado en el PalmDOC header (offset 12) es != 0, el contenido
-// está cifrado y no es posible extraer texto sin la clave DRM.
+// Estrategia:
+//   1. Importar mobi.js de foliate-js vía jsDelivr (ES module dinámico)
+//   2. Usar su API para extraer secciones/texto
+//   3. Convertir al formato {id, title, html} que usa este lector
+//   4. Si el CDN falla → fallback a extracción directa de texto legible
 
 async function parseAZW3(arrayBuffer) {
+    // ── Verificar DRM antes de intentar cualquier cosa ────────────
     const bytes = new Uint8Array(arrayBuffer);
-    const view = new DataView(arrayBuffer);
-    const utf8 = new TextDecoder('utf-8', { fatal: false });
-
-    if (bytes.length < 0x50) throw new Error('Archivo AZW3/MOBI demasiado pequeño');
-
-    // ── 1. Leer lista de registros del PalmDB ──
-    const numRec = view.getUint16(0x4C, false);
-    if (numRec < 1) throw new Error('PalmDB sin registros');
-
-    const recOffsets = [];
-    for (let i = 0; i < numRec; i++) {
-        recOffsets.push(view.getUint32(0x4E + i * 8, false));
-    }
-    recOffsets.push(bytes.length); // sentinel final
-
-    function getRecord(idx) {
-        if (idx < 0 || idx >= numRec) return null;
-        const s = recOffsets[idx];
-        const e = recOffsets[idx + 1];
-        if (s >= bytes.length || s >= e) return null;
-        return bytes.slice(s, Math.min(e, bytes.length));
-    }
-
-    // ── 2. Verificar el PalmDOC header en el registro 0 ──
-    // Registro 0: [compression u16][unused u16][textLength u32][textRecCount u16][recSize u16][encryption u16][unused2 u16]
-    const rec0 = getRecord(0);
-    if (!rec0 || rec0.length < 16) throw new Error('Registro 0 inválido');
-
-    const rec0View = new DataView(rec0.buffer, rec0.byteOffset, rec0.byteLength);
-    const compression = rec0View.getUint16(0, false);  // 1=raw, 2=PalmDOC, 17480=HUFF/CDIC
-    const textRecCount = rec0View.getUint16(8, false); // número de registros de texto
-    const encryption = rec0View.getUint16(12, false); // 0=sin DRM, 1=DRM old, 2=DRM
-
-    // ── 3. Verificar DRM ──
-    if (encryption !== 0) {
-        throw new Error(
-            '⚠ Este archivo tiene DRM (protección de copia de Amazon).\n' +
-            'Para leerlo necesitás eliminarlo primero con una herramienta como Calibre + DeDRM plugin.'
-        );
-    }
-
-    // ── 4. Leer el MOBI header (siempre en offset 16 del registro 0) ──
-    function leerMobiHeader(rec) {
-        if (!rec || rec.length < 20) return null;
-        const v = new DataView(rec.buffer, rec.byteOffset, rec.byteLength);
-        const mag = String.fromCharCode(rec[16], rec[17], rec[18], rec[19]);
-        if (mag !== 'MOBI') return null;
-        const mobiLen = v.getUint32(20, false);           // longitud del MOBI header
-        const mobiType = v.getUint32(24, false);           // tipo: 2=MOBI, 257=KF8
-        const encoding = v.getUint32(28, false);           // 1252=latin1, 65001=utf8
-        const firstNonText = v.getUint16(8, false);           // primer rec no-texto (= textRecCount + 1)
-        // EXTH flag: bit 6 de offset 0x80 relativo al rec
-        const fullLen = 16 + mobiLen;
-        let hasEXTH = false;
-        if (rec.length > fullLen + 4) {
-            const exthMag = String.fromCharCode(rec[fullLen], rec[fullLen + 1], rec[fullLen + 2], rec[fullLen + 3]);
-            hasEXTH = exthMag === 'EXTH';
-        }
-        return { mobiType, encoding, firstNonText, fullLen, hasEXTH };
-    }
-
-    const mobiInfo = leerMobiHeader(rec0);
-    if (!mobiInfo) throw new Error('[azw3] No se encontró cabecera MOBI en el registro 0');
-
-    // ── 5. Buscar bloque KF8 (BOUNDARY) ──
-    // En AZW3 dual (MOBI + KF8), existe un registro con el texto "BOUNDARY"
-    let kf8HeaderIdx = -1;
-    for (let i = 1; i < numRec; i++) {
-        const rec = getRecord(i);
-        if (rec && rec.length >= 8) {
-            const tag = String.fromCharCode(...rec.slice(0, 8));
-            if (tag.startsWith('BOUNDARY')) {
-                // El header KF8 está en el siguiente registro
-                kf8HeaderIdx = i + 1;
-                break;
+    if (bytes.length > 0x60) {
+        const dv = new DataView(arrayBuffer);
+        const numRec = dv.getUint16(0x4C, false);
+        if (numRec > 0) {
+            const rec0off = dv.getUint32(0x4E, false);
+            if (rec0off + 14 < bytes.length) {
+                const rec0dv = new DataView(arrayBuffer, rec0off);
+                const enc = rec0dv.getUint16(12, false);
+                if (enc !== 0) throw new Error(
+                    'Este archivo tiene DRM de Amazon y no puede leerse.\n' +
+                    'Usá Calibre + DeDRM plugin para eliminarlo primero.'
+                );
             }
         }
     }
 
-    // Decidir qué base usar: KF8 si existe, si no MOBI clásico
-    let baseHeaderIdx, baseRec1st;
-    if (kf8HeaderIdx >= 0 && kf8HeaderIdx < numRec) {
-        const kf8Rec = getRecord(kf8HeaderIdx);
-        const kf8Info = leerMobiHeader(kf8Rec);
-        if (kf8Info && kf8Info.mobiType === 257) {
-            // KF8 válido
-            baseHeaderIdx = kf8HeaderIdx;
-            baseRec1st = kf8HeaderIdx + 1;
-            console.log('[azw3] Usando bloque KF8');
-        } else {
-            baseHeaderIdx = 0;
-            baseRec1st = 1;
-            console.log('[azw3] KF8 encontrado pero inválido, usando MOBI clásico');
-        }
-    } else {
-        baseHeaderIdx = 0;
-        baseRec1st = 1;
-        console.log('[azw3] Sin BOUNDARY, usando MOBI clásico');
-    }
+    // ── Intentar con foliate-js (HuffCDIC real) ───────────────────
+    try {
+        const MOBI_CDN = 'https://cdn.jsdelivr.net/npm/foliate-js@1.0.1/mobi.js';
+        const { MOBI } = await import(MOBI_CDN);
 
-    // Re-leer info del header base elegido
-    const baseRec = getRecord(baseHeaderIdx);
-    const baseView = new DataView(baseRec.buffer, baseRec.byteOffset, baseRec.byteLength);
-    const baseComp = baseView.getUint16(0, false);
-    const baseTxtRec = baseView.getUint16(8, false);
-    const baseEnc = baseView.getUint32(28, false); // encoding: 65001=utf8, 1252=latin1
+        const file = new File([arrayBuffer], 'book.mobi');
+        const book = await new MOBI(file).init();
 
-    const decoder = baseEnc === 1252
-        ? new TextDecoder('windows-1252', { fatal: false })
-        : new TextDecoder('utf-8', { fatal: false });
+        // Iterar secciones del libro
+        const caps = [];
+        const count = book.sections?.length ?? 0;
 
-    // ── 6. Descompresor PalmDOC ──
-    function decompressPalmDOC(data) {
-        const out = [];
-        let i = 0;
-        while (i < data.length) {
-            const c = data[i++];
-            if (c === 0x00) {
-                out.push(0);
-            } else if (c <= 0x08) {
-                for (let j = 0; j < c && i < data.length; j++) out.push(data[i++]);
-            } else if (c <= 0x7F) {
-                out.push(c);
-            } else if (c <= 0xBF) {
-                if (i >= data.length) break;
-                const next = data[i++];
-                const dist = ((c << 8 | next) >> 3) & 0x7FF;
-                const len = (next & 0x07) + 3;
-                const base = out.length - dist;
-                for (let j = 0; j < len; j++) out.push(base + j >= 0 ? (out[base + j] ?? 0x20) : 0x20);
-            } else {
-                out.push(0x20);
-                out.push(c ^ 0x80);
-            }
-        }
-        return new Uint8Array(out);
-    }
+        for (let i = 0; i < count; i++) {
+            try {
+                const section = await book.sections[i].load?.();
+                if (!section) continue;
 
-    // ── 7. Extraer registros de texto ──
-    let htmlCompleto = '';
-    const maxRec = Math.min(baseTxtRec, 500); // límite de seguridad
-
-    for (let r = 0; r < maxRec; r++) {
-        const rec = getRecord(baseRec1st + r);
-        if (!rec) continue;
-
-        // Calcular trailing bytes a ignorar (último byte del registro indica cuántos bytes extra hay al final)
-        const trailingSize = rec.length > 0 ? (rec[rec.length - 1] & 0x03) + 1 : 0;
-        const usable = rec.slice(0, Math.max(0, rec.length - trailingSize));
-
-        let data = usable;
-        if (baseComp === 2) {
-            try { data = decompressPalmDOC(usable); } catch (e) { data = usable; }
-        }
-
-        htmlCompleto += decoder.decode(data);
-    }
-
-    if (!htmlCompleto.trim()) {
-        throw new Error('[azw3] No se pudo extraer contenido. El archivo puede estar dañado o usar compresión HUFF/CDIC no soportada.');
-    }
-
-    // ── 8. Limpiar y parsear HTML ──
-    // Los MOBI/AZW3 usan filepos anchors y tags propios de Kindle — limpiarlos
-    htmlCompleto = htmlCompleto
-        .replace(/<mbp:pagebreak[^>]*>/gi, '\n<!-- pagebreak -->\n')
-        .replace(/<a\s+filepos=[^>]*>\s*<\/a>/gi, '')
-        .replace(/<guide>[\s\S]*?<\/guide>/gi, '');
-
-    const esHTML = /<(p|div|html|body|h[1-6]|span)\b/i.test(htmlCompleto);
-
-    if (esHTML) {
-        const doc = new DOMParser().parseFromString(htmlCompleto, 'text/html');
-
-        // Limpiar scripts, styles y nodos inútiles
-        doc.querySelectorAll('script, style, [filepos]').forEach(el => el.remove());
-
-        // Intentar dividir por encabezados o comentarios pagebreak
-        const headings = Array.from(doc.querySelectorAll('h1, h2, h3'));
-
-        if (headings.length >= 2) {
-            const caps = [];
-            headings.forEach((h, i) => {
-                const titulo = h.textContent.trim().slice(0, 80) || `Capítulo ${i + 1}`;
-                let capHtml = h.outerHTML;
-                let sib = h.nextElementSibling;
-                let limit = 0;
-                while (sib && limit++ < 300) {
-                    if (sib.matches('h1,h2,h3')) break;
-                    capHtml += sib.outerHTML;
-                    sib = sib.nextElementSibling;
+                // section puede ser un HTMLDocument o un string
+                let html = '';
+                if (typeof section === 'string') {
+                    html = section;
+                } else if (section?.documentElement) {
+                    // HTMLDocument: serializar body
+                    const body = section.querySelector('body, Body');
+                    html = body ? body.innerHTML : section.documentElement.innerHTML;
                 }
-                if (capHtml.replace(/<[^>]+>/g, '').trim().length > 30) {
-                    caps.push({ id: `__azw3_${i}`, title: titulo, html: capHtml });
-                }
-            });
-            if (caps.length > 0) {
-                console.log(`[azw3] ✓ ${caps.length} capítulos extraídos vía headings`);
-                return caps;
+
+                // Limpiar markup Kindle
+                html = html
+                    .replace(/<mbp:pagebreak[^>]*\/?>/gi, '')
+                    .replace(/<mbp:[^>]+>/gi, '')
+                    .replace(/filepos\s*=\s*["']?\d+["']?/gi, '')
+                    .trim();
+
+                const texto = html.replace(/<[^>]+>/g, '').trim();
+                if (texto.length < 20) continue;
+
+                // Título: primer heading o "Sección N"
+                const tmpDoc = new DOMParser().parseFromString(html, 'text/html');
+                const titulo = tmpDoc.querySelector('h1,h2,h3')?.textContent?.trim().slice(0, 80)
+                    || (book.metadata?.title ? `${book.metadata.title} — ${i + 1}` : `Sección ${i + 1}`);
+
+                caps.push({ id: `__mobi_${i}`, title: titulo, html });
+            } catch (secErr) {
+                console.warn(`[mobi] sección ${i} falló:`, secErr.message);
             }
         }
 
-        // Sin headings: extraer todo el texto y dividir como TXT
-        const textoLimpio = doc.body?.textContent || htmlCompleto.replace(/<[^>]+>/g, ' ');
-        console.log('[azw3] Sin headings — dividiendo como texto plano');
-        return parseTXT(new TextEncoder().encode(textoLimpio).buffer);
+        if (caps.length > 0) {
+            console.log(`[mobi] ✓ foliate-js: ${caps.length} secciones`);
+            return caps;
+        }
+        throw new Error('foliate-js no extrajo contenido');
+
+    } catch (foliateErr) {
+        console.warn('[mobi] foliate-js falló:', foliateErr.message, '— usando fallback');
+        return _parseMobiFallback(arrayBuffer);
+    }
+}
+
+// ── Fallback: extracción directa sin foliate-js ────────────────────
+// Funciona para MOBI con compresión LZ77 (la más común en archivos viejos)
+// Para HuffCDIC muestra mensaje claro indicando que hay que convertir.
+function _parseMobiFallback(arrayBuffer) {
+    const bytes = new Uint8Array(arrayBuffer);
+    const dv = new DataView(arrayBuffer);
+
+    try {
+        const numRec = dv.getUint16(0x4C, false);
+        const offs = [];
+        for (let i = 0; i <= numRec; i++)
+            offs.push(i < numRec ? dv.getUint32(0x4E + i * 8, false) : bytes.length);
+
+        const getRec = i => bytes.slice(offs[i], Math.min(offs[i + 1], bytes.length));
+        const rec0 = getRec(0);
+        const r0v = new DataView(rec0.buffer, rec0.byteOffset, rec0.byteLength);
+        const comp = r0v.getUint16(0, false);
+        const nTxt = r0v.getUint16(8, false);
+        const enc = rec0.length > 32 ? (new DataView(rec0.buffer, rec0.byteOffset + 28)).getUint32(0, false) : 65001;
+        const decode = enc === 1252 ? new TextDecoder('windows-1252', { fatal: false }) : new TextDecoder('utf-8', { fatal: false });
+
+        if (comp === 17480) throw new Error('HuffCDIC');
+
+        const lz77 = (data) => {
+            const out = []; let i = 0;
+            while (i < data.length) {
+                const c = data[i++];
+                if (!c) out.push(0);
+                else if (c <= 8) for (let j = 0; j < c && i < data.length; j++) out.push(data[i++]);
+                else if (c <= 127) out.push(c);
+                else if (c <= 191) {
+                    const n = data[i++]; const dist = ((c & 63) << 5) | (n >> 3); const len = (n & 7) + 3;
+                    const s = out.length - dist;
+                    for (let j = 0; j < len; j++) out.push(s + j >= 0 && s + j < out.length ? out[s + j] : 32);
+                } else { out.push(32); out.push(c ^ 128); }
+            }
+            return new Uint8Array(out);
+        };
+
+        let html = '';
+        for (let r = 0; r < Math.min(nTxt, 600); r++) {
+            const rec = getRec(1 + r);
+            const trail = rec[rec.length - 1] & 3;
+            const usable = trail ? rec.slice(0, rec.length - trail - 1) : rec;
+            html += decode.decode(comp === 2 ? lz77(usable) : usable);
+        }
+
+        if (!html.trim()) throw new Error('vacío');
+
+        html = html
+            .replace(/<mbp:pagebreak[^>]*\/?>/gi, '\n<!-- pb -->\n')
+            .replace(/<mbp:[^>]+>/gi, '')
+            .replace(/<guide[\s\S]*?<\/guide>/gi, '')
+            .replace(/filepos\s*=\s*["']?\d+["']?/gi, '');
+
+        return _mobiHtmlToChapters(html);
+
+    } catch (e) {
+        if (e.message === 'HuffCDIC') {
+            throw new Error(
+                'Este archivo usa compresión HuffCDIC de Amazon y el CDN de foliate-js no está disponible.\n\n' +
+                '✅ Solución: convertí el archivo a EPUB con Calibre (gratuito):\n' +
+                '   calibre-ebook.com → Agregar libro → Convertir → formato EPUB'
+            );
+        }
+        throw new Error('No se pudo extraer texto del archivo MOBI/AZW3.');
+    }
+}
+
+// ── Convertir HTML MOBI a array de capítulos ──────────────────────
+function _mobiHtmlToChapters(htmlRaw) {
+    if (!/<(?:p|div|body|h[1-6])\b/i.test(htmlRaw))
+        return parseTXT(new TextEncoder().encode(htmlRaw).buffer);
+
+    const doc = new DOMParser().parseFromString(htmlRaw, 'text/html');
+    doc.querySelectorAll('script, style').forEach(el => el.remove());
+
+    const headings = Array.from(doc.querySelectorAll('h1, h2, h3'));
+    if (headings.length >= 2) {
+        const caps = [];
+        headings.forEach((h, i) => {
+            const titulo = h.textContent.trim().slice(0, 80) || `Capítulo ${i + 1}`;
+            let html = h.outerHTML, sib = h.nextElementSibling, lim = 0;
+            while (sib && lim++ < 400 && !sib.matches('h1,h2,h3')) {
+                html += sib.outerHTML; sib = sib.nextElementSibling;
+            }
+            if (html.replace(/<[^>]+>/g, '').trim().length > 20)
+                caps.push({ id: `__mobi_${i}`, title: titulo, html });
+        });
+        if (caps.length) return caps;
     }
 
-    // Texto plano directo
-    return parseTXT(new TextEncoder().encode(htmlCompleto).buffer);
+    const partes = htmlRaw.split(/<!-- pb -->/i);
+    if (partes.length >= 3) {
+        const caps = partes.map((p, i) => {
+            const d = new DOMParser().parseFromString(p, 'text/html');
+            const txt = d.body?.textContent?.trim() || '';
+            if (txt.length < 30) return null;
+            const t = d.querySelector('h1,h2,h3')?.textContent?.trim().slice(0, 80) || `Sección ${i + 1}`;
+            return { id: `__mobi_${i}`, title: t, html: d.body.innerHTML };
+        }).filter(Boolean);
+        if (caps.length) return caps;
+    }
+
+    const texto = doc.body?.textContent?.trim() || '';
+    if (texto.length < 50) throw new Error('El archivo no contiene texto extraíble.');
+    return parseTXT(new TextEncoder().encode(texto).buffer);
 }
 
 

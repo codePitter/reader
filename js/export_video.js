@@ -256,12 +256,11 @@ function _expTtsChange() {
     const val = document.querySelector('input[name="exp-tts"]:checked')?.value;
     const warn = document.getElementById('exp-browser-warning');
     if (warn) warn.style.display = (val === 'browser') ? 'block' : 'none';
-    // Actualizar el texto del botón siguiente según el modo
     const btnNext = document.getElementById('exp-btn-next');
     if (btnNext) {
         if (val === 'audioonly') {
-            btnNext.textContent = '▶ Exportar solo audio';
-            btnNext.onclick = _exportarSoloAudio;
+            btnNext.textContent = '▶ Siguiente → Opciones de audio';
+            btnNext.onclick = _abrirModalSoloAudio;
         } else {
             btnNext.textContent = 'Siguiente → Elegir imágenes';
             btnNext.onclick = _pasarASeleccionImagenes;
@@ -635,9 +634,128 @@ async function _expEsperarImagenes() {
 // ───────────────────────────────────────────────────────────────────
 
 // ───────────────────────────────────────────────────────────────────
-// EXPORTAR SOLO AUDIO — genera WAV completo del capítulo
+// MODAL DEDICADO SOLO AUDIO — WAV o MP3
 // ───────────────────────────────────────────────────────────────────
-async function _exportarSoloAudio() {
+function _abrirModalSoloAudio() {
+    _quitarModal();
+    const chapSel = document.getElementById('chapters');
+    const chapTxt = chapSel?.options[chapSel?.selectedIndex]?.text || 'capitulo';
+    _expFileName = `${chapTxt.trim()} - ${EXPORT_SITE_TAG}`;
+
+    const durEst = Math.round(sentences.length * 0.07); // ~4s/frase estimado en minutos
+
+    const m = document.createElement('div');
+    m.id = 'export-modal';
+    m.style.cssText = `position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.88);
+        display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;`;
+
+    m.innerHTML = `
+    <div style="background:#111;border:1px solid #2a2a2a;border-radius:12px;
+                padding:28px 30px;width:420px;max-width:95vw;color:#e8e0d0;">
+
+        <div style="font-size:.62rem;color:#c8a96e;letter-spacing:.12em;margin-bottom:4px;">🔊 EXPORTAR AUDIO</div>
+        <div style="font-size:.47rem;color:#444;margin-bottom:22px;">
+            ${sentences.length} frases · ~${durEst} min · ${_expFileName}
+        </div>
+
+        <!-- Formato -->
+        <div style="font-size:.55rem;color:#666;margin-bottom:10px;">Formato de salida</div>
+        <div style="display:flex;gap:10px;margin-bottom:22px;">
+
+            <label id="aud-lbl-wav" style="flex:1;border:1px solid #2a2a2a;border-radius:8px;
+                   padding:14px 14px;cursor:pointer;background:#0d0d0d;transition:all .2s;">
+                <input type="radio" name="aud-fmt" value="wav" checked
+                       onchange="_audFmtChange()" style="accent-color:#c8a96e;margin-right:6px;">
+                <span style="font-size:.6rem;font-weight:700;">WAV</span><br>
+                <span style="font-size:.47rem;color:#555;margin-top:4px;display:block;line-height:1.6;">
+                    Sin compresión<br>
+                    Descarga inmediata<br>
+                    <span style="color:#666;">Mayor tamaño</span>
+                </span>
+            </label>
+
+            <label id="aud-lbl-mp3" style="flex:1;border:1px solid #2a2a2a;border-radius:8px;
+                   padding:14px 14px;cursor:pointer;background:#0d0d0d;transition:all .2s;">
+                <input type="radio" name="aud-fmt" value="mp3"
+                       onchange="_audFmtChange()" style="accent-color:#c8a96e;margin-right:6px;">
+                <span style="font-size:.6rem;font-weight:700;">MP3</span><br>
+                <span style="font-size:.47rem;color:#555;margin-top:4px;display:block;line-height:1.6;">
+                    Comprimido · portable<br>
+                    <span style="color:#666;">~25s extra (FFmpeg.wasm)</span><br>
+                    <span id="aud-mp3-bitrate-row" style="display:none;">
+                        Bitrate:
+                        <select id="aud-mp3-bitrate"
+                            style="background:#0d0d0d;border:1px solid rgba(200,169,110,.3);
+                                   border-radius:3px;color:#c8a96e;font-family:'DM Mono',monospace;
+                                   font-size:.47rem;padding:1px 4px;outline:none;cursor:pointer;">
+                            <option value="320k">320 kbps (máxima)</option>
+                            <option value="192k" selected>192 kbps (alta)</option>
+                            <option value="128k">128 kbps (estándar)</option>
+                            <option value="96k">96 kbps (ligero)</option>
+                        </select>
+                    </span>
+                </span>
+            </label>
+        </div>
+
+        <div style="background:rgba(200,169,110,.04);border:1px solid rgba(200,169,110,.1);
+                    border-radius:6px;padding:8px 12px;font-size:.46rem;color:#555;
+                    margin-bottom:20px;line-height:1.7;">
+            ℹ El audio se genera con XTTS v2 / Edge TTS frase por frase.<br>
+            Los archivos <b style="color:#666;">nunca salen de tu dispositivo</b>.
+        </div>
+
+        <div style="display:flex;gap:10px;justify-content:flex-end;">
+            <button onclick="_abrirModalConfig()"
+                    style="background:none;border:1px solid #2a2a2a;border-radius:5px;
+                           color:#555;font-size:.57rem;padding:8px 14px;cursor:pointer;">
+                ← Atrás
+            </button>
+            <button onclick="_cerrarModalExport()"
+                    style="background:none;border:1px solid #2a2a2a;border-radius:5px;
+                           color:#555;font-size:.57rem;padding:8px 14px;cursor:pointer;">
+                Cancelar
+            </button>
+            <button id="aud-btn-export"
+                    onclick="_exportarSoloAudioDesdeModal()"
+                    style="background:#1e1e1e;border:1px solid #c8a96e;border-radius:5px;
+                           color:#c8a96e;font-size:.58rem;font-weight:700;
+                           padding:8px 18px;cursor:pointer;">
+                ▶ Exportar
+            </button>
+        </div>
+    </div>`;
+
+    document.body.appendChild(m);
+    _audFmtChange(); // estado inicial
+}
+
+function _exportarSoloAudioDesdeModal() {
+    const fmt = document.querySelector('input[name="aud-fmt"]:checked')?.value || 'wav';
+    const bitrate = document.getElementById('aud-mp3-bitrate')?.value || '192k';
+    _exportarSoloAudio(fmt, bitrate);
+}
+
+function _audFmtChange() {
+    const val = document.querySelector('input[name="aud-fmt"]:checked')?.value;
+    ['wav', 'mp3'].forEach(v => {
+        const lbl = document.getElementById(`aud-lbl-${v}`);
+        if (!lbl) return;
+        lbl.style.borderColor = val === v ? '#c8a96e' : '#2a2a2a';
+        lbl.style.background = val === v ? 'rgba(200,169,110,.07)' : '#0d0d0d';
+    });
+    // Mostrar selector de bitrate solo con MP3
+    const bitrateRow = document.getElementById('aud-mp3-bitrate-row');
+    if (bitrateRow) bitrateRow.style.display = val === 'mp3' ? 'inline' : 'none';
+    // Actualizar texto del botón
+    const btn = document.getElementById('aud-btn-export');
+    if (btn) btn.textContent = val === 'mp3' ? '▶ Exportar MP3' : '▶ Exportar WAV';
+}
+
+// ───────────────────────────────────────────────────────────────────
+// EXPORTAR SOLO AUDIO — genera WAV y opcionalmente convierte a MP3
+// ───────────────────────────────────────────────────────────────────
+async function _exportarSoloAudio(formato = 'wav', mp3Bitrate = '192k') {
     _expCancelled = false;
     _quitarModal();
 
@@ -722,19 +840,37 @@ async function _exportarSoloAudio() {
 
         if (_expCancelled) return;
 
-        // Descargar
-        _updateWidget(100, '✓ Preparando descarga…');
-        const url = URL.createObjectURL(wavBlob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${_expFileName}.wav`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        setTimeout(() => URL.revokeObjectURL(url), 8000);
+        if (_expCancelled) return;
 
-        mostrarNotificacion('✓ Audio exportado correctamente');
-        document.getElementById('exp-float-widget')?.remove();
+        // Descargar o convertir a MP3
+        if (formato === 'mp3') {
+            _updateWidget(92, '🔄 Convirtiendo a MP3…');
+            document.getElementById('exp-float-widget')?.remove();
+            // Delegar a convert_mp3.js
+            if (typeof convertirWAVaMP3 === 'function') {
+                await convertirWAVaMP3(wavBlob, _expFileName, mp3Bitrate);
+            } else {
+                // Fallback: descargar WAV si convert_mp3.js no está cargado
+                mostrarNotificacion('⚠ convert_mp3.js no disponible — descargando WAV');
+                const url = URL.createObjectURL(wavBlob);
+                const a = document.createElement('a');
+                a.href = url; a.download = `${_expFileName}.wav`;
+                document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                setTimeout(() => URL.revokeObjectURL(url), 8000);
+            }
+        } else {
+            _updateWidget(100, '✓ Preparando descarga…');
+            const url = URL.createObjectURL(wavBlob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${_expFileName}.wav`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(url), 8000);
+            mostrarNotificacion('✓ Audio WAV exportado correctamente');
+            document.getElementById('exp-float-widget')?.remove();
+        }
 
     } catch (err) {
         window._exportEnCurso = false;

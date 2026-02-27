@@ -362,13 +362,74 @@ const GENRE_GENERATORS = {
             nodes.push({ osc: p });
         });
         return nodes;
+    },
+
+    epic: (ctx, gain) => {
+        const nodes = [];
+        // Coro simulado: varias frecuencias ligeramente desafinadas en sine/triangle
+        const choirFreqs = [261.63, 261.63 * 1.005, 329.63, 329.63 * 0.997, 392.00, 392.00 * 1.003];
+        choirFreqs.forEach((freq, i) => {
+            const osc = ctx.createOscillator();
+            const g = ctx.createGain();
+            osc.type = i % 2 === 0 ? 'sine' : 'triangle';
+            osc.frequency.value = freq;
+            g.gain.value = 0.025;
+            osc.connect(g); g.connect(gain); osc.start();
+            nodes.push({ osc });
+        });
+        // Brass hits: acordes de fanfarria cada 4 segundos
+        const brassNotes = [261.63, 329.63, 392.00, 523.25];
+        let brassPhase = 0;
+        const brassInterval = setInterval(() => {
+            brassNotes.forEach((freq, i) => {
+                const o = ctx.createOscillator();
+                const g = ctx.createGain();
+                o.type = 'sawtooth'; o.frequency.value = freq * (brassPhase % 2 === 0 ? 1 : 1.25);
+                g.gain.value = 0;
+                o.connect(g); g.connect(gain); o.start();
+                const now = ctx.currentTime;
+                g.gain.linearRampToValueAtTime(0.055 - i * 0.008, now + 0.08);
+                g.gain.linearRampToValueAtTime(0.03 - i * 0.004, now + 0.5);
+                g.gain.linearRampToValueAtTime(0, now + 1.2);
+                setTimeout(() => { try { o.stop(); } catch (e) { } }, 1400);
+            });
+            brassPhase++;
+        }, 4000);
+        nodes.push({ interval: brassInterval });
+        // Timbales épicos en pulso binario
+        const timbal = ctx.createOscillator();
+        const tg = ctx.createGain();
+        timbal.type = 'sine'; timbal.frequency.value = 80;
+        tg.gain.value = 0;
+        timbal.connect(tg); tg.connect(gain); timbal.start();
+        let tBeat = 0;
+        const timbalInterval = setInterval(() => {
+            const pattern = [1, 0, 0, 1, 0, 0, 1, 0];
+            if (pattern[tBeat % pattern.length]) {
+                const now = ctx.currentTime;
+                tg.gain.setValueAtTime(0.18, now);
+                tg.gain.linearRampToValueAtTime(0, now + 0.3);
+            }
+            tBeat++;
+        }, 380);
+        nodes.push({ osc: timbal, interval: timbalInterval });
+        // Pad de cuerdas graves continuo
+        [65.41, 98.00].forEach(freq => {
+            const p = ctx.createOscillator();
+            const pg = ctx.createGain();
+            p.type = 'sine'; p.frequency.value = freq;
+            pg.gain.value = 0.04;
+            p.connect(pg); pg.connect(gain); p.start();
+            nodes.push({ osc: p });
+        });
+        return nodes;
     }
 };
 
 const GENRE_LABELS = {
     mystery: 'Misterio oscuro', suspense: 'Suspenso tenso', drama: 'Drama cinematográfico',
-    action: 'Acción intensa', fantasy: 'Fantasía mágica', romance: 'Romance suave',
-    lofi: 'Lo-Fi + lluvia', nature: 'Naturaleza y viento',
+    action: 'Acción intensa', epic: 'Épico orquestal', fantasy: 'Fantasía mágica',
+    romance: 'Romance suave', lofi: 'Lo-Fi + lluvia', nature: 'Naturaleza y viento',
     horror: 'Horror oscuro', adventure: 'Aventura épica'
 };
 
@@ -386,11 +447,15 @@ function guardarApiKey() {
     }
 }
 
-// Show key status on load
+// Show key status on load + validación en consola
 window.addEventListener('DOMContentLoaded', () => {
     const keyStatusEl = document.getElementById('key-status');
-    if (freesoundApiKey && keyStatusEl) {
-        keyStatusEl.textContent = '✓ configurada';
+    if (freesoundApiKey) {
+        if (keyStatusEl) keyStatusEl.textContent = '✓ configurada';
+        const origen = localStorage.getItem('freesound_api_key') ? 'localStorage' : 'hardcodeada (default)';
+        console.log(`🎵 [Freesound] API key cargada desde ${origen}`);
+    } else {
+        console.warn('🎵 [Freesound] Sin API key — el player usará generador local exclusivamente');
     }
 });
 
@@ -401,7 +466,8 @@ const FREESOUND_QUERIES = {
     suspense: ['suspense thriller tension', 'psychological horror ambient', 'heartbeat tense atmosphere', 'chase scene cinematic'],
     drama: ['emotional piano ambient', 'cinematic sad orchestral', 'melancholy strings atmosphere', 'dramatic film score'],
     action: ['epic battle cinematic', 'intense action orchestral', 'war drums epic', 'adrenaline cinematic score'],
-    fantasy: ['magical fantasy ambient', 'ethereal fantasy soundscape', 'enchanted forest music', 'epic fantasy orchestral'],
+    epic: ['epic orchestral choir', 'cinematic epic soundtrack', 'heroic battle anthem', 'fantasy epic brass choir', 'legendary orchestral score'],
+    fantasy: ['magical fantasy ambient', 'ethereal fantasy soundscape', 'enchanted forest music', 'fantasy harp orchestral'],
     romance: ['romantic piano soft', 'love theme gentle strings', 'tender romantic ambient', 'soft acoustic romance'],
     lofi: ['lofi hip hop chill', 'study music ambient beats', 'chill lofi background', 'jazzy lofi instrumental'],
     nature: ['forest nature ambient', 'rain birds peaceful', 'ocean waves relaxing', 'meditation nature sounds'],
@@ -412,24 +478,44 @@ const FREESOUND_QUERIES = {
 // Análisis avanzado: detecta tono, intensidad y subtono del texto
 // Si hay universo detectado, aplica boost de géneros específicos
 function analizarTextoDetallado(texto) {
-    const lower = texto.toLowerCase().slice(0, 3000);
+    // Muestreo distribuido: inicio + mitad + final (1000 chars cada uno)
+    // Evita el sesgo de analizar solo el inicio del capítulo
+    const SAMPLE = 1000;
+    const len = texto.length;
+    const inicio = texto.slice(0, SAMPLE);
+    const mitad = texto.slice(Math.floor(len / 2 - SAMPLE / 2), Math.floor(len / 2 + SAMPLE / 2));
+    const final = texto.slice(Math.max(0, len - SAMPLE));
+    const lower = (inicio + ' ' + mitad + ' ' + final).toLowerCase();
     const words = lower.split(/\s+/);
     const totalWords = words.length;
 
     // Función helper: cuenta ocurrencias por 1000 palabras (normalizado)
+    // Bilingüe: keywords en español e inglés para EPUBs mixtos o en EN
     const freq = (lista) => lista.reduce((s, w) => s + (lower.split(w).length - 1), 0) / totalWords * 1000;
 
     const scores = {
-        mystery: freq(['misterio', 'enigma', 'sombra', 'oscuro', 'secreto', 'oculto', 'extraño', 'cadáver', 'crimen', 'investigar', 'pista', 'detecti', 'desapareció', 'cuerpo', 'asesino', 'veneno', 'conspiración']),
-        suspense: freq(['tensión', 'peligro', 'trampa', 'amenaza', 'miedo', 'terror', 'acecho', 'perseguir', 'escapar', 'corazón', 'aceleró', 'tiempo', 'demasiado tarde', 'pistola', 'arma', 'disparó', 'huir', 'atrapado']),
-        drama: freq(['llanto', 'lágrimas', 'dolor', 'sufrir', 'perder', 'traición', 'soledad', 'sacrificio', 'promesa', 'herida', 'culpa', 'perdón', 'familia', 'ruptura', 'pérdida', 'luto', 'desesperanza', 'fracasó']),
-        action: freq(['combate', 'batalla', 'golpe', 'atacar', 'disparar', 'explotar', 'luchar', 'espada', 'victoria', 'enemigo', 'guerrero', 'sangre', 'herido', 'correr', 'saltar', 'velocidad', 'patada', 'puño', 'chocó']),
-        fantasy: freq(['magia', 'hechizo', 'dragón', 'reino', 'elfo', 'mago', 'destino', 'profecía', 'criatura', 'portal', 'artefacto', 'encantamiento', 'espíritu', 'runa', 'hada', 'brujo', 'varita', 'conjuro', 'poción']),
-        romance: freq(['amor', 'beso', 'mirada', 'suave', 'sentir', 'latir', 'ternura', 'abrazo', 'sonrisa', 'deseo', 'piel', 'suspirar', 'juntos', 'enamorar', 'cariño', 'corazón', 'acarició', 'besó', 'amaba']),
-        lofi: freq(['estudiar', 'aprender', 'libro', 'notas', 'lección', 'conocimiento', 'teoría', 'análisis', 'investigación', 'datos', 'concepto', 'comprender', 'fórmula', 'clase', 'universidad', 'examen', 'trabajo']),
-        nature: freq(['bosque', 'árbol', 'río', 'montaña', 'viento', 'lluvia', 'animal', 'campo', 'flor', 'tierra', 'cielo', 'amanecer', 'naturaleza', 'verde', 'agua', 'pájaro', 'mar', 'playa', 'selva', 'tormenta']),
-        horror: freq(['horror', 'aterrador', 'monstruo', 'demonio', 'sangre', 'muerte', 'oscuridad', 'grito', 'pesadilla', 'fantasma', 'sombra', 'aparición', 'terror', 'carne', 'víscera', 'mutilado', 'cadáver', 'pudrir']),
-        adventure: freq(['aventura', 'explorar', 'viaje', 'camino', 'destino', 'mapa', 'tesoro', 'expedición', 'descubrir', 'horizonte', 'navegar', 'peligro', 'misión', 'héroe', 'guardia', 'fortaleza', 'territorio']),
+        mystery: freq(['misterio', 'enigma', 'sombra', 'oscuro', 'secreto', 'oculto', 'extraño', 'cadáver', 'crimen', 'investigar', 'pista', 'detecti', 'desapareció', 'cuerpo', 'asesino', 'veneno', 'conspiración',
+            'mystery', 'shadow', 'clue', 'detective', 'secret', 'vanished', 'corpse', 'suspect', 'poison', 'conspiracy', 'hidden', 'darkness']),
+        suspense: freq(['tensión', 'peligro', 'trampa', 'amenaza', 'miedo', 'terror', 'acecho', 'perseguir', 'escapar', 'corazón', 'aceleró', 'demasiado tarde', 'pistola', 'arma', 'disparó', 'huir', 'atrapado',
+            'danger', 'trap', 'threat', 'chase', 'escape', 'heartbeat', 'weapon', 'fled', 'trapped', 'pulse', 'ticking', 'too late', 'aimed']),
+        drama: freq(['llanto', 'lágrimas', 'dolor', 'sufrir', 'perder', 'traición', 'soledad', 'sacrificio', 'promesa', 'herida', 'culpa', 'perdón', 'familia', 'ruptura', 'pérdida', 'luto', 'desesperanza', 'fracasó',
+            'tears', 'pain', 'suffer', 'betrayal', 'loneliness', 'sacrifice', 'promise', 'guilt', 'forgive', 'grief', 'loss', 'broken', 'mourning', 'regret']),
+        action: freq(['combate', 'batalla', 'golpe', 'atacar', 'disparar', 'explotar', 'luchar', 'espada', 'victoria', 'enemigo', 'guerrero', 'sangre', 'herido', 'correr', 'saltar', 'velocidad', 'patada', 'puño', 'chocó',
+            'battle', 'fight', 'strike', 'slash', 'dodge', 'explode', 'attack', 'sword', 'warrior', 'charge', 'clash', 'punch', 'kick', 'sprint', 'wound']),
+        epic: freq(['legado', 'leyenda', 'destino', 'elegido', 'profecía', 'ejército', 'reino', 'trono', 'guerra', 'conquista', 'gloria', 'honor', 'caída', 'ascenso', 'poder', 'antiguo', 'oscuridad', 'luz',
+            'legacy', 'legend', 'chosen', 'prophecy', 'army', 'kingdom', 'throne', 'war', 'conquest', 'glory', 'honor', 'fall', 'rise', 'power', 'ancient', 'darkness', 'light', 'fate', 'champion', 'realm']),
+        fantasy: freq(['magia', 'hechizo', 'dragón', 'reino', 'elfo', 'mago', 'profecía', 'criatura', 'portal', 'artefacto', 'encantamiento', 'espíritu', 'runa', 'hada', 'brujo', 'varita', 'conjuro', 'poción',
+            'magic', 'spell', 'dragon', 'elf', 'wizard', 'artifact', 'enchant', 'rune', 'fairy', 'mana', 'portal', 'curse', 'ritual', 'summoned', 'creature']),
+        romance: freq(['amor', 'beso', 'mirada', 'suave', 'sentir', 'latir', 'ternura', 'abrazo', 'sonrisa', 'deseo', 'piel', 'suspirar', 'juntos', 'enamorar', 'cariño', 'acarició', 'besó', 'amaba',
+            'love', 'kiss', 'gaze', 'tender', 'embrace', 'smile', 'desire', 'skin', 'sigh', 'together', 'heart', 'caress', 'longing', 'warmth', 'cherish']),
+        lofi: freq(['estudiar', 'aprender', 'libro', 'notas', 'lección', 'conocimiento', 'teoría', 'análisis', 'investigación', 'datos', 'concepto', 'fórmula', 'clase', 'universidad', 'examen', 'trabajo',
+            'study', 'learn', 'notes', 'research', 'theory', 'analysis', 'concept', 'formula', 'class', 'university', 'exam', 'knowledge']),
+        nature: freq(['bosque', 'árbol', 'río', 'montaña', 'viento', 'lluvia', 'animal', 'campo', 'flor', 'tierra', 'cielo', 'amanecer', 'naturaleza', 'verde', 'agua', 'pájaro', 'mar', 'playa', 'selva', 'tormenta',
+            'forest', 'tree', 'river', 'mountain', 'wind', 'rain', 'field', 'flower', 'earth', 'sky', 'dawn', 'nature', 'water', 'bird', 'ocean', 'beach', 'jungle', 'storm']),
+        horror: freq(['horror', 'aterrador', 'monstruo', 'demonio', 'sangre', 'muerte', 'oscuridad', 'grito', 'pesadilla', 'fantasma', 'sombra', 'aparición', 'terror', 'carne', 'víscera', 'mutilado', 'cadáver', 'pudrir',
+            'horror', 'monster', 'demon', 'scream', 'nightmare', 'ghost', 'apparition', 'flesh', 'decay', 'mutilated', 'dread', 'crawl', 'pale', 'shriek']),
+        adventure: freq(['aventura', 'explorar', 'viaje', 'camino', 'mapa', 'tesoro', 'expedición', 'descubrir', 'horizonte', 'navegar', 'misión', 'héroe', 'guardia', 'fortaleza', 'territorio',
+            'adventure', 'explore', 'journey', 'path', 'map', 'treasure', 'expedition', 'discover', 'horizon', 'navigate', 'mission', 'hero', 'quest', 'trail', 'territory']),
     };
 
     // ── Boost del universo detectado ──
@@ -465,48 +551,92 @@ let freesoundTrackUrl = null;
 let freesoundAudio = null;
 let _lastFreesoundResults = {};  // cache por género
 
+// Limpiar todo el pool de caché — llamar al cargar un nuevo EPUB/archivo
+function limpiarCacheAmbiental() {
+    Object.keys(_lastFreesoundResults).forEach(k => delete _lastFreesoundResults[k]);
+    console.log('🎵 Cache ambiental limpiada');
+}
+
 async function buscarEnFreesound(genre, subtono) {
-    if (!freesoundApiKey) return null;
+    if (!freesoundApiKey) {
+        console.warn('🎵 [Freesound] Sin API key — usando generador local');
+        return null;
+    }
 
     // ── Queries del universo tienen prioridad si hay uno detectado ──
     let queries;
     const univAmbient = aiDetectedUniverse ? UNIVERSE_CONFIG[aiDetectedUniverse]?.ambient : null;
     if (univAmbient?.freesoundQueries?.length) {
         queries = univAmbient.freesoundQueries;
-        console.log(`🎵 Usando queries de universo "${aiDetectedUniverse}"`);
+        console.log(`🎵 [Freesound] Usando queries de universo "${aiDetectedUniverse}":`, queries);
     } else {
         queries = FREESOUND_QUERIES[genre] || FREESOUND_QUERIES['mystery'];
+        console.log(`🎵 [Freesound] Queries disponibles para "${genre}":`, queries);
     }
 
     const queryStr = queries[Math.floor(Math.random() * queries.length)];
+    console.log(`🎵 [Freesound] Query seleccionada → "${queryStr}"`);
 
     // Cache por clave compuesta (universo + género)
     const cacheKey = univAmbient ? `__universe__${aiDetectedUniverse}` : genre;
     if (_lastFreesoundResults[cacheKey] && _lastFreesoundResults[cacheKey].length > 1) {
         const pool = _lastFreesoundResults[cacheKey];
-        const pick = pool[Math.floor(Math.random() * pool.length)];
+        const pick = _weightedPickByRating(pool);
+        console.log(`🎵 [Freesound] Sirviendo desde caché (${pool.length} tracks) → "${pick.name}" (${Math.round(pick.duration)}s, ★${pick.rating?.toFixed(1) ?? '?'})`);
         return pick;
     }
 
     const query = encodeURIComponent(queryStr);
-    const url = `https://freesound.org/apiv2/search/text/?query=${query}&filter=duration:[60 TO 360]&fields=name,previews,duration,avg_rating&page_size=20&sort=rating_desc&token=${freesoundApiKey}`;
+    const url = `https://freesound.org/apiv2/search/text/?query=${query}&filter=duration:[60 TO 90]&fields=name,previews,duration,avg_rating&page_size=20&sort=rating_desc&token=${freesoundApiKey}`;
 
+    console.log(`🎵 [Freesound] Buscando en API...`);
     try {
         const res = await fetch(url);
         if (!res.ok) {
+            console.error(`🎵 [Freesound] Error HTTP ${res.status}${res.status === 401 ? ' — API key inválida o expirada' : ''}`);
             if (res.status === 401) document.getElementById('key-status').textContent = '✗ key inválida';
             return null;
         }
         const data = await res.json();
+        console.log(`🎵 [Freesound] Resultados crudos: ${data.results?.length ?? 0} tracks`);
+
         if (data.results && data.results.length > 0) {
-            const good = data.results
-                .filter(t => t.avg_rating >= 3 || data.results.indexOf(t) < 8)
-                .map(t => ({ url: t.previews['preview-hq-mp3'], name: t.name, duration: t.duration }));
+            const antesDeRating = data.results.filter(t => t.duration >= 60 && t.duration <= 90);
+            console.log(`🎵 [Freesound] Tras filtro duración 60–90s: ${antesDeRating.length} tracks`);
+
+            const good = antesDeRating
+                .filter(t => t.avg_rating >= 3 || antesDeRating.indexOf(t) < 8)
+                .map(t => ({ url: t.previews['preview-hq-mp3'], name: t.name, duration: t.duration, rating: t.avg_rating || 3 }));
+
+            console.log(`🎵 [Freesound] Tras filtro rating ≥3: ${good.length} tracks aptos`);
+
+            if (good.length === 0) {
+                console.warn(`🎵 [Freesound] Pool vacío para "${genre}" con query "${queryStr}" — fallback a local`);
+                return null;
+            }
+
             _lastFreesoundResults[cacheKey] = good;
-            return good[Math.floor(Math.random() * good.length)];
+            const pick = _weightedPickByRating(good);
+            console.log(`🎵 [Freesound] ✓ Track elegido → "${pick.name}" (${Math.round(pick.duration)}s, ★${pick.rating?.toFixed(1) ?? '?'})`);
+            return pick;
+        } else {
+            console.warn(`🎵 [Freesound] Sin resultados para "${queryStr}"`);
         }
-    } catch (e) { console.warn('Freesound error:', e); }
+    } catch (e) {
+        console.error('🎵 [Freesound] Error de red o parsing:', e.message);
+    }
     return null;
+}
+
+// Selección ponderada: tracks con mayor rating tienen más probabilidad de ser elegidos
+function _weightedPickByRating(pool) {
+    const totalWeight = pool.reduce((s, t) => s + (t.rating || 3), 0);
+    let rand = Math.random() * totalWeight;
+    for (const track of pool) {
+        rand -= (track.rating || 3);
+        if (rand <= 0) return track;
+    }
+    return pool[pool.length - 1];
 }
 
 function toggleAmbientPanel() {
@@ -535,11 +665,13 @@ async function selectGenre(genre) {
 
 async function playAmbient(genre) {
     const g = genre || ambientGenre;
+    console.log(`🎵 [Player] playAmbient("${g}") — key Freesound: ${freesoundApiKey ? '✓ presente' : '✗ ausente'}`);
 
     // Try Freesound first if key is available
     if (freesoundApiKey) {
         const track = await buscarEnFreesound(g, null);
         if (track) {
+            console.log(`🎵 [Player] Reproduciendo desde Freesound: "${track.name}"`);
             freesoundAudio = new Audio(track.url);
             freesoundAudio.loop = true;
             freesoundAudio.volume = ambientVolume;
@@ -551,22 +683,30 @@ async function playAmbient(genre) {
                 document.getElementById('ambient-track-name').textContent = track.name;
                 document.getElementById('ambient-track-genre').textContent = '♪ Freesound CC0';
                 document.getElementById('ambient-player').classList.add('ambient-playing');
-            }).catch(() => playAmbientLocal(g));
+            }).catch((err) => {
+                console.warn(`🎵 [Player] Audio.play() falló (${err.message}) — fallback a local`);
+                playAmbientLocal(g);
+            });
             return;
         }
+        console.warn(`🎵 [Player] Freesound no devolvió tracks — fallback a generador local`);
     }
     // Fallback: procedural
     playAmbientLocal(g);
 }
 
 function playAmbientLocal(genre) {
+    console.log(`🎵 [Player] Iniciando generador procedural para "${genre}"`);
     const ctx = getAudioCtx();
     if (ctx.state === 'suspended') ctx.resume();
     ambientGainNode = ctx.createGain();
     ambientGainNode.gain.value = ambientVolume;
     ambientGainNode.connect(ctx.destination);
     const generator = GENRE_GENERATORS[genre || ambientGenre];
-    if (!generator) return;
+    if (!generator) {
+        console.error(`🎵 [Player] No hay generador para el género "${genre}"`);
+        return;
+    }
     ambientNodes = generator(ctx, ambientGainNode);
     ambientPlaying = true;
     document.getElementById('ambient-play-btn').textContent = '⏸';
@@ -574,6 +714,7 @@ function playAmbientLocal(genre) {
     document.getElementById('ambient-track-name').textContent = GENRE_LABELS[genre];
     document.getElementById('ambient-track-genre').textContent = '♪ generado localmente';
     document.getElementById('ambient-player').classList.add('ambient-playing');
+    console.log(`🎵 [Player] Generador local activo — ${ambientNodes.length} nodos de audio`);
 }
 
 function stopAmbient() {
@@ -636,6 +777,7 @@ async function siguienteTrack() {
         : ambientGenre;
 
     if (_lastFreesoundResults[cacheKey]) {
+        // Eliminar el track actual del pool (el primero) para garantizar variedad
         _lastFreesoundResults[cacheKey].shift();
         if (_lastFreesoundResults[cacheKey].length === 0) {
             delete _lastFreesoundResults[cacheKey];

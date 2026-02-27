@@ -56,14 +56,14 @@ const UNIVERSE_CONFIG = {
     fantasy_epic: {
         ambient: {
             label: 'Fantasy Épico',
-            genreBoost: { fantasy: 2, adventure: 1 },
+            genreBoost: { epic: 2, fantasy: 1, adventure: 1 },
             freesoundQueries: ['epic fantasy orchestral', 'fantasy adventure music', 'medieval epic']
         }
     },
     cultivation: {
         ambient: {
             label: 'Cultivation / Xianxia',
-            genreBoost: { fantasy: 2, action: 1 },
+            genreBoost: { epic: 1, fantasy: 2, action: 1 },
             freesoundQueries: ['chinese traditional meditation', 'wuxia ambient', 'cultivation music']
         }
     },
@@ -98,7 +98,7 @@ const UNIVERSE_CONFIG = {
     adventure: {
         ambient: {
             label: 'Aventura',
-            genreBoost: { adventure: 2, action: 1 },
+            genreBoost: { adventure: 2, epic: 1, action: 1 },
             freesoundQueries: ['adventure epic journey', 'exploration cinematic', 'heroic adventure theme']
         }
     },

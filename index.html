@@ -30,6 +30,18 @@
             <button type="button" class="rec-btn" onclick="toggleEditor()" id="editor-toggle-btn" style="margin-bottom:0;">
                 ✏️ Editor
             </button>
+            <button type="button" class="rec-btn export-btn" id="btn-export-video"
+                    onclick="exportarVideoDirecto()"
+                    disabled
+                    title="Exportar capítulo como video">
+                🎬 Exportar video
+            </button>
+            <button type="button" class="rec-btn export-btn" id="btn-export-audio"
+                    onclick="abrirModalExportarAudio()"
+                    disabled
+                    title="Exportar capítulo como audio WAV o MP3">
+                🎵 Exportar audio
+            </button>
             <span class="subtitle" id="current-chapter-title">Ningún capítulo seleccionado</span>
         </div>
 
@@ -298,12 +310,15 @@
     <!-- ─── SIDEBAR ─── -->
     <div class="sidebar">
 
-        <!-- Cargar EPUB -->
+        <!-- Cargar archivo -->
         <div class="sidebar-section">
             <div class="section-label">Archivo</div>
-            <label for="epub-file" class="file-label">📂 Seleccionar EPUB</label>
-            <input type="file" id="epub-file" accept=".epub">
+            <label for="epub-file" class="file-label">📂 Seleccionar archivo</label>
+            <input type="file" id="epub-file" accept=".epub,.txt,.html,.htm,.pdf,.fb2,.fb3,.docx,.rtf,.odt,.mobi,.prc,.azw3,.azw,.cbz,.cbr">
             <span id="file-name">Ningún archivo seleccionado</span>
+            <div id="formats-hint" style="font-size:0.52rem;color:var(--text-dim);margin-top:4px;line-height:1.5;opacity:0.6;">
+                epub · txt · pdf · docx · html · fb2 · odt · rtf · mobi · cbz…
+            </div>
         </div>
 
         <!-- Capítulos -->
@@ -737,6 +752,7 @@
     <script src="js/main.js"></script>
     <!-- Módulos funcionales -->
     <script src="js/epub.js"></script>
+    <script src="js/formats.js"></script>
     <script src="js/translation.js"></script>
     <script src="js/player.js"></script>
     <script src="js/tts.js"></script>
@@ -746,6 +762,8 @@
     <!-- Grabador de video — depende de tts.js, video.js, images.js -->
     <script src="js/export_video.js"></script>
     <script src="js/convert_mp4.js"></script>
+    <script src="js/convert_mp3.js"></script>
+    <script src="js/export_buttons.js"></script>
     <!-- UI: patches y helpers — debe cargarse último -->
     <script src="js/ui.js"></script>
     <!-- Inicialización de UI — debe cargarse después de ui.js -->
