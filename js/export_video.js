@@ -652,7 +652,10 @@ function _expReasignarCarpeta() {
 }
 function _quitarModal() {
     const m = document.getElementById('export-modal');
-    if (m) m.remove();
+    if (m) {
+        if (m._resizeObs) m._resizeObs.disconnect();
+        m.remove();
+    }
     document.getElementById('exp-float-widget')?.remove();
 }
 
@@ -1686,6 +1689,19 @@ function _abrirPreviewEfectos() {
     // Render inicial
     _expPreviewFrase = 0;
     _expPreviewRender();
+
+    // Re-renderizar timeline al cambiar tamaño (ej: salir de pantalla completa)
+    if (typeof ResizeObserver !== 'undefined') {
+        const _expResizeObs = new ResizeObserver(() => {
+            _expTimelineInit();
+            _expTimelineRender();
+            document.querySelectorAll('.exp-track-canvas-wrap canvas').forEach((cv, i) => {
+                if (_expAudioTracks[i]) _expAudioDrawTrack(cv, _expAudioTracks[i]);
+            });
+        });
+        _expResizeObs.observe(m);
+        m._resizeObs = _expResizeObs;
+    }
 }
 
 // ─── ESTADO DEL PLAYER DE PREVIEW ───────────────────────────────────
@@ -1704,18 +1720,16 @@ function _expTogglePlay() {
     }
 }
 
-// Nueva función: pausa sin resetear posición de audio
+// Pausa sin resetear posición de audio (para poder reanudar correctamente)
 function _expPausePlay() {
     _expIsPlaying = false;
     if (_expPlayTimer) { clearInterval(_expPlayTimer); _expPlayTimer = null; }
-    if (typeof _expPlayLoopId !== 'undefined') _expPlayLoopId++; // cancela loop async TTS
+    if (typeof _expPlayLoopId !== 'undefined') _expPlayLoopId++;
     const btn = document.getElementById('exp-play-btn');
     if (btn) { btn.textContent = '▶ Play'; btn.style.color = '#c8a96e'; btn.style.borderColor = '#3a3a3a'; }
-    // Solo pausar el audio SIN resetear currentTime (para poder reanudar correctamente)
     _expAudioTracks.forEach(t => {
         if (t.audioEl && !t.audioEl.paused) t.audioEl.pause();
     });
-    // Resetear botón solo
     const soloBtn = document.getElementById('exp-audio-solo-btn');
     if (soloBtn) { soloBtn.dataset.playing = '0'; soloBtn.textContent = '🔊 Escuchar preview'; soloBtn.style.color = '#c8a96e'; soloBtn.style.borderColor = '#3a3a3a'; }
 }
@@ -1819,7 +1833,26 @@ function _expTtsGetCurrentTime(fraseIdx) {
     return t;
 }
 
-// Reinicia la reproducción desde el principio (frase 0, sin importar si está playing)
+// Seek: ir a una frase específica sincronizando audio y video
+function _expSeekToFrase(fraseIdx) {
+    const wasPlaying = _expIsPlaying;
+    if (wasPlaying) _expPausePlay();
+    _expPreviewFrase = fraseIdx;
+    _expPreviewRender();
+    _expTimelineRender();
+    _expUpdateCounter();
+    // Sincronizar track TTS al tiempo exacto de esa frase
+    _expAudioTracks.forEach(t => {
+        if (!t.audioEl) return;
+        if (t._isTtsTrack && _expTtsDuraciones && _expTtsDuraciones.length) {
+            t.audioEl.currentTime = _expTtsGetCurrentTime(fraseIdx);
+        }
+        // Otros tracks (música) mantienen posición independiente
+    });
+    if (wasPlaying) _expStartPlay(true);
+}
+
+// Reinicia la reproducción desde el principio (frase 0)
 function _expRestartPlay() {
     const wasPlaying = _expIsPlaying;
     if (wasPlaying) _expPausePlay();
@@ -1827,7 +1860,6 @@ function _expRestartPlay() {
     _expPreviewRender();
     _expTimelineRender();
     _expUpdateCounter();
-    // Sincronizar audio TTS al inicio
     _expAudioTracks.forEach(t => {
         if (t.audioEl) t.audioEl.currentTime = 0;
     });
@@ -1970,12 +2002,9 @@ function _tlMouseDown(e) {
         _tlDragState = { divider: divIdx, startX: x };
         canvas.style.cursor = 'col-resize';
     } else {
-        // Click → ir a esa frase
+        // Click → seek a esa frase (sincroniza audio + video)
         const fraseIdx = Math.min(Math.floor((x / canvas.width) * total), total - 1);
-        _expPreviewFrase = Math.max(0, fraseIdx);
-        _expPreviewRender();
-        _expTimelineRender();
-        _expUpdateCounter();
+        _expSeekToFrase(Math.max(0, fraseIdx));
     }
 }
 
@@ -2384,7 +2413,7 @@ function _expAudioPlayStart(isResume) {
 
     tracks.forEach(t => {
         try {
-            // ¿Es un resume? Si el elemento ya existe y está pausado, solo reanudar
+            // ¿Es un resume con el elemento ya existente y pausado?
             const isTrackResume = isResume && t.audioEl && t.audioEl.paused;
 
             // Crear/reutilizar el elemento video
@@ -2411,10 +2440,8 @@ function _expAudioPlayStart(isResume) {
             if (t.gainNode) t.gainNode.gain.value = t.volume / 100;
             else t.audioEl.volume = t.volume / 100;
 
-            // Sincronización de posición:
-            // - Track TTS (_isTtsTrack): siempre posicionar al tiempo exacto de _expPreviewFrase
-            //   para corregir cualquier drift acumulado y garantizar sincronía con las frases
-            // - Otros tracks: si es resume, continuar desde donde estaban; si es inicio, resetear a 0
+            // Track TTS: siempre sincronizar al tiempo exacto de la frase actual
+            // Otros tracks: solo resetear si NO es resume (evita desincronización)
             if (t._isTtsTrack && _expTtsDuraciones && _expTtsDuraciones.length) {
                 t.audioEl.currentTime = _expTtsGetCurrentTime(_expPreviewFrase);
             } else if (!isTrackResume) {
