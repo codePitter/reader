@@ -3232,6 +3232,7 @@ input[type="text"] {
     flex-direction: row;
     align-items: stretch;
     pointer-events: auto;
+    transition: opacity 0.4s ease;
 }
 
 /* ── Solapa siempre visible ── */

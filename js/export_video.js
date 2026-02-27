@@ -297,16 +297,16 @@ async function _pasarASeleccionImagenes() {
     const grupos = Math.ceil(total / EXPORT_IMGS_PER);
     _expImagenes = [];
 
-    // Pre-cargar sugerencia automática para cada grupo
+    // Pre-cargar sugerencia automática para cada grupo usando el proveedor activo
     for (let g = 0; g < grupos; g++) {
         const desde = g * EXPORT_IMGS_PER;
         const hasta = Math.min(desde + EXPORT_IMGS_PER, total);
         const fragmento = sentences.slice(desde, hasta).join(' ');
         let url = null;
         try {
-            if (typeof _promptAKeywords === 'function' && typeof seleccionarImagenAfin === 'function') {
-                const kw = _promptAKeywords(fragmento);
-                url = seleccionarImagenAfin(kw);
+            // Usar _pedirImagen de images.js: respeta el proveedor activo (Openverse, Pixabay, etc.)
+            if (typeof _pedirImagen === 'function') {
+                url = await _pedirImagen(fragmento);
             }
         } catch (e) { }
         if (!url) url = `https://picsum.photos/seed/${g * 13 + 7}/${EXPORT_W}/${EXPORT_H}`;
@@ -381,8 +381,36 @@ function _renderModalImagenes() {
             <div style="font-size:.62rem;color:#c8a96e;letter-spacing:.1em;">
                 🖼 SELECCIÓN DE IMÁGENES — ${grupos} grupos
             </div>
-            <div style="display:flex;gap:8px;align-items:center;">
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">
                 <span style="font-size:.5rem;color:#555;margin-right:4px;">Editá la URL o pulsá 🔀 para sugerir otra</span>
+
+                <!-- Botón carpeta local global -->
+                <label id="exp-folder-label"
+                       title="Cargá una carpeta con imágenes y se distribuyen automáticamente entre los grupos"
+                       style="display:flex;align-items:center;gap:5px;cursor:pointer;
+                              background:#1a1a1a;border:1px solid #3a3a3a;border-radius:5px;
+                              color:#888;font-size:.54rem;padding:6px 11px;
+                              transition:all .18s;white-space:nowrap;"
+                       onmouseover="this.style.borderColor='#c8a96e';this.style.color='#c8a96e'"
+                       onmouseout="this.style.borderColor='#3a3a3a';this.style.color='#888'">
+                    📂 Carpeta local
+                    <input id="exp-folder-input" type="file" accept="image/*" multiple
+                           webkitdirectory mozdirectory directory
+                           style="display:none;"
+                           onchange="_expCargarCarpetaLocal(this)">
+                </label>
+                <!-- Modo de asignación -->
+                <select id="exp-folder-mode"
+                        title="Modo de distribución de las imágenes de la carpeta"
+                        onchange="_expReasignarCarpeta()"
+                        style="background:#0d0d0d;border:1px solid #2a2a2a;border-radius:5px;
+                               color:#666;font-size:.5rem;padding:5px 6px;cursor:pointer;
+                               font-family:'DM Mono',monospace;display:none;">
+                    <option value="secuencial">En orden</option>
+                    <option value="aleatorio">Aleatoria</option>
+                    <option value="ciclico">Cíclico</option>
+                </select>
+
                 <button onclick="_abrirModalConfig()"
                         id="exp-btn-back"
                         style="background:none;border:1px solid #2a2a2a;border-radius:5px;
@@ -444,14 +472,12 @@ function _expCambiarUrl(g, url) {
     img.src = url.trim();
 }
 
-function _expSugerirOtra(g) {
+async function _expSugerirOtra(g) {
     let url = null;
     try {
-        if (typeof _promptAKeywords === 'function' && typeof seleccionarImagenAfin === 'function') {
-            // Resetear _lastShown para forzar imagen diferente
-            if (typeof _smartPool !== 'undefined') _smartPool._lastShown = _expImagenes[g].url;
-            const kw = _promptAKeywords(_expImagenes[g].fragmento);
-            url = seleccionarImagenAfin(kw);
+        // Usar _pedirImagen de images.js: respeta el proveedor activo
+        if (typeof _pedirImagen === 'function') {
+            url = await _pedirImagen(_expImagenes[g].fragmento);
         }
     } catch (e) { }
     if (!url) url = `https://picsum.photos/seed/${Date.now() % 9999}/${EXPORT_W}/${EXPORT_H}`;
@@ -487,8 +513,109 @@ function _expCargarArchivoLocal(g, inputEl) {
 }
 
 // ───────────────────────────────────────────────────────────────────
-// HELPERS MODAL
+// CARPETA LOCAL — carga múltiples imágenes y las distribuye entre grupos
 // ───────────────────────────────────────────────────────────────────
+
+// Extensiones de imagen aceptadas
+const _EXP_IMG_EXTS = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'avif', 'tiff', 'tif']);
+
+function _expCargarCarpetaLocal(inputEl) {
+    // Filtrar solo archivos de imagen válidos y ordenar por nombre
+    const files = Array.from(inputEl.files || [])
+        .filter(f => {
+            const ext = f.name.split('.').pop().toLowerCase();
+            return _EXP_IMG_EXTS.has(ext);
+        })
+        .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+
+    if (files.length === 0) {
+        mostrarNotificacion('⚠ No se encontraron imágenes en la carpeta');
+        return;
+    }
+
+    const grupos = _expImagenes.length;
+    const modo = document.getElementById('exp-folder-mode')?.value || 'secuencial';
+
+    // Construir lista de índices de archivo para cada grupo según el modo
+    let indices = [];
+    if (modo === 'aleatorio') {
+        // Fisher-Yates sobre índices de archivos, replicados para cubrir todos los grupos
+        const base = [];
+        for (let i = 0; i < Math.ceil(grupos / files.length); i++) {
+            for (let j = 0; j < files.length; j++) base.push(j);
+        }
+        for (let i = base.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [base[i], base[j]] = [base[j], base[i]];
+        }
+        indices = base.slice(0, grupos);
+    } else if (modo === 'ciclico') {
+        // Distribuye cíclicamente: grupo 0→img 0, grupo 1→img 1, ... vuelve al inicio
+        for (let g = 0; g < grupos; g++) indices.push(g % files.length);
+    } else {
+        // Secuencial: reparte de forma proporcional; si hay más grupos que imágenes, repite
+        for (let g = 0; g < grupos; g++) {
+            indices.push(Math.min(Math.floor(g * files.length / grupos), files.length - 1));
+        }
+    }
+
+    // Aplicar cada imagen al grupo correspondiente
+    let cargadas = 0;
+    indices.forEach((fileIdx, g) => {
+        const file = files[fileIdx];
+        const objectUrl = URL.createObjectURL(file);
+
+        // Actualizar thumbnail visual
+        const wrap = document.getElementById(`exp-thumb-wrap-${g}`);
+        if (wrap) wrap.style.backgroundImage = `url('${objectUrl}')`;
+
+        // Actualizar input de URL
+        const urlInput = document.getElementById(`exp-url-${g}`);
+        if (urlInput) urlInput.value = `[local] ${file.name}`;
+
+        // Cargar HTMLImageElement para la exportación
+        const img = new Image();
+        img.onload = () => {
+            _expImagenes[g].img = img;
+            _expImagenes[g].url = objectUrl;
+            _expImagenes[g].localBlob = true;
+            cargadas++;
+            if (cargadas === grupos) {
+                mostrarNotificacion(`✓ ${files.length} imagen(s) asignada(s) a ${grupos} grupos`);
+            }
+        };
+        img.onerror = () => { cargadas++; };
+        img.src = objectUrl;
+    });
+
+    // Mostrar selector de modo y notificación
+    const modeEl = document.getElementById('exp-folder-mode');
+    if (modeEl) modeEl.style.display = 'block';
+
+    // Actualizar label del botón con cantidad
+    const lbl = document.getElementById('exp-folder-label');
+    if (lbl) {
+        // Preservar el input dentro, solo cambiar el texto visible
+        const txt = lbl.childNodes[0];
+        if (txt && txt.nodeType === Node.TEXT_NODE) {
+            txt.textContent = `📂 ${files.length} img`;
+        } else {
+            lbl.firstChild.textContent = `📂 ${files.length} img`;
+        }
+        lbl.style.borderColor = '#7eb89a';
+        lbl.style.color = '#7eb89a';
+    }
+
+    mostrarNotificacion(`⏳ Asignando ${files.length} imágenes a ${grupos} grupos…`);
+}
+
+// Reaplicar la carpeta con el nuevo modo cuando el usuario cambia el select
+function _expReasignarCarpeta() {
+    const inputEl = document.getElementById('exp-folder-input');
+    if (inputEl && inputEl.files && inputEl.files.length > 0) {
+        _expCargarCarpetaLocal(inputEl);
+    }
+}
 function _quitarModal() {
     const m = document.getElementById('export-modal');
     if (m) m.remove();

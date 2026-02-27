@@ -370,8 +370,12 @@ function aplicarReemplazosAutomaticos(texto) {
     let textoModificado = texto;
     for (const [buscar, reemplazar] of Object.entries(reemplazosAutomaticos)) {
         try {
-            const regex = new RegExp(buscar, 'gi');
+            // Escapar caracteres especiales de regex para que literales como "***" funcionen
+            const buscarEscapado = buscar.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const regex = new RegExp(buscarEscapado, 'gi');
             textoModificado = textoModificado.replace(regex, (match) => {
+                // Si reemplazar es vacío, devolver vacío directamente (sin lógica de capitalización)
+                if (!reemplazar) return '';
                 if (match.charAt(0) === match.charAt(0).toUpperCase() && match.charAt(0) !== match.charAt(0).toLowerCase()) {
                     return reemplazar.charAt(0).toUpperCase() + reemplazar.slice(1);
                 }

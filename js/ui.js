@@ -68,7 +68,9 @@ function reemplazarPalabra() {
     const elemento = document.getElementById('texto-contenido');
     let regex;
     try {
-        regex = new RegExp(buscar, 'gi');
+        // Escapar siempre — los reemplazos son literales, no expresiones regex
+        const buscarEscapado = buscar.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        regex = new RegExp(buscarEscapado, 'gi');
     } catch (e) {
         regex = new RegExp(buscar.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
     }
@@ -82,6 +84,8 @@ function reemplazarPalabra() {
     }
 
     elemento.textContent = textoOriginal.replace(regex, (match) => {
+        // Si reemplazar es vacío, devolver vacío directamente
+        if (!reemplazar) return '';
         // Preservar capitalización del match
         if (match.charAt(0) === match.charAt(0).toUpperCase() &&
             match.charAt(0) !== match.charAt(0).toLowerCase()) {

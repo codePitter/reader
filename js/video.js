@@ -438,7 +438,11 @@ function detectarUniverso() {
     const fuentes = [
         document.getElementById('file-name')?.textContent || '',
         document.getElementById('current-chapter-title')?.textContent || '',
-        (sentences || []).slice(0, 30).join(' ')
+        // Usar texto ya renderizado en el contenedor (disponible tras cargarCapitulo)
+        // como fallback cuando sentences aún no está poblado
+        (typeof sentences !== 'undefined' && sentences && sentences.length > 0)
+            ? sentences.slice(0, 30).join(' ')
+            : (document.getElementById('texto-contenido')?.textContent?.slice(0, 800) || '')
     ].join(' ').toLowerCase();
 
     aiDetectedUniverse = null;
@@ -447,12 +451,40 @@ function detectarUniverso() {
             aiDetectedUniverse = val;
             console.log(`📚 Universo detectado: ${val}`);
             mostrarNotificacion(`📚 Universo: ${val}`);
-            // notificarUniversoDetectado es async: espera a que Claude genere las queries
-            // ANTES de cargar los pools de imágenes y disparar la música.
-            // precalentarPoolPixabay, refrescarSmartPool y selectGenre se invocan
-            // al final de notificarUniversoDetectado, cuando todo ya está listo.
+            // Notificar a images.js para cargar el pool con el universo correcto
             if (typeof notificarUniversoDetectado === 'function') {
                 notificarUniversoDetectado(val);
+            }
+            // Precalentar pool de imágenes ahora que el universo es conocido
+            if (typeof precalentarPoolPixabay === 'function') {
+                precalentarPoolPixabay();
+            }
+            // Reconstruir el smart pool de imágenes con queries del universo detectado
+            if (typeof refrescarSmartPool === 'function') {
+                refrescarSmartPool();
+            }
+
+            // ── Auto-aplicar género musical del universo ──
+            const univConfig = UNIVERSE_CONFIG[val];
+            const ambientCfg = univConfig?.ambient;
+            if (ambientCfg) {
+                const genre = ambientCfg.defaultGenre;
+                const label = ambientCfg.label || val;
+                // Activar género si no hay uno ya activo manualmente
+                if (!ambientGenre) {
+                    selectGenre(genre).then(() => {
+                        // Mostrar el label del universo en vez del género genérico
+                        const trackGenreEl = document.getElementById('ambient-track-genre');
+                        if (trackGenreEl) trackGenreEl.textContent = `${label} · auto`;
+                    });
+                    console.log(`🎵 Música auto-detectada para universo: ${genre} (${label})`);
+                } else {
+                    // Ya hay género activo — solo invalidar cache de Freesound
+                    // para que la próxima canción use queries del universo
+                    const cacheKey = `__universe__${val}`;
+                    delete _lastFreesoundResults[cacheKey];
+                    console.log(`🎵 Universo activo — próxima pista de Freesound usará queries de "${val}"`);
+                }
             }
             break;
         }
@@ -1954,15 +1986,23 @@ if (_tcEl) _tcObserver.observe(_tcEl, { childList: true, subtree: true, characte
     function hideControls() {
         var bar = document.querySelector('.video-bar');
         var wrap = document.getElementById('video-progress-wrap');
+        var sidebar = document.getElementById('video-sidebar-toolbar');
+        var overlay = document.getElementById('video-overlay');
         if (bar) { bar.style.opacity = '0'; bar.style.pointerEvents = 'none'; }
         if (wrap) { wrap.style.opacity = '0.3'; wrap.style.pointerEvents = ''; }
+        if (sidebar) { sidebar.style.opacity = '0'; sidebar.style.pointerEvents = 'none'; }
+        if (overlay) overlay.style.cursor = 'none';
     }
 
     function showControls() {
         var bar = document.querySelector('.video-bar');
         var wrap = document.getElementById('video-progress-wrap');
+        var sidebar = document.getElementById('video-sidebar-toolbar');
+        var overlay = document.getElementById('video-overlay');
         if (bar) { bar.style.opacity = '1'; bar.style.pointerEvents = ''; }
         if (wrap) { wrap.style.opacity = '1'; wrap.style.pointerEvents = ''; }
+        if (sidebar) { sidebar.style.opacity = '1'; sidebar.style.pointerEvents = ''; }
+        if (overlay) overlay.style.cursor = '';
         if (_t) clearTimeout(_t);
         // Siempre ocultar tras 3s si el overlay está activo — sin chequear si está reproduciendo
         _t = setTimeout(function () {

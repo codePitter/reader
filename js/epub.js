@@ -191,15 +191,6 @@ document.getElementById('epub-file').addEventListener('change', async function (
             cargarCapitulo(archivosOrdenados[0]);
         }
 
-        // ── Detección de universo automática al cargar el EPUB ──
-        // Se ejecuta tras un pequeño delay para que file-name y current-chapter-title
-        // ya estén actualizados en el DOM antes de que detectarUniverso los lea
-        setTimeout(() => {
-            if (typeof detectarUniverso === 'function') {
-                detectarUniverso();
-            }
-        }, 800);
-
     } catch (error) {
         console.error('Error al cargar EPUB:', error);
         document.getElementById('file-name').textContent = 'Error al cargar';
@@ -431,6 +422,21 @@ async function cargarCapitulo(ruta, _cancelToken) {
         if (capEl) capEl.textContent = tituloActual;
 
         mostrarNotificacion(traduccionAutomatica ? '✓ Capítulo listo' : '✓ Capítulo cargado');
+
+        // ── Detectar universo narrativo ahora que el texto está disponible ──
+        // Se llama aquí (y no solo en activarModoVideo) para que el pool de imágenes
+        // empiece a cargarse en background antes de que el usuario inicie la reproducción.
+        // detectarUniverso() lee el nombre del archivo y el título del capítulo,
+        // que ya están seteados en este punto.
+        if (typeof detectarUniverso === 'function') {
+            setTimeout(() => detectarUniverso(), 100);
+        }
+
+        // ── Habilitar botones de exportar ahora que hay contenido cargado ──
+        const btnExportVideo = document.getElementById('btn-export-video');
+        const btnExportAudio = document.getElementById('btn-export-audio');
+        if (btnExportVideo) btnExportVideo.disabled = false;
+        if (btnExportAudio) btnExportAudio.disabled = false;
 
         // ── Determinar si iniciar TTS automáticamente ──
         const eraNavegacionIntencionada = !!window._navegacionIntencionada;
