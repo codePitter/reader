@@ -1841,14 +1841,34 @@ function _expSeekToFrase(fraseIdx) {
     _expPreviewRender();
     _expTimelineRender();
     _expUpdateCounter();
-    // Sincronizar track TTS al tiempo exacto de esa frase
+
+    // Tiempo total acumulado hasta esta frase (en segundos)
+    const totalSecsAtFrase = _expTtsGetCurrentTime(fraseIdx);
+
     _expAudioTracks.forEach(t => {
         if (!t.audioEl) return;
         if (t._isTtsTrack && _expTtsDuraciones && _expTtsDuraciones.length) {
-            t.audioEl.currentTime = _expTtsGetCurrentTime(fraseIdx);
+            // Track TTS: posición exacta según la frase
+            t.audioEl.currentTime = totalSecsAtFrase;
+        } else {
+            // Tracks de música: sincronizar al mismo tiempo relativo
+            // usando módulo para respetar el loop natural del audio
+            const dur = t.audioEl.duration;
+            if (dur && dur > 0 && isFinite(dur)) {
+                t.audioEl.currentTime = totalSecsAtFrase % dur;
+            } else {
+                // Duración aún no disponible: esperar y reintentar
+                t.audioEl.addEventListener('loadedmetadata', function onMeta() {
+                    t.audioEl.removeEventListener('loadedmetadata', onMeta);
+                    const d = t.audioEl.duration;
+                    if (d && d > 0 && isFinite(d)) {
+                        t.audioEl.currentTime = totalSecsAtFrase % d;
+                    }
+                });
+            }
         }
-        // Otros tracks (música) mantienen posición independiente
     });
+
     if (wasPlaying) _expStartPlay(true);
 }
 
