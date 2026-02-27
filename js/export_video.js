@@ -1825,12 +1825,20 @@ function _expUpdateCounter() {
 
 // Calcula el currentTime en segundos dentro del WAV TTS concatenado para una frase dada
 function _expTtsGetCurrentTime(fraseIdx) {
-    if (!_expTtsDuraciones || !_expTtsDuraciones.length) return 0;
+    if (!_expTtsDuraciones || !_expTtsDuraciones.length) return fraseIdx * EXPORT_SEC_FRASE;
     let t = 0;
     for (let i = 0; i < fraseIdx && i < _expTtsDuraciones.length; i++) {
         t += (_expTtsDuraciones[i] || (EXPORT_SEC_FRASE * 1000)) / 1000;
     }
     return t;
+}
+
+// Duración total del video en segundos (suma de todas las frases)
+function _expGetTotalDuration() {
+    if (!_expTtsDuraciones || !_expTtsDuraciones.length) {
+        return sentences.length * EXPORT_SEC_FRASE;
+    }
+    return _expTtsDuraciones.reduce((sum, ms) => sum + (ms || EXPORT_SEC_FRASE * 1000), 0) / 1000;
 }
 
 // Seek: ir a una frase específica sincronizando audio y video
@@ -1851,19 +1859,24 @@ function _expSeekToFrase(fraseIdx) {
             // Track TTS: posición exacta según la frase
             t.audioEl.currentTime = totalSecsAtFrase;
         } else {
-            // Tracks de música: sincronizar al mismo tiempo relativo
-            // usando módulo para respetar el loop natural del audio
+            // Tracks de música: posicionar según offset del track
+            const trackOffsetSecs = (t.offset || 0) * _expGetTotalDuration();
+            const audioPos = totalSecsAtFrase - trackOffsetSecs;
             const dur = t.audioEl.duration;
+            const applySeek = (d) => {
+                if (audioPos < 0 || audioPos > d) {
+                    t._skipPlay = true; // fuera del rango
+                } else {
+                    t._skipPlay = false;
+                    t.audioEl.currentTime = Math.max(0, audioPos);
+                }
+            };
             if (dur && dur > 0 && isFinite(dur)) {
-                t.audioEl.currentTime = totalSecsAtFrase % dur;
+                applySeek(dur);
             } else {
-                // Duración aún no disponible: esperar y reintentar
                 t.audioEl.addEventListener('loadedmetadata', function onMeta() {
                     t.audioEl.removeEventListener('loadedmetadata', onMeta);
-                    const d = t.audioEl.duration;
-                    if (d && d > 0 && isFinite(d)) {
-                        t.audioEl.currentTime = totalSecsAtFrase % d;
-                    }
+                    if (t.audioEl.duration) applySeek(t.audioEl.duration);
                 });
             }
         }
@@ -1883,6 +1896,8 @@ function _expRestartPlay() {
     _expAudioTracks.forEach(t => {
         if (t.audioEl) t.audioEl.currentTime = 0;
     });
+    // Forzar redibujado de cursores en todos los tracks
+    _expAudioRenderTracks();
     if (wasPlaying) _expStartPlay(true);
 }
 
@@ -2440,10 +2455,17 @@ function _expAudioPlayStart(isResume) {
             if (!t.audioEl) {
                 t.audioEl = document.createElement('video');
                 t.audioEl.src = t.audioUrl;
-                t.audioEl.loop = true;
+                t.audioEl.loop = false; // sin loop: el audio termina cuando termina
                 t.audioEl.muted = false;
                 t.audioEl.style.cssText = 'position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;top:-9999px;';
                 document.body.appendChild(t.audioEl);
+                // Actualizar audioDuration cuando esté disponible (para el canvas)
+                t.audioEl.addEventListener('loadedmetadata', () => {
+                    if (t.audioEl && t.audioEl.duration) {
+                        t.audioDuration = t.audioEl.duration;
+                        _expAudioRenderTracks();
+                    }
+                }, { once: true });
             }
 
             // Conectar al Web Audio API para control de gain (fade)
@@ -2461,20 +2483,35 @@ function _expAudioPlayStart(isResume) {
             else t.audioEl.volume = t.volume / 100;
 
             // Track TTS: siempre sincronizar al tiempo exacto de la frase actual
-            // Otros tracks: solo resetear si NO es resume (evita desincronización)
+            // Tracks de música: sincronizar según offset del track en el video
             if (t._isTtsTrack && _expTtsDuraciones && _expTtsDuraciones.length) {
                 t.audioEl.currentTime = _expTtsGetCurrentTime(_expPreviewFrase);
-            } else if (!isTrackResume) {
-                t.audioEl.currentTime = 0;
+            } else {
+                // Calcular tiempo de video actual y posición dentro del audio según offset
+                const videoTimeSecs = _expTtsGetCurrentTime(_expPreviewFrase);
+                const trackOffsetSecs = (t.offset || 0) * _expGetTotalDuration();
+                const audioPos = videoTimeSecs - trackOffsetSecs;
+                const dur = t.audioEl.duration;
+                if (audioPos < 0 || (dur && audioPos > dur)) {
+                    // Fuera del rango del track: no reproducir (silenciar y pausar tras play)
+                    t.audioEl.currentTime = 0;
+                    t._skipPlay = true;
+                } else {
+                    t.audioEl.currentTime = Math.max(0, audioPos);
+                    t._skipPlay = false;
+                }
             }
-            const p = t.audioEl.play();
-            if (p) p
-                .then(() => {
-                    console.log('[🎵 audio] ✅ Playing:', t.name);
-                    // Iniciar loop de fade
-                    _expAudioFadeLoop(t);
-                })
-                .catch(e => console.error('[🎵 audio] ❌', e));
+            if (t._skipPlay) {
+                console.log('[🎵 audio] ⏭ Track fuera de rango:', t.name);
+            } else {
+                const p = t.audioEl.play();
+                if (p) p
+                    .then(() => {
+                        console.log('[🎵 audio] ✅ Playing:', t.name);
+                        _expAudioFadeLoop(t);
+                    })
+                    .catch(e => console.error('[🎵 audio] ❌', e));
+            }
         } catch (e) { console.error('[🎵 audio] ❌', e); }
     });
 }
@@ -2486,7 +2523,26 @@ function _expAudioFadeLoop(t) {
 
     const duration = t.audioEl.duration || 1;
     const current = t.audioEl.currentTime;
-    const frac = current / duration; // posición 0–1 dentro del audio
+
+    // Para tracks de música (no TTS): usar posición en el video (frac del video total)
+    // Para el track TTS: usar posición dentro del propio audio
+    let frac;
+    if (!t._isTtsTrack) {
+        // Calcular fracción del video basada en el tiempo de video actual
+        const videoTimeSecs = _expTtsGetCurrentTime(_expPreviewFrase);
+        const totalDur = _expGetTotalDuration() || 1;
+        const trackOffsetSecs = (t.offset || 0) * totalDur;
+        const audioPos = videoTimeSecs - trackOffsetSecs;
+        // Si estamos fuera del rango del audio, silenciar
+        if (audioPos < 0 || audioPos > duration) {
+            if (t.gainNode) t.gainNode.gain.value = 0;
+            requestAnimationFrame(() => _expAudioFadeLoop(t));
+            return;
+        }
+        frac = audioPos / duration; // posición 0–1 dentro del audio
+    } else {
+        frac = current / duration;
+    }
 
     // Calcular volumen según segmentos con fade in/out
     let fadeMultiplier = 1.0;
@@ -2505,19 +2561,16 @@ function _expAudioFadeLoop(t) {
             if (seg.fadeOut > 0 && posInSeg > (1 - seg.fadeOut)) {
                 fadeMultiplier = Math.min(fadeMultiplier, (1 - posInSeg) / seg.fadeOut);
             }
-            // Segmento eliminado
             if (seg.deleted) fadeMultiplier = 0;
             break;
         }
-        // Si estamos en una zona de segmento deleted, silenciar
         if (frac >= seg.from && frac <= seg.to && seg.deleted) {
             fadeMultiplier = 0; break;
         }
     }
 
-    // Aplicar volumen resultante (base × fade)
-    const targetGain = (t.volume / 100) * Math.max(0, Math.min(1, fadeMultiplier));
-    // Suavizar con pequeño ramp para evitar clicks
+    // Aplicar volumen resultante (base × fade × mute)
+    const targetGain = t.muted ? 0 : (t.volume / 100) * Math.max(0, Math.min(1, fadeMultiplier));
     try {
         t.gainNode.gain.setTargetAtTime(targetGain, _expWebAudioCtx.currentTime, 0.05);
     } catch (e) {
@@ -2546,18 +2599,34 @@ function _expAudioGetCtx() {
     return _expAudioCtx;
 }
 
-function _expAudioAddTrack(name, color, audioBuffer, audioUrl) {
+function _expAudioAddTrack(name, color, audioBuffer, audioUrl, isTts) {
     const track = {
         id: ++_expAudioTrackIdCounter,
         name, color,
-        volume: 80, muted: false,
+        volume: isTts ? 80 : 15,  // música: 15% por defecto
+        muted: false,
         segments: [{ from: 0, to: 1, deleted: false, fadeIn: 0, fadeOut: 0 }],
         splitHistory: [],
-        audioBuffer: audioBuffer || null,  // no usado, compatibilidad
+        audioBuffer: audioBuffer || null,
         audioUrl: audioUrl || null,
-        audioEl: null,  // HTMLAudioElement — se crea al reproducir
+        audioEl: null,
+        offset: 0,
+        audioDuration: null,  // se precarga abajo para poder dibujar el bloque
     };
     _expAudioTracks.push(track);
+
+    // Precargar duración del audio para poder dibujarlo correctamente desde el inicio
+    if (audioUrl && !isTts) {
+        const probe = new Audio();
+        probe.src = audioUrl;
+        probe.addEventListener('loadedmetadata', () => {
+            track.audioDuration = probe.duration;
+            probe.src = '';
+            _expAudioRenderTracks();
+        }, { once: true });
+        probe.load();
+    }
+
     _expAudioRenderTracks();
     _expAudioUpdatePanelList();
     return track.id;
@@ -2720,9 +2789,37 @@ function _expAudioDrawTrack(canvas, t) {
     c.clearRect(0, 0, W, H);
     c.fillStyle = '#0a0a0a'; c.fillRect(0, 0, W, H);
 
+    // Para tracks de música (no TTS): el bloque de audio ocupa solo una fracción del canvas
+    // según su duración relativa al video total y su offset de inicio.
+    // offset=0.3 significa que el audio empieza en el 30% del video.
+    const totalDur = _expGetTotalDuration() || 1;
+    // Usar duración precargada si el audioEl aún no existe (antes del primer play)
+    const audioDur = (t.audioEl && t.audioEl.duration && isFinite(t.audioEl.duration))
+        ? t.audioEl.duration
+        : (t.audioDuration && isFinite(t.audioDuration) ? t.audioDuration : totalDur);
+    const trackOffset = t._isTtsTrack ? 0 : (t.offset || 0);
+    // fracción del canvas que ocupa el audio
+    const audioFrac = t._isTtsTrack ? 1 : Math.min(1 - trackOffset, audioDur / totalDur);
+    // x donde empieza y termina el bloque de audio en el canvas
+    const blockX1 = trackOffset * W;
+    const blockX2 = Math.min(W, blockX1 + audioFrac * W);
+
+    // Zona fuera del audio (antes y después del bloque): marcar con patrón oscuro
+    if (!t._isTtsTrack) {
+        c.fillStyle = '#0f0f0f';
+        if (blockX1 > 0) c.fillRect(0, 0, blockX1, H);
+        if (blockX2 < W) c.fillRect(blockX2, 0, W - blockX2, H);
+        // Borde de inicio del bloque
+        c.fillStyle = t.color + '55';
+        c.fillRect(blockX1, 0, 2, H);
+    }
+
     t.segments.forEach((seg, idx) => {
         if (seg.deleted) return;
-        const x1 = seg.from * W, x2 = seg.to * W, sw = x2 - x1;
+        // Mapear from/to del segmento (0-1 dentro del audio) al canvas global
+        const x1 = blockX1 + seg.from * (blockX2 - blockX1);
+        const x2 = blockX1 + seg.to * (blockX2 - blockX1);
+        const sw = x2 - x1;
         if (sw < 1) return;
         const isSel = _expAudioSelectedSeg?.trackId === t.id && _expAudioSelectedSeg?.segIdx === idx;
 
@@ -2829,17 +2926,41 @@ function _expAudioDrawTrack(canvas, t) {
     });
 
     // ── Cursor de posición ──────────────────────────────────────────────
-    let cursorFrac = _expPreviewFrase / Math.max(1, sentences.length);
-    const _activeAudio = _expAudioTracks.find(tr => tr.id === t.id && tr.audioEl && !tr.audioEl.paused);
-    if (_activeAudio && _activeAudio.audioEl.duration) {
-        cursorFrac = (_activeAudio.audioEl.currentTime % _activeAudio.audioEl.duration) / _activeAudio.audioEl.duration;
+    // Para tracks de música: el cursor refleja la posición del video mapeada al canvas del track
+    // considerando el offset del track. Así el cursor siempre coincide con la posición real.
+    let cursorFrac;
+    if (t._isTtsTrack) {
+        // TTS: cursor basado en currentTime del audio
+        const _activeTts = _expAudioTracks.find(tr => tr.id === t.id && tr.audioEl && !tr.audioEl.paused);
+        if (_activeTts && _activeTts.audioEl.duration) {
+            cursorFrac = _activeTts.audioEl.currentTime / _activeTts.audioEl.duration;
+        } else {
+            cursorFrac = _expPreviewFrase / Math.max(1, sentences.length);
+        }
+    } else {
+        // Música: cursor basado en posición del video relativa al offset del track
+        const totalDur = _expGetTotalDuration() || 1;
+        const videoTimeSecs = _expTtsGetCurrentTime(_expPreviewFrase);
+        const trackOffsetSecs = (t.offset || 0) * totalDur;
+        const dur = (t.audioEl && t.audioEl.duration) || 0;
+        if (dur > 0) {
+            const audioPos = videoTimeSecs - trackOffsetSecs;
+            cursorFrac = Math.max(0, Math.min(1, audioPos / dur));
+            // Si está fuera del rango del track, no mostrar cursor
+            if (audioPos < 0 || audioPos > dur) cursorFrac = -1;
+        } else {
+            cursorFrac = (videoTimeSecs - trackOffsetSecs) / totalDur;
+        }
     }
-    const px = Math.round(cursorFrac * W);
-    c.fillStyle = 'rgba(255,255,255,.6)'; c.fillRect(px - 1, 0, 2, H);
+    if (cursorFrac >= 0) {
+        const px = Math.round(cursorFrac * W);
+        c.fillStyle = 'rgba(255,255,255,.6)'; c.fillRect(px - 1, 0, 2, H);
+    }
 }
 
 // ─── Eventos de track ───────────────────────────────────────────────
 const _EXP_FADE_HIT = 10;
+let _expAudioOffsetDrag = null; // { trackId, canvasEl, startX, origOffset }
 
 function _expAudioGetFadeHandle(canvas, t, cx) {
     const W = canvas.width;
@@ -2871,6 +2992,14 @@ function _expAudioBindTrackEvents(wrap, canvas, t) {
         }
         const frac = cx / canvas.width;
         if (_expAudioMode === 'split') { _expAudioSplitAt(t, frac); return; }
+        // Para tracks de música (no TTS): permitir arrastrar el offset del bloque
+        if (!t._isTtsTrack) {
+            _expAudioOffsetDrag = { trackId: t.id, canvasEl: canvas, startX: e.clientX, origOffset: t.offset || 0 };
+            wrap.style.cursor = 'grabbing';
+            document.addEventListener('mousemove', _expAudioOnOffsetDrag);
+            document.addEventListener('mouseup', _expAudioOnOffsetDragEnd, { once: true });
+            return;
+        }
         const si = t.segments.findIndex(s => !s.deleted && frac >= s.from && frac <= s.to);
         _expAudioSelectedSeg = si >= 0 ? { trackId: t.id, segIdx: si } : null;
         _expAudioRenderTracks();
@@ -2886,7 +3015,11 @@ function _expAudioBindTrackEvents(wrap, canvas, t) {
             const pct = Math.round((fh.side === 'in' ? seg.fadeIn : seg.fadeOut) * 100);
             if (tooltip) { tooltip.style.display = 'block'; tooltip.style.left = (e.clientX + 12) + 'px'; tooltip.style.top = (e.clientY - 24) + 'px'; tooltip.textContent = fh.side === 'in' ? `◁ Fade in: ${pct}%` : `▷ Fade out: ${pct}%`; }
         } else {
-            wrap.style.cursor = _expAudioMode === 'split' ? 'crosshair' : 'pointer';
+            if (!t._isTtsTrack && _expAudioMode !== 'split') {
+                wrap.style.cursor = 'grab';
+            } else {
+                wrap.style.cursor = _expAudioMode === 'split' ? 'crosshair' : 'pointer';
+            }
             if (tooltip) tooltip.style.display = 'none';
         }
     });
@@ -2903,6 +3036,43 @@ function _expAudioBindTrackEvents(wrap, canvas, t) {
         if (menu) { menu.style.display = 'block'; menu.style.left = e.clientX + 'px'; menu.style.top = e.clientY + 'px'; }
         document.addEventListener('click', _expAudioCloseCtxMenu, { once: true });
     });
+}
+
+function _expAudioOnOffsetDrag(e) {
+    if (!_expAudioOffsetDrag) return;
+    const t = _expAudioTracks.find(t => t.id === _expAudioOffsetDrag.trackId);
+    if (!t) return;
+    const canvas = _expAudioOffsetDrag.canvasEl;
+    const W = canvas.getBoundingClientRect().width || canvas.width;
+    const dx = e.clientX - _expAudioOffsetDrag.startX;
+    const deltaFrac = dx / W;
+    t.offset = Math.max(0, Math.min(1, _expAudioOffsetDrag.origOffset + deltaFrac));
+    _expAudioDrawTrack(canvas, t);
+    // Mostrar tooltip con posición
+    const tooltip = document.getElementById('exp-fade-tooltip');
+    if (tooltip) {
+        const pct = Math.round(t.offset * 100);
+        tooltip.style.display = 'block';
+        tooltip.style.left = (e.clientX + 12) + 'px';
+        tooltip.style.top = (e.clientY - 24) + 'px';
+        tooltip.textContent = `⟺ Inicio: ${pct}%`;
+    }
+}
+
+function _expAudioOnOffsetDragEnd(e) {
+    if (!_expAudioOffsetDrag) return;
+    const tooltip = document.getElementById('exp-fade-tooltip');
+    if (tooltip) tooltip.style.display = 'none';
+    // Restaurar cursor
+    const t = _expAudioTracks.find(t => t.id === _expAudioOffsetDrag.trackId);
+    const canvas = _expAudioOffsetDrag.canvasEl;
+    if (canvas.parentElement) canvas.parentElement.style.cursor = 'grab';
+    _expAudioOffsetDrag = null;
+    document.removeEventListener('mousemove', _expAudioOnOffsetDrag);
+    // Re-sincronizar audio si está reproduciendo
+    if (_expIsPlaying) {
+        _expSeekToFrase(_expPreviewFrase);
+    }
 }
 
 function _expAudioOnFadeDrag(e) {
@@ -3271,7 +3441,7 @@ async function _expTtsPregenerar() {
 
     // Agregar nuevo track
     if (trackUrl) {
-        const id = _expAudioAddTrack('Voz TTS', '#7eb89a', null, trackUrl);
+        const id = _expAudioAddTrack('Voz TTS', '#7eb89a', null, trackUrl, true);
         const t = _expAudioTracks.find(t => t.id === id);
         if (t) t._isTtsTrack = true;
         const ctrl = document.getElementById('exp-audio-preview-controls');
