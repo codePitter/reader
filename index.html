@@ -314,7 +314,7 @@
         <div class="sidebar-section">
             <div class="section-label">Archivo</div>
             <label for="epub-file" class="file-label">📂 Seleccionar archivo</label>
-            <input type="file" id="epub-file" accept=".epub,.txt,.html,.htm,.pdf,.fb2,.fb3,.docx,.rtf,.odt,.mobi,.prc,.azw3,.azw,.cbz,.cbr">
+            <input type="file" id="epub-file" accept=".epub,.txt,.html,.htm,.pdf,.fb2,.fb3,.docx,.rtf,.odt,.mobi,.prc,.azw3,.azw,.cbz,.cbr" data-default-dir="documents">
             <span id="file-name">Ningún archivo seleccionado</span>
             <div id="formats-hint" style="font-size:0.52rem;color:var(--text-dim);margin-top:4px;line-height:1.5;opacity:0.6;">
                 epub · txt · pdf · docx · html · fb2 · odt · rtf · mobi · cbz…
@@ -776,7 +776,7 @@
             <button id="btn-toggle-ai-img" onclick="toggleAIImages()" class="vbar-btn">&#128444; IA</button>
             <button id="btn-toggle-grayscale" onclick="toggleImageGrayscale()" title="Escala de grises" class="vbar-btn">⬜ B&W</button>
             <button id="btn-toggle-index" onclick="togglevideoIndex()" style="background:none;border:none;color:var(--text-dim);font-size:0.9rem;cursor:pointer;padding:0 2px;flex-shrink:0;transition:color 0.2s;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-dim)'">&#9776;</button>
-            <button id="btn-export-video" onclick="exportarVideo()" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-dim);font-size:0.58rem;padding:2px 6px;cursor:pointer;flex-shrink:0;white-space:nowrap;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-dim)'">&#11015; Video</button>
+            <button id="btn-export-video" onclick="exportarVideoDirecto()" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-dim);font-size:0.58rem;padding:2px 6px;cursor:pointer;flex-shrink:0;white-space:nowrap;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-dim)'">&#11015; Video</button>
             <button id="btn-cancel-export" onclick="cancelarExportacion()" style="display:none;background:none;border:1px solid var(--accent);border-radius:4px;color:var(--accent);font-size:0.58rem;padding:2px 6px;cursor:pointer;flex-shrink:0;white-space:nowrap;">&#10005; Cancelar</button>
             <button id="btn-fullscreen" onclick="toggleFullscreen()" style="background:none;border:none;color:var(--text-dim);font-size:0.9rem;cursor:pointer;padding:0 2px;flex-shrink:0;transition:color 0.2s;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-dim)'">&#x26F6;</button>
             <button onclick="cerrarvideo()" style="background:none;border:none;color:var(--text-dim);font-size:1rem;cursor:pointer;padding:0 2px;flex-shrink:0;transition:color 0.2s;" onmouseover="this.style.color='#ff6b6b'" onmouseout="this.style.color='var(--text-dim)'">&#10005;</button>

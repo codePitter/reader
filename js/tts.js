@@ -467,6 +467,15 @@ function envolverOracionesEnSpans(contenedor, oraciones) {
 
 // ─── TTS ENGINE — pausa, reanuda, detiene, auto-siguiente capítulo ───
 function pausarTTS() {
+    // Pausar motor XTTS/Edge (audioActual) si está activo
+    if (typeof audioActual !== 'undefined' && audioActual && !audioActual.paused) {
+        audioActual.pause();
+        isPaused = true;
+        actualizarEstadoTTS('pausado');
+        mostrarNotificacion('Lectura pausada');
+        return;
+    }
+    // Pausar browser synth
     if (synth.speaking && !synth.paused) {
         synth.pause();
         isPaused = true;
@@ -476,15 +485,26 @@ function pausarTTS() {
 }
 
 function reanudarTTS() {
-    // Chrome tiene un bug con synth.resume() — relanzar desde la oración actual
     const indiceActual = currentSentenceIndex;
     isPaused = false;
     isReading = true;
+    // Reanudar motor XTTS/Edge: el audioActual sigue siendo válido, solo resumirlo
+    if (typeof audioActual !== 'undefined' && audioActual && audioActual.paused && audioActual.src) {
+        actualizarEstadoTTS('reproduciendo');
+        audioActual.play();
+        return;
+    }
+    // Chrome tiene un bug con synth.resume() — relanzar desde la oración actual
     synth.cancel();
     setTimeout(() => {
         currentSentenceIndex = indiceActual;
         actualizarEstadoTTS('reproduciendo');
-        leerOracion(indiceActual);
+        // Usar el motor correcto según servidor disponible
+        if (typeof servidorTTSDisponible !== 'undefined' && servidorTTSDisponible) {
+            leerOracionLocal(indiceActual);
+        } else {
+            leerOracion(indiceActual);
+        }
     }, 150);
 }
 

@@ -2360,6 +2360,11 @@ async function exportarVideo() {
         return;
     }
 
+    // ── Pausar TTS antes de grabar ──
+    if (typeof isReading !== 'undefined' && isReading) {
+        if (typeof pausarTTS === 'function') pausarTTS();
+    }
+
     _exportCancelled = false;
     _exportChunks = [];
 

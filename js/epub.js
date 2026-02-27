@@ -9,6 +9,42 @@
 // ======================
 
 // Cargar archivo EPUB
+// Interceptar el label para abrir en Documents si showOpenFilePicker esta disponible
+(function () {
+    const lbl = document.querySelector('label[for="epub-file"]');
+    const inp = document.getElementById('epub-file');
+    if (lbl && inp && typeof window.showOpenFilePicker === 'function') {
+        lbl.addEventListener('click', async function (e) {
+            e.preventDefault();
+            try {
+                const [fileHandle] = await window.showOpenFilePicker({
+                    startIn: 'documents',
+                    types: [{
+                        description: 'Libros y documentos', accept: {
+                            'application/epub+zip': ['.epub'],
+                            'text/plain': ['.txt'],
+                            'text/html': ['.html', '.htm'],
+                            'application/pdf': ['.pdf'],
+                            'application/octet-stream': ['.fb2', '.fb3', '.mobi', '.prc', '.azw3', '.azw', '.cbz', '.cbr'],
+                            'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
+                            'application/rtf': ['.rtf']
+                        }
+                    }],
+                    multiple: false
+                });
+                const file = await fileHandle.getFile();
+                // Disparar el change handler con el archivo obtenido
+                const dt = new DataTransfer();
+                dt.items.add(file);
+                inp.files = dt.files;
+                inp.dispatchEvent(new Event('change'));
+            } catch (err) {
+                if (err.name !== 'AbortError') inp.click(); // fallback al selector nativo
+            }
+        });
+    }
+})();
+
 document.getElementById('epub-file').addEventListener('change', async function (e) {
     const file = e.target.files[0];
     if (!file) return;

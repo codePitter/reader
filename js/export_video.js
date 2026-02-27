@@ -12,7 +12,8 @@ const EXPORT_IMGS_PER = 10;    // frases por grupo de imagen
 const EXPORT_SEC_FRASE = 4.0;   // segundos/frase cuando no hay XTTS
 
 let _expTtsMode = 'browser'; // se setea en el modal de config, se lee en _iniciarExportacion
-let _expFileName = '';       // nombre de archivo congelado al iniciar — no cambia aunque cambie el capítulo
+let _expFileName = '';       // nombre de archivo congelado al iniciar
+let _expTtsBuffers = null;   // ArrayBuffer[] pre-generado desde el panel TTS del preview — no cambia aunque cambie el capítulo
 
 // Efectos globales para la exportación (configurables en el paso de preview)
 let _expEffects = {
@@ -27,8 +28,34 @@ let _expEffects = {
     textColor: '#c8a96e',
     textOpacity: 1.0,
     fontFamily: 'Georgia,serif',  // tipografía del texto
+    strokeEnabled: false,
+    strokeColor: '#000000',
+    strokeWidth: 2,               // px (1–8)
 };
 let _expImagenes = [];   // [{ img: HTMLImageElement|null, url: string, grupo: int }]
+// _expImageRanges: [{ desde: int, hasta: int }] — índices de frase (0-based, inclusive)
+// Se inicializa en _inicializarRanges() y se puede editar desde el timeline del preview
+let _expImageRanges = [];   // sincronizado con _expImagenes por índice
+
+function _inicializarRanges() {
+    const total = sentences.length;
+    const grupos = _expImagenes.length;
+    _expImageRanges = _expImagenes.map((_, g) => ({
+        desde: g * EXPORT_IMGS_PER,
+        hasta: Math.min((g + 1) * EXPORT_IMGS_PER - 1, total - 1)
+    }));
+    // Asegurar que el último grupo llegue hasta el final
+    if (grupos > 0) _expImageRanges[grupos - 1].hasta = total - 1;
+}
+
+// Dado un índice de frase, retorna el índice del grupo/imagen que le corresponde
+function _expGetGrupoParaFrase(fraseIdx) {
+    for (let g = 0; g < _expImageRanges.length; g++) {
+        if (fraseIdx >= _expImageRanges[g].desde && fraseIdx <= _expImageRanges[g].hasta) return g;
+    }
+    // fallback
+    return Math.min(Math.floor(fraseIdx / EXPORT_IMGS_PER), _expImagenes.length - 1);
+}
 
 // ───────────────────────────────────────────────────────────────────
 // PUNTO DE ENTRADA
@@ -40,6 +67,7 @@ function exportarVideo() {
     }
     _expCancelled = false;
     _expImagenes = [];
+    _expImageRanges = [];
     _abrirModalConfig();
 }
 
@@ -53,6 +81,11 @@ function cancelarExportacion() {
 // ───────────────────────────────────────────────────────────────────
 async function _abrirModalConfig() {
     _quitarModal();
+
+    // Pausar musica ambiental al entrar al modal de exportacion
+    if (typeof freesoundAudio !== 'undefined' && freesoundAudio && !freesoundAudio.paused) {
+        freesoundAudio.pause();
+    }
 
     // Re-verificar servidor en tiempo real antes de dibujar el modal
     // (servidorTTSDisponible puede estar en false por error transitorio previo)
@@ -74,7 +107,7 @@ async function _abrirModalConfig() {
         display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;`;
     m.innerHTML = `
     <div style="background:#111;border:1px solid #2a2a2a;border-radius:10px;
-                padding:28px 30px;width:460px;max-width:95vw;color:#e8e0d0;">
+                padding:28px 30px;width:460px;max-width:95vw;max-height:95vh;overflow-y:auto;color:#e8e0d0;">
         <div style="font-size:.62rem;color:#c8a96e;letter-spacing:.12em;margin-bottom:18px;">⬇ EXPORTAR</div>
 
         <!-- TTS -->
@@ -316,6 +349,7 @@ async function _pasarASeleccionImagenes() {
     }
 
     _renderModalImagenes();
+    _inicializarRanges();
 }
 
 function _renderModalImagenes() {
@@ -326,7 +360,7 @@ function _renderModalImagenes() {
     m.id = 'export-modal';
     m.style.cssText = `position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.9);
         display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;
-        font-family:'DM Mono',monospace;padding:24px 12px;`;
+        font-family:'DM Mono',monospace;padding:16px 12px;box-sizing:border-box;`;
 
     const grid = _expImagenes.map((item, g) => {
         const desde = g * EXPORT_IMGS_PER + 1;
@@ -701,32 +735,39 @@ async function _iniciarExportacion() {
 
         let audioBuffers = null;
         if (ttsMode === 'xtts') {
-            _updateWidget(5, '🔌 Verificando servidor TTS…');
-            let servidorOk = false;
-            try {
-                const hRes = await fetch(`${TTS_API_URL}/health`, { method: 'GET' });
-                servidorOk = hRes.ok;
-                if (servidorOk) servidorTTSDisponible = true;
-            } catch (e) { servidorOk = false; }
-
-            if (!servidorOk) {
-                mostrarNotificacion('⚠ Servidor XTTS no responde — exportando sin audio');
+            // Reutilizar buffers pre-generados si existen
+            if (typeof _expTtsBuffers !== 'undefined' && _expTtsBuffers && _expTtsBuffers.length === sentences.length) {
+                _updateWidget(10, '✓ Audio TTS pre-generado — reutilizando…');
+                audioBuffers = _expTtsBuffers;
+                _expTtsBuffers = null;
             } else {
-                let _ttsPausadoPorExport = false;
-                if (typeof isReading !== 'undefined' && isReading) {
-                    if (typeof pausarTTS === 'function') pausarTTS();
-                    _ttsPausadoPorExport = true;
-                    if (typeof _limpiarTTSCache === 'function') await _limpiarTTSCache();
-                    await new Promise(r => setTimeout(r, 600));
+                _updateWidget(5, '🔌 Verificando servidor TTS…');
+                let servidorOk = false;
+                try {
+                    const hRes = await fetch(`${TTS_API_URL}/health`, { method: 'GET' });
+                    servidorOk = hRes.ok;
+                    if (servidorOk) servidorTTSDisponible = true;
+                } catch (e) { servidorOk = false; }
+
+                if (!servidorOk) {
+                    mostrarNotificacion('⚠ Servidor XTTS no responde — exportando sin audio');
+                } else {
+                    let _ttsPausadoPorExport = false;
+                    if (typeof isReading !== 'undefined' && isReading) {
+                        if (typeof pausarTTS === 'function') pausarTTS();
+                        _ttsPausadoPorExport = true;
+                        if (typeof _limpiarTTSCache === 'function') await _limpiarTTSCache();
+                        await new Promise(r => setTimeout(r, 600));
+                    }
+
+                    window._exportEnCurso = true;
+                    audioBuffers = await _expGenerarAudioXTTSWidget(_updateWidget);
+                    window._exportEnCurso = false;
+
+                    if (_ttsPausadoPorExport && typeof reanudarTTS === 'function') reanudarTTS();
+                    if (_expCancelled) { return; }
                 }
-
-                window._exportEnCurso = true;
-                audioBuffers = await _expGenerarAudioXTTSWidget(_updateWidget);
-                window._exportEnCurso = false;
-
-                if (_ttsPausadoPorExport && typeof reanudarTTS === 'function') reanudarTTS();
-                if (_expCancelled) { return; }
-            }
+            } // end else (no pre-generados)
         }
 
         _updateWidget(audioBuffers ? 55 : 10, '🎬 Renderizando video…');
@@ -778,7 +819,7 @@ function _abrirModalSoloAudio() {
 
     m.innerHTML = `
     <div style="background:#111;border:1px solid #2a2a2a;border-radius:12px;
-                padding:28px 30px;width:420px;max-width:95vw;color:#e8e0d0;">
+                padding:28px 30px;width:420px;max-width:95vw;max-height:95vh;overflow-y:auto;color:#e8e0d0;">
 
         <div style="font-size:.62rem;color:#c8a96e;letter-spacing:.12em;margin-bottom:4px;">🔊 EXPORTAR AUDIO</div>
         <div style="font-size:.47rem;color:#444;margin-bottom:22px;">
@@ -1066,178 +1107,568 @@ function _abrirPreviewEfectos() {
     _expEffects.textColor = (typeof _videoTextColor !== 'undefined') ? _videoTextColor : '#c8a96e';
     _expEffects.textOpacity = (typeof _videoTextOpacity !== 'undefined') ? _videoTextOpacity : 1.0;
 
+    if (_expImageRanges.length !== _expImagenes.length) _inicializarRanges();
+
+    // Inyectar CSS dedicado (una sola vez)
+    if (!document.getElementById('exp-preview-style')) {
+        const st = document.createElement('style');
+        st.id = 'exp-preview-style';
+        st.textContent = `
+        #export-modal {
+            position: fixed !important;
+            inset: 0 !important;
+            z-index: 9999 !important;
+            background: #0a0908 !important;
+            font-family: 'DM Mono', monospace !important;
+            display: flex !important;
+            flex-direction: column !important;
+            overflow: hidden !important;
+            color: #e8e0d0 !important;
+        }
+        #exp-topbar {
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 16px;
+            border-bottom: 1px solid #1e1e1e;
+        }
+        #exp-body {
+            flex: 1 1 0;
+            min-height: 0;
+            display: flex;
+            gap: 12px;
+            padding: 10px 14px 8px;
+            overflow: hidden;
+        }
+        #exp-left-col {
+            flex: 1 1 0;
+            min-width: 0;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 7px;
+            overflow: hidden;
+        }
+        #exp-canvas-wrap {
+            flex: 1 1 0;
+            min-height: 0;
+            background: #000;
+            border-radius: 8px;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #exp-canvas-wrap canvas {
+            max-width: 100%;
+            max-height: 100%;
+            display: block;
+        }
+        #exp-playback-row {
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        #exp-timeline-wrap {
+            flex-shrink: 0;
+            background: #0d0d0d;
+            border: 1px solid #1e1e1e;
+            border-radius: 6px;
+            padding: 7px 10px;
+        }
+        #exp-right-panel {
+            flex: 0 0 256px;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            overflow-y: auto;
+            padding-bottom: 4px;
+        }
+        #exp-right-panel::-webkit-scrollbar { width: 3px; }
+        #exp-right-panel::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 2px; }
+        #exp-bottombar {
+            flex-shrink: 0;
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+            align-items: center;
+            padding: 9px 14px;
+            border-top: 1px solid #1e1e1e;
+            background: #0a0908;
+        }
+        #exp-tl-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 10px;
+            border-bottom: 1px solid #1e1e1e;
+        }
+        #exp-audio-tracks { padding: 5px 10px 0; }
+        .exp-track-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 4px;
+        }
+        .exp-track-label {
+            font-size: .42rem;
+            color: #888;
+            width: 66px;
+            flex-shrink: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .exp-track-canvas-wrap {
+            flex: 1;
+            min-width: 0;
+            position: relative;
+            height: 34px;
+            border-radius: 3px;
+            background: #0a0a0a;
+            border: 1px solid #1e1e1e;
+            cursor: pointer;
+            overflow: visible;
+        }
+        .exp-track-canvas-wrap canvas { display:block; width:100%; height:100%; }
+        .exp-tl-btn {
+            background: none;
+            border: 1px solid #2a2a2a;
+            border-radius: 4px;
+            color: #666;
+            font-family: 'DM Mono', monospace;
+            font-size: .47rem;
+            padding: 3px 8px;
+            cursor: pointer;
+            transition: all .15s;
+            white-space: nowrap;
+        }
+        .exp-tl-btn:hover { border-color: #c8a96e; color: #c8a96e; }
+        .exp-tl-btn.active { border-color: #c8a96e; color: #c8a96e; }
+        .exp-tl-btn.danger:hover { border-color: #cc6655; color: #cc6655; }
+        .exp-add-track-btn {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            width: 100%;
+            padding: 4px 10px;
+            background: none;
+            border: 1px dashed #272727;
+            border-radius: 4px;
+            color: #333;
+            font-family: 'DM Mono', monospace;
+            font-size: .46rem;
+            cursor: pointer;
+            transition: all .15s;
+        }
+        .exp-add-track-btn:hover { border-color: #7eb89a; color: #7eb89a; }
+        .exp-img-tl-wrap { padding: 3px 10px 7px; border-top: 1px solid #1e1e1e; }
+        .exp-img-tl-inner { margin-left: 72px; }
+        #exp-img-timeline-inner { width: 100%; display: block; cursor: pointer; }
+        .exp-fade-tooltip {
+            position: fixed;
+            background: #111;
+            border: 1px solid #3a3a3a;
+            border-radius: 4px;
+            padding: 3px 8px;
+            font-size: .44rem;
+            color: #c8a96e;
+            pointer-events: none;
+            z-index: 99999;
+            display: none;
+            white-space: nowrap;
+            font-family: 'DM Mono', monospace;
+        }
+        .exp-ctx-menu {
+            position: fixed;
+            background: #111;
+            border: 1px solid #3a3a3a;
+            border-radius: 6px;
+            padding: 4px 0;
+            z-index: 99999;
+            min-width: 150px;
+            box-shadow: 0 8px 24px rgba(0,0,0,.7);
+            display: none;
+            font-family: 'DM Mono', monospace;
+        }
+        .exp-ctx-item { padding: 6px 14px; font-size: .51rem; color: #888; cursor: pointer; transition: background .1s, color .1s; }
+        .exp-ctx-item:hover { background: #1a1a1a; color: #e8e0d0; }
+        .exp-ctx-item.danger:hover { color: #cc6655; }
+        .exp-ctx-sep { border-top: 1px solid #1e1e1e; margin: 3px 0; }
+        `;
+        document.head.appendChild(st);
+    }
+
     _quitarModal();
     const m = document.createElement('div');
     m.id = 'export-modal';
-    m.style.cssText = `position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.95);
-        display:flex;flex-direction:column;align-items:center;justify-content:center;
-        overflow:hidden;font-family:'DM Mono',monospace;padding:12px 16px;`;
 
     m.innerHTML = `
-    <div style="width:90%;max-width:1200px;display:flex;flex-direction:column;height:calc(100vh - 24px);">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-shrink:0;">
+        <div id="exp-topbar">
             <div style="font-size:.62rem;color:#c8a96e;letter-spacing:.1em;">🎨 PREVIEW — EFECTOS DE VIDEO</div>
-            <div style="font-size:.5rem;color:#555;">Los efectos se aplican a todo el video</div>
+            <div style="font-size:.47rem;color:#444;">Los efectos se aplican a todo el video</div>
         </div>
 
-        <!-- Layout horizontal: canvas izquierda + controles derecha -->
-        <div style="display:flex;gap:14px;flex:1;min-height:0;overflow:hidden;">
+        <div id="exp-body">
 
-        <!-- Canvas preview: ocupa todo el alto disponible manteniendo 16:9 -->
-        <div style="flex:1;min-width:0;display:flex;align-items:center;justify-content:center;background:#000;border-radius:8px;overflow:hidden;">
-            <canvas id="exp-preview-canvas" style="max-width:100%;max-height:100%;display:block;"></canvas>
-        </div>
-
-        <!-- Panel de controles derecha -->
-        <div style="flex:0 0 260px;display:flex;flex-direction:column;gap:10px;overflow-y:auto;">
-
-        <!-- Controles en grid 2 columnas (ahora columna única dentro del panel derecho) -->
-        <div style="display:flex;flex-direction:column;gap:10px;">
-
-            <!-- Col izquierda: imagen -->
-            <div style="background:#111;border:1px solid #2a2a2a;border-radius:8px;padding:14px 16px;">
-                <div style="font-size:.52rem;color:#c8a96e;letter-spacing:.08em;margin-bottom:12px;">IMAGEN</div>
-
-                <label style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-                    <span style="font-size:.55rem;color:#888;">Blanco y negro</span>
-                    <input type="checkbox" id="exp-fx-bw" ${_expEffects.grayscale ? 'checked' : ''}
-                           onchange="_expFxChange()" style="accent-color:#c8a96e;width:14px;height:14px;">
-                </label>
-
-                <div style="margin-bottom:10px;">
-                    <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-                        <span style="font-size:.52rem;color:#888;">Opacidad imagen</span>
-                        <span id="exp-fx-opacity-val" style="font-size:.52rem;color:#c8a96e;">${Math.round(_expEffects.imgOpacity * 100)}%</span>
-                    </div>
-                    <input type="range" id="exp-fx-opacity" min="5" max="100" value="${Math.round(_expEffects.imgOpacity * 100)}"
-                           oninput="_expFxChange()" style="width:100%;accent-color:#c8a96e;">
+            <div id="exp-left-col">
+                <div id="exp-canvas-wrap">
+                    <canvas id="exp-preview-canvas"></canvas>
                 </div>
 
-                <div style="margin-bottom:10px;">
-                    <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-                        <span style="font-size:.52rem;color:#888;">Brillo</span>
-                        <span id="exp-fx-brightness-val" style="font-size:.52rem;color:#c8a96e;">${_expEffects.brightness.toFixed(2)}</span>
-                    </div>
-                    <input type="range" id="exp-fx-brightness" min="50" max="200" value="${Math.round(_expEffects.brightness * 100)}"
-                           oninput="_expFxChange()" style="width:100%;accent-color:#c8a96e;">
+                <div id="exp-playback-row">
+                    <button id="exp-play-btn" onclick="_expTogglePlay()"
+                            style="background:#1a1a1a;border:1px solid #3a3a3a;border-radius:5px;
+                                   color:#c8a96e;font-family:'DM Mono',monospace;font-size:.66rem;
+                                   padding:4px 14px;cursor:pointer;min-width:68px;transition:all .15s;"
+                            onmouseover="this.style.borderColor='#c8a96e';this.style.background='rgba(200,169,110,.07)'"
+                            onmouseout="this.style.borderColor='#3a3a3a';this.style.background='#1a1a1a'">▶ Play</button>
+                    <button id="exp-restart-btn" onclick="_expRestartPlay()"
+                            title="Volver al inicio"
+                            style="background:#1a1a1a;border:1px solid #3a3a3a;border-radius:5px;
+                                   color:#888;font-family:'DM Mono',monospace;font-size:.66rem;
+                                   padding:4px 10px;cursor:pointer;transition:all .15s;margin-left:4px;"
+                            onmouseover="this.style.borderColor='#c8a96e';this.style.color='#c8a96e';this.style.background='rgba(200,169,110,.07)'"
+                            onmouseout="this.style.borderColor='#3a3a3a';this.style.color='#888';this.style.background='#1a1a1a'">⏮</button>
+                    <span id="exp-play-counter" style="font-size:.5rem;color:#555;">Frase 1 / ${sentences.length}</span>
+                    <div style="flex:1;"></div>
+                    <span style="font-size:.43rem;color:#2a2a2a;">Arrastrá los bordes del timeline para reasignar imágenes</span>
                 </div>
 
-                <div style="margin-bottom:0;">
-                    <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-                        <span style="font-size:.52rem;color:#888;">Contraste</span>
-                        <span id="exp-fx-contrast-val" style="font-size:.52rem;color:#c8a96e;">${_expEffects.contrast.toFixed(2)}</span>
+                <div id="exp-timeline-wrap">
+                    <div id="exp-tl-toolbar">
+                        <span style="font-size:.43rem;color:#444;letter-spacing:.07em;text-transform:uppercase;flex:1;">Timeline</span>
+                        <button class="exp-tl-btn" id="exp-btn-split" onclick="_expAudioSetMode('split')" title="Click en un track para dividirlo">✂ Split</button>
+                        <button class="exp-tl-btn danger" onclick="_expAudioDeleteSelected()" title="Eliminar segmento seleccionado">🗑 Eliminar</button>
+                        <button class="exp-tl-btn" onclick="_expAudioUndoSplit()">↩ Deshacer</button>
                     </div>
-                    <input type="range" id="exp-fx-contrast" min="50" max="200" value="${Math.round(_expEffects.contrast * 100)}"
-                           oninput="_expFxChange()" style="width:100%;accent-color:#c8a96e;">
+
+                    <div id="exp-audio-tracks"></div>
+
+                    <div style="padding:4px 10px 5px;">
+                        <label class="exp-add-track-btn">
+                            + Agregar track de audio
+                            <input type="file" accept="audio/*" style="display:none" onchange="_expAudioAddFromFile(this)" data-default-dir="music">
+                        </label>
+                    </div>
+
+                    <div class="exp-img-tl-wrap">
+                        <div style="font-size:.42rem;color:#444;letter-spacing:.07em;margin-bottom:3px;text-transform:uppercase;">Imágenes</div>
+                        <div class="exp-img-tl-inner">
+                            <canvas id="exp-timeline-canvas" height="50"
+                                    style="width:100%;display:block;cursor:pointer;"></canvas>
+                        </div>
+                        <div id="exp-timeline-hint" style="font-size:.41rem;color:#2a2a2a;margin-top:2px;text-align:right;">
+                            Click para ir a una frase · Arrastrá los separadores para cambiar rangos
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <!-- Col derecha: viñeta + texto -->
-            <div style="background:#111;border:1px solid #2a2a2a;border-radius:8px;padding:14px 16px;">
-                <div style="font-size:.52rem;color:#c8a96e;letter-spacing:.08em;margin-bottom:12px;">VIÑETA & TEXTO</div>
+            <div id="exp-right-panel">
 
-                <label style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-                    <span style="font-size:.55rem;color:#888;">Viñeta</span>
-                    <input type="checkbox" id="exp-fx-vignette" ${_expEffects.vignette ? 'checked' : ''}
-                           onchange="_expFxChange()" style="accent-color:#c8a96e;width:14px;height:14px;">
-                </label>
-
-                <div style="margin-bottom:10px;">
-                    <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-                        <span style="font-size:.52rem;color:#888;">Intensidad viñeta</span>
-                        <span id="exp-fx-vigint-val" style="font-size:.52rem;color:#c8a96e;">${Math.round(_expEffects.vigIntensity * 100)}%</span>
+                <!-- ══ SECCIÓN IMAGEN ══ -->
+                <div style="background:#111;border:1px solid #2a2a2a;border-radius:8px;overflow:hidden;flex-shrink:0;">
+                    <div onclick="_expToggleSection('sec-imagen',this)"
+                         style="display:flex;align-items:center;justify-content:space-between;
+                                padding:9px 14px;cursor:pointer;user-select:none;transition:background .15s;"
+                         onmouseover="this.style.background='#161616'" onmouseout="this.style.background=''">
+                        <span style="font-size:.51rem;color:#c8a96e;letter-spacing:.08em;">IMAGEN</span>
+                        <span id="sec-imagen-arrow" style="font-size:.47rem;color:#555;">▶</span>
                     </div>
-                    <input type="range" id="exp-fx-vigint" min="0" max="100" value="${Math.round(_expEffects.vigIntensity * 100)}"
-                           oninput="_expFxChange()" style="width:100%;accent-color:#c8a96e;">
-                </div>
-
-                <div style="margin-bottom:10px;">
-                    <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-                        <span style="font-size:.52rem;color:#888;">Tamaño viñeta</span>
-                        <span id="exp-fx-vigsize-val" style="font-size:.52rem;color:#c8a96e;">${_expEffects.vigSize.toFixed(2)}</span>
+                    <div id="sec-imagen" style="display:none;padding:11px 14px;">
+                        <label style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;">
+                            <span style="font-size:.5rem;color:#888;">Blanco y negro</span>
+                            <input type="checkbox" id="exp-fx-bw" ${_expEffects.grayscale ? 'checked' : ''}
+                                   onchange="_expFxChange()" style="accent-color:#c8a96e;width:14px;height:14px;">
+                        </label>
+                        <div style="margin-bottom:9px;">
+                            <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
+                                <span style="font-size:.5rem;color:#888;">Opacidad imagen</span>
+                                <span id="exp-fx-opacity-val" style="font-size:.5rem;color:#c8a96e;">${Math.round(_expEffects.imgOpacity * 100)}%</span>
+                            </div>
+                            <input type="range" id="exp-fx-opacity" min="5" max="100" value="${Math.round(_expEffects.imgOpacity * 100)}"
+                                   oninput="_expFxChange()" style="width:100%;accent-color:#c8a96e;">
+                        </div>
+                        <div style="margin-bottom:9px;">
+                            <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
+                                <span style="font-size:.5rem;color:#888;">Brillo</span>
+                                <span id="exp-fx-brightness-val" style="font-size:.5rem;color:#c8a96e;">${_expEffects.brightness.toFixed(2)}</span>
+                            </div>
+                            <input type="range" id="exp-fx-brightness" min="50" max="200" value="${Math.round(_expEffects.brightness * 100)}"
+                                   oninput="_expFxChange()" style="width:100%;accent-color:#c8a96e;">
+                        </div>
+                        <div>
+                            <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
+                                <span style="font-size:.5rem;color:#888;">Contraste</span>
+                                <span id="exp-fx-contrast-val" style="font-size:.5rem;color:#c8a96e;">${_expEffects.contrast.toFixed(2)}</span>
+                            </div>
+                            <input type="range" id="exp-fx-contrast" min="50" max="200" value="${Math.round(_expEffects.contrast * 100)}"
+                                   oninput="_expFxChange()" style="width:100%;accent-color:#c8a96e;">
+                        </div>
                     </div>
-                    <input type="range" id="exp-fx-vigsize" min="50" max="120" value="${Math.round(_expEffects.vigSize * 100)}"
-                           oninput="_expFxChange()" style="width:100%;accent-color:#c8a96e;">
                 </div>
 
-                <div style="margin-bottom:10px;">
-                    <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-                        <span style="font-size:.52rem;color:#888;">Opacidad texto</span>
-                        <span id="exp-fx-textopacity-val" style="font-size:.52rem;color:#c8a96e;">${Math.round(_expEffects.textOpacity * 100)}%</span>
+                <!-- ══ SECCIÓN VIÑETA ══ -->
+                <div style="background:#111;border:1px solid #2a2a2a;border-radius:8px;overflow:hidden;flex-shrink:0;">
+                    <div onclick="_expToggleSection('sec-vineta',this)"
+                         style="display:flex;align-items:center;justify-content:space-between;
+                                padding:9px 14px;cursor:pointer;user-select:none;transition:background .15s;"
+                         onmouseover="this.style.background='#161616'" onmouseout="this.style.background=''">
+                        <span style="font-size:.51rem;color:#c8a96e;letter-spacing:.08em;">VIÑETA</span>
+                        <span id="sec-vineta-arrow" style="font-size:.47rem;color:#555;">▶</span>
                     </div>
-                    <input type="range" id="exp-fx-textopacity" min="10" max="100" value="${Math.round(_expEffects.textOpacity * 100)}"
-                           oninput="_expFxChange()" style="width:100%;accent-color:#c8a96e;">
-                </div>
-
-                <div>
-                    <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-                        <span style="font-size:.52rem;color:#888;">Color de texto</span>
-                        <span id="exp-fx-color-val" style="font-size:.52rem;color:#c8a96e;">${_expEffects.textColor}</span>
+                    <div id="sec-vineta" style="display:none;padding:11px 14px;">
+                        <label style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;">
+                            <span style="font-size:.5rem;color:#888;">Activar viñeta</span>
+                            <input type="checkbox" id="exp-fx-vignette" ${_expEffects.vignette ? 'checked' : ''}
+                                   onchange="_expFxChange()" style="accent-color:#c8a96e;width:14px;height:14px;">
+                        </label>
+                        <div style="margin-bottom:9px;">
+                            <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
+                                <span style="font-size:.5rem;color:#888;">Intensidad</span>
+                                <span id="exp-fx-vigint-val" style="font-size:.5rem;color:#c8a96e;">${_expEffects.vigIntensity.toFixed(2)}</span>
+                            </div>
+                            <input type="range" id="exp-fx-vigint" min="0" max="100" value="${Math.round(_expEffects.vigIntensity * 100)}"
+                                   oninput="_expFxChange()" style="width:100%;accent-color:#c8a96e;">
+                        </div>
+                        <div>
+                            <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
+                                <span style="font-size:.5rem;color:#888;">Tamaño</span>
+                                <span id="exp-fx-vigsize-val" style="font-size:.5rem;color:#c8a96e;">${_expEffects.vigSize.toFixed(2)}</span>
+                            </div>
+                            <input type="range" id="exp-fx-vigsize" min="50" max="120" value="${Math.round(_expEffects.vigSize * 100)}"
+                                   oninput="_expFxChange()" style="width:100%;accent-color:#c8a96e;">
+                        </div>
                     </div>
-                    <input type="color" id="exp-fx-color" value="${_expEffects.textColor}"
-                           oninput="_expFxChange()" style="width:100%;height:28px;border:1px solid #2a2a2a;border-radius:4px;background:#0d0d0d;cursor:pointer;">
                 </div>
-            </div>
 
-            <!-- Zoom -->
-            <div style="background:#111;border:1px solid #2a2a2a;border-radius:8px;padding:12px 16px;">
-                <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-                    <span style="font-size:.52rem;color:#888;">Zoom imagen</span>
-                    <span id="exp-fx-zoom-val" style="font-size:.52rem;color:#c8a96e;">${_expEffects.zoom.toFixed(2)}x</span>
+                <!-- ══ SECCIÓN TEXTO ══ -->
+                <div style="background:#111;border:1px solid #2a2a2a;border-radius:8px;overflow:hidden;flex-shrink:0;">
+                    <div onclick="_expToggleSection('sec-texto',this)"
+                         style="display:flex;align-items:center;justify-content:space-between;
+                                padding:9px 14px;cursor:pointer;user-select:none;transition:background .15s;"
+                         onmouseover="this.style.background='#161616'" onmouseout="this.style.background=''">
+                        <span style="font-size:.51rem;color:#c8a96e;letter-spacing:.08em;">TEXTO</span>
+                        <span id="sec-texto-arrow" style="font-size:.47rem;color:#555;">▶</span>
+                    </div>
+                    <div id="sec-texto" style="display:none;padding:11px 14px;">
+                        <div style="margin-bottom:9px;">
+                            <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
+                                <span style="font-size:.5rem;color:#888;">Color texto</span>
+                                <span id="exp-fx-textcolor-val" style="font-size:.5rem;color:#c8a96e;">${_expEffects.textColor}</span>
+                            </div>
+                            <input type="color" id="exp-fx-textcolor" value="${_expEffects.textColor}"
+                                   oninput="_expFxChange()" style="width:100%;height:24px;border:1px solid #2a2a2a;border-radius:4px;background:#0d0d0d;cursor:pointer;">
+                        </div>
+                        <div style="margin-bottom:9px;">
+                            <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
+                                <span style="font-size:.5rem;color:#888;">Opacidad texto</span>
+                                <span id="exp-fx-textopacity-val" style="font-size:.5rem;color:#c8a96e;">${Math.round(_expEffects.textOpacity * 100)}%</span>
+                            </div>
+                            <input type="range" id="exp-fx-textopacity" min="10" max="100" value="${Math.round(_expEffects.textOpacity * 100)}"
+                                   oninput="_expFxChange()" style="width:100%;accent-color:#c8a96e;">
+                        </div>
+                        <div style="border-top:1px solid #1e1e1e;padding-top:9px;">
+                            <label style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;">
+                                <span style="font-size:.5rem;color:#888;">Borde de texto</span>
+                                <input type="checkbox" id="exp-fx-stroke" ${_expEffects.strokeEnabled ? 'checked' : ''}
+                                       onchange="_expFxChange()" style="accent-color:#c8a96e;width:14px;height:14px;">
+                            </label>
+                            <div id="exp-stroke-controls" style="display:${_expEffects.strokeEnabled ? 'block' : 'none'};">
+                                <div style="margin-bottom:8px;">
+                                    <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
+                                        <span style="font-size:.5rem;color:#888;">Color borde</span>
+                                    </div>
+                                    <input type="color" id="exp-fx-strokecolor" value="${_expEffects.strokeColor}"
+                                           oninput="_expFxChange()" style="width:100%;height:24px;border:1px solid #2a2a2a;border-radius:4px;background:#0d0d0d;cursor:pointer;">
+                                </div>
+                                <div>
+                                    <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
+                                        <span style="font-size:.5rem;color:#888;">Grosor</span>
+                                        <span id="exp-fx-strokewidth-val" style="font-size:.5rem;color:#c8a96e;">${_expEffects.strokeWidth}px</span>
+                                    </div>
+                                    <input type="range" id="exp-fx-strokewidth" min="1" max="8" value="${_expEffects.strokeWidth}"
+                                           oninput="_expFxChange()" style="width:100%;accent-color:#c8a96e;">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <input type="range" id="exp-fx-zoom" min="100" max="200" value="${Math.round(_expEffects.zoom * 100)}"
-                       oninput="_expFxChange()" style="width:100%;accent-color:#c8a96e;">
-            </div>
 
-            <!-- Tipografía -->
-            <div style="background:#111;border:1px solid #2a2a2a;border-radius:8px;padding:12px 16px;">
-                <div style="font-size:.52rem;color:#c8a96e;letter-spacing:.08em;margin-bottom:10px;">TIPOGRAFÍA</div>
-                <select id="exp-fx-font" onchange="_expFxChange()"
-                        style="width:100%;background:#0d0d0d;border:1px solid #2a2a2a;border-radius:4px;
-                               color:#e8e0d0;font-size:.55rem;padding:5px 7px;cursor:pointer;
-                               font-family:'DM Mono',monospace;accent-color:#c8a96e;">
-                    <option value="Georgia,serif" ${_expEffects.fontFamily === 'Georgia,serif' ? 'selected' : ''}>Georgia (Clásica)</option>
-                    <option value="'Times New Roman',serif" ${_expEffects.fontFamily === "'Times New Roman',serif" ? 'selected' : ''}>Times New Roman</option>
-                    <option value="'Palatino Linotype',Palatino,serif" ${_expEffects.fontFamily.includes('Palatino') ? 'selected' : ''}>Palatino (Elegante)</option>
-                    <option value="'Book Antiqua',Palatino,serif" ${_expEffects.fontFamily.includes('Book Antiqua') ? 'selected' : ''}>Book Antiqua</option>
-                    <option value="Garamond,serif" ${_expEffects.fontFamily.includes('Garamond') ? 'selected' : ''}>Garamond (Editorial)</option>
-                    <option value="'Trebuchet MS',sans-serif" ${_expEffects.fontFamily.includes('Trebuchet') ? 'selected' : ''}>Trebuchet (Moderno)</option>
-                    <option value="'Arial',sans-serif" ${_expEffects.fontFamily === "'Arial',sans-serif" ? 'selected' : ''}>Arial (Limpio)</option>
-                    <option value="'Courier New',monospace" ${_expEffects.fontFamily.includes('Courier') ? 'selected' : ''}>Courier (Máquina)</option>
-                    <option value="Impact,fantasy" ${_expEffects.fontFamily.includes('Impact') ? 'selected' : ''}>Impact (Dramático)</option>
-                </select>
-                <!-- Preview de la tipografía -->
-                <div id="exp-font-preview" style="margin-top:8px;padding:6px;background:#0a0908;border-radius:4px;
-                     text-align:center;font-size:14px;color:#c8a96e;font-style:italic;
-                     font-family:${_expEffects.fontFamily};">
-                    El hechicero inmortal...
+                <!-- ══ SECCIÓN ZOOM ══ -->
+                <div style="background:#111;border:1px solid #2a2a2a;border-radius:8px;overflow:hidden;flex-shrink:0;">
+                    <div onclick="_expToggleSection('sec-zoom',this)"
+                         style="display:flex;align-items:center;justify-content:space-between;
+                                padding:9px 14px;cursor:pointer;user-select:none;transition:background .15s;"
+                         onmouseover="this.style.background='#161616'" onmouseout="this.style.background=''">
+                        <span style="font-size:.51rem;color:#c8a96e;letter-spacing:.08em;">ZOOM IMAGEN</span>
+                        <span id="sec-zoom-arrow" style="font-size:.47rem;color:#555;">▶</span>
+                    </div>
+                    <div id="sec-zoom" style="display:none;padding:11px 14px;">
+                        <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
+                            <span style="font-size:.5rem;color:#888;">Zoom</span>
+                            <span id="exp-fx-zoom-val" style="font-size:.5rem;color:#c8a96e;">${_expEffects.zoom.toFixed(2)}x</span>
+                        </div>
+                        <input type="range" id="exp-fx-zoom" min="100" max="200" value="${Math.round(_expEffects.zoom * 100)}"
+                               oninput="_expFxChange()" style="width:100%;accent-color:#c8a96e;">
+                    </div>
                 </div>
-            </div>
 
-        </div><!-- fin flex-direction:column controles -->
-        </div><!-- fin panel derecha -->
-        </div><!-- fin layout horizontal flex:1 -->
+                <!-- ══ SECCIÓN TIPOGRAFÍA ══ -->
+                <div style="background:#111;border:1px solid #2a2a2a;border-radius:8px;overflow:hidden;flex-shrink:0;">
+                    <div onclick="_expToggleSection('sec-typo',this)"
+                         style="display:flex;align-items:center;justify-content:space-between;
+                                padding:9px 14px;cursor:pointer;user-select:none;transition:background .15s;"
+                         onmouseover="this.style.background='#161616'" onmouseout="this.style.background=''">
+                        <span style="font-size:.51rem;color:#c8a96e;letter-spacing:.08em;">TIPOGRAFÍA</span>
+                        <span id="sec-typo-arrow" style="font-size:.47rem;color:#555;">▶</span>
+                    </div>
+                    <div id="sec-typo" style="display:none;padding:11px 14px;">
+                        <select id="exp-fx-font" onchange="_expFxChange()"
+                                style="width:100%;background:#0d0d0d;border:1px solid #2a2a2a;border-radius:4px;
+                                       color:#e8e0d0;font-family:'DM Mono',monospace;font-size:.52rem;
+                                       padding:4px 7px;cursor:pointer;">
+                            <option value="Georgia,serif" ${_expEffects.fontFamily === 'Georgia,serif' ? 'selected' : ''}>Georgia (Clásica)</option>
+                            <option value="'Times New Roman',serif" ${_expEffects.fontFamily === "'Times New Roman',serif" ? 'selected' : ''}>Times New Roman</option>
+                            <option value="'Palatino Linotype',Palatino,serif" ${_expEffects.fontFamily.includes('Palatino') ? 'selected' : ''}>Palatino (Elegante)</option>
+                            <option value="'Book Antiqua',Palatino,serif" ${_expEffects.fontFamily.includes('Book Antiqua') ? 'selected' : ''}>Book Antiqua</option>
+                            <option value="Garamond,serif" ${_expEffects.fontFamily.includes('Garamond') ? 'selected' : ''}>Garamond (Editorial)</option>
+                            <option value="'Trebuchet MS',sans-serif" ${_expEffects.fontFamily.includes('Trebuchet') ? 'selected' : ''}>Trebuchet (Moderno)</option>
+                            <option value="'Arial',sans-serif" ${_expEffects.fontFamily === "'Arial',sans-serif" ? 'selected' : ''}>Arial (Limpio)</option>
+                            <option value="'Courier New',monospace" ${_expEffects.fontFamily.includes('Courier') ? 'selected' : ''}>Courier (Máquina)</option>
+                            <option value="Impact,fantasy" ${_expEffects.fontFamily.includes('Impact') ? 'selected' : ''}>Impact (Dramático)</option>
+                        </select>
+                        <div id="exp-font-preview" style="margin-top:8px;padding:6px;background:#0a0908;border-radius:4px;
+                             text-align:center;font-size:14px;color:#c8a96e;font-style:italic;
+                             font-family:${_expEffects.fontFamily};">
+                            El hechicero inmortal...
+                        </div>
+                    </div>
+                </div>
 
-        <!-- Botones abajo -->
-        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:10px;flex-shrink:0;">
-            <button onclick="_renderModalImagenes()"
+                <!-- ══ SECCIÓN MÚSICA ══ -->
+                <div style="background:#111;border:1px solid #2a2a2a;border-radius:8px;overflow:hidden;flex-shrink:0;">
+                    <div onclick="_expToggleSection('sec-audio',this)"
+                         style="display:flex;align-items:center;justify-content:space-between;
+                                padding:9px 14px;cursor:pointer;user-select:none;transition:background .15s;"
+                         onmouseover="this.style.background='#161616'" onmouseout="this.style.background=''">
+                        <span style="font-size:.51rem;color:#c8a96e;letter-spacing:.08em;">MÚSICA</span>
+                        <span id="sec-audio-arrow" style="font-size:.47rem;color:#555;">▶</span>
+                    </div>
+                    <div id="sec-audio" style="display:none;padding:11px 14px;">
+                        <label style="display:flex;align-items:center;justify-content:center;gap:6px;
+                               width:100%;padding:7px;background:none;border:1px dashed #2a2a2a;border-radius:5px;
+                               color:#666;font-family:'DM Mono',monospace;font-size:.51rem;cursor:pointer;
+                               transition:all .15s;margin-bottom:8px;"
+                               onmouseover="this.style.borderColor='#7eb89a';this.style.color='#7eb89a'"
+                               onmouseout="this.style.borderColor='#2a2a2a';this.style.color='#666'">
+                            📁 Cargar audio local
+                            <input type="file" accept="audio/*" style="display:none" onchange="_expAudioAddFromFile(this)" data-default-dir="music">
+                        </label>
+                        <div id="exp-panel-tracks-list"></div>
+                        <div id="exp-audio-preview-controls" style="display:none;margin-top:6px;">
+                            <button id="exp-audio-solo-btn"
+                                onclick="_expAudioSoloToggle()"
+                                style="width:100%;background:#1a1a1a;border:1px solid #3a3a3a;
+                                       border-radius:5px;color:#c8a96e;font-family:'DM Mono',monospace;
+                                       font-size:.55rem;padding:6px;cursor:pointer;transition:all .15s;"
+                                onmouseover="this.style.borderColor='#c8a96e'"
+                                onmouseout="this.style.borderColor=document.getElementById('exp-audio-solo-btn').dataset.playing==='1'?'#7eb89a':'#3a3a3a'">
+                                🔊 Escuchar preview
+                            </button>
+                        </div>
+                        <div style="border-top:1px solid #1e1e1e;margin:8px 0;"></div>
+                        <div style="font-size:.44rem;color:#333;line-height:1.7;">
+                            ✂ Split: dividir en cualquier punto.<br>
+                            Arrastrá <span style="color:#555;">◁ ▷</span> en los bordes para fade.<br>
+                            Click derecho → menú rápido.
+                        </div>
+                    </div>
+                </div>
+
+
+                <!-- Seccion AUDIO TTS -->
+                <div id="sec-tts-wrap" style="background:#111;border:1px solid #2a2a2a;border-radius:8px;overflow:hidden;flex-shrink:0;">
+                    <div onclick="_expToggleSection('sec-tts',this)"
+                         style="display:flex;align-items:center;justify-content:space-between;
+                                padding:9px 14px;cursor:pointer;user-select:none;transition:background .15s;"
+                         onmouseover="this.style.background='#161616'" onmouseout="this.style.background=''">
+                        <span style="font-size:.51rem;color:#c8a96e;letter-spacing:.08em;">AUDIO TTS</span>
+                        <span id="sec-tts-arrow" style="font-size:.47rem;color:#555;">▼</span>
+                    </div>
+                    <div id="sec-tts" style="padding:11px 14px;">
+                        <div id="exp-tts-status-row" style="display:flex;align-items:center;gap:7px;margin-bottom:9px;">
+                            <div id="exp-tts-dot" style="width:7px;height:7px;border-radius:50%;background:#333;flex-shrink:0;"></div>
+                            <span id="exp-tts-status-lbl" style="font-size:.48rem;color:#555;flex:1;">Sin pre-generar</span>
+                            <button id="exp-tts-clear-btn" onclick="_expTtsClear()" title="Descartar"
+                                style="display:none;background:none;border:none;color:#555;font-size:.65rem;cursor:pointer;padding:0 2px;"
+                                onmouseover="this.style.color='#e07070'" onmouseout="this.style.color='#555'">✕</button>
+                        </div>
+                        <div id="exp-tts-progress-wrap" style="display:none;margin-bottom:9px;">
+                            <div style="background:#1a1a1a;border-radius:3px;height:3px;overflow:hidden;">
+                                <div id="exp-tts-progress-bar" style="height:100%;width:0%;background:#7eb89a;transition:width .3s;"></div>
+                            </div>
+                            <div id="exp-tts-progress-lbl" style="font-size:.43rem;color:#555;margin-top:3px;text-align:right;">0%</div>
+                        </div>
+                        <div style="margin-bottom:9px;">
+                            <div style="font-size:.44rem;color:#444;margin-bottom:4px;">Voz Edge TTS</div>
+                            <select id="exp-tts-voice-select"
+                                    onchange="if(typeof setEdgeTtsVoice==='function') setEdgeTtsVoice(this.value)"
+                                    style="width:100%;background:#0d0d0d;border:1px solid #2a2a2a;border-radius:4px;
+                                           color:#e8e0d0;font-family:'DM Mono',monospace;font-size:.49rem;
+                                           padding:4px 7px;cursor:pointer;">
+                            </select>
+                        </div>
+                        <button id="exp-tts-gen-btn" onclick="_expTtsPregenerar()"
+                            style="width:100%;background:#1a1a1a;border:1px solid #3a3a3a;
+                                   border-radius:5px;color:#7eb89a;font-family:'DM Mono',monospace;
+                                   font-size:.54rem;padding:7px;cursor:pointer;transition:all .15s;margin-bottom:6px;"
+                            onmouseover="if(!this.disabled){this.style.borderColor='#7eb89a'}"
+                            onmouseout="if(!this.disabled){this.style.borderColor='#3a3a3a'}">
+                            🎙 Pre-generar audio TTS
+                        </button>
+                        <div style="font-size:.43rem;color:#333;line-height:1.7;">
+                            Genera el audio XTTS ahora para<br>
+                            sincronizar el preview y adelantar<br>
+                            trabajo al exportar.
+                        </div>
+                    </div>
+                </div>
+
+            </div><!-- fin right panel -->
+        </div><!-- fin body -->
+
+        <div id="exp-bottombar">
+            <button onclick="_expStopPlay();_renderModalImagenes()"
                     style="background:none;border:1px solid #2a2a2a;border-radius:5px;
-                           color:#555;font-size:.57rem;padding:8px 14px;cursor:pointer;">
+                           color:#555;font-family:'DM Mono',monospace;font-size:.56rem;
+                           padding:7px 16px;cursor:pointer;transition:all .15s;"
+                    onmouseover="this.style.borderColor='#555';this.style.color='#e8e0d0'"
+                    onmouseout="this.style.borderColor='#2a2a2a';this.style.color='#555'">
                 ← Atrás
             </button>
-            <button onclick="_cerrarModalExport()"
+            <button onclick="_expStopPlay();_cerrarModalExport()"
                     style="background:none;border:1px solid #2a2a2a;border-radius:5px;
-                           color:#555;font-size:.57rem;padding:8px 14px;cursor:pointer;">
+                           color:#555;font-family:'DM Mono',monospace;font-size:.56rem;
+                           padding:7px 16px;cursor:pointer;transition:all .15s;"
+                    onmouseover="this.style.borderColor='#555';this.style.color='#e8e0d0'"
+                    onmouseout="this.style.borderColor='#2a2a2a';this.style.color='#555'">
                 Cancelar
             </button>
-            <button onclick="_iniciarExportacion()"
+            <button onclick="_expStopPlay();_iniciarExportacion()"
                     style="background:#c8a96e;border:none;border-radius:5px;
-                           color:#0a0908;font-size:.58rem;font-weight:700;
-                           padding:8px 22px;cursor:pointer;">
+                           color:#0a0908;font-family:'DM Mono',monospace;font-size:.57rem;
+                           font-weight:700;padding:7px 22px;cursor:pointer;transition:opacity .15s;"
+                    onmouseover="this.style.opacity='.88'"
+                    onmouseout="this.style.opacity='1'">
                 ▶ Exportar
             </button>
         </div>
-    </div>`; // fin div height:calc(100vh-24px)
+    `;
 
     document.body.appendChild(m);
 
@@ -1246,8 +1677,366 @@ function _abrirPreviewEfectos() {
     canvas.width = EXPORT_W;
     canvas.height = EXPORT_H;
 
-    // Mostrar primera imagen disponible
+    // Inicializar timeline
+    _expTimelineInit();
+
+    // Inicializar audio tracks
+    _expAudioInit();
+
+    // Render inicial
+    _expPreviewFrase = 0;
     _expPreviewRender();
+}
+
+// ─── ESTADO DEL PLAYER DE PREVIEW ───────────────────────────────────
+let _expPreviewFrase = 0;       // frase actualmente visible en el preview
+let _expPlayTimer = null;       // setInterval del play (fallback sin TTS buffers)
+let _expPlayInterval = 1200;    // ms por frase (fallback sin audio TTS)
+let _expPlayLoopId = 0;         // token para cancelar el loop async TTS
+let _expTtsDuraciones = null;   // ms por frase, decodificado de _expTtsBuffers
+let _expIsPlaying = false;      // true mientras el preview esta reproduciendo
+
+function _expTogglePlay() {
+    if (_expIsPlaying) {
+        _expPausePlay();
+    } else {
+        _expStartPlay(true); // true = resume desde donde quedó
+    }
+}
+
+// Nueva función: pausa sin resetear posición de audio
+function _expPausePlay() {
+    _expIsPlaying = false;
+    if (_expPlayTimer) { clearInterval(_expPlayTimer); _expPlayTimer = null; }
+    if (typeof _expPlayLoopId !== 'undefined') _expPlayLoopId++; // cancela loop async TTS
+    const btn = document.getElementById('exp-play-btn');
+    if (btn) { btn.textContent = '▶ Play'; btn.style.color = '#c8a96e'; btn.style.borderColor = '#3a3a3a'; }
+    // Solo pausar el audio SIN resetear currentTime (para poder reanudar correctamente)
+    _expAudioTracks.forEach(t => {
+        if (t.audioEl && !t.audioEl.paused) t.audioEl.pause();
+    });
+    // Resetear botón solo
+    const soloBtn = document.getElementById('exp-audio-solo-btn');
+    if (soloBtn) { soloBtn.dataset.playing = '0'; soloBtn.textContent = '🔊 Escuchar preview'; soloBtn.style.color = '#c8a96e'; soloBtn.style.borderColor = '#3a3a3a'; }
+}
+
+function _expStartPlay(isResume) {
+    _expIsPlaying = true;
+    const btn = document.getElementById('exp-play-btn');
+    if (btn) { btn.textContent = '⏸ Pausa'; btn.style.color = '#7eb89a'; btn.style.borderColor = '#7eb89a'; }
+    _expAudioPlayStart(isResume);
+
+    // Con buffers TTS pre-generados: loop sincronizado por duración real
+    if (typeof _expTtsBuffers !== 'undefined' && _expTtsBuffers && _expTtsBuffers.length === sentences.length) {
+        _expStartPlayTtsSync();
+        return;
+    }
+
+    // Sin buffers: intervalo fijo
+    _expPlayTimer = setInterval(() => {
+        _expPreviewFrase = (_expPreviewFrase + 1) % sentences.length;
+        _expPreviewRender();
+        _expTimelineRender();
+        _expUpdateCounter();
+        // Redibujar tracks de audio para mover el cursor
+        if (_expAudioTracks.length > 0) {
+            document.querySelectorAll('.exp-track-canvas-wrap canvas').forEach((cv, i) => {
+                if (_expAudioTracks[i]) _expAudioDrawTrack(cv, _expAudioTracks[i]);
+            });
+        }
+    }, _expPlayInterval);
+}
+
+// Loop async sincronizado con duraciones reales del audio TTS
+async function _expStartPlayTtsSync() {
+    const loopId = ++_expPlayLoopId;
+    const total = sentences.length;
+
+    // Decodificar duraciones reales una sola vez (se cachea en _expTtsDuraciones)
+    if (!_expTtsDuraciones || _expTtsDuraciones.length !== total) {
+        _expTtsDuraciones = new Array(total).fill(EXPORT_SEC_FRASE * 1000);
+        try {
+            const tmpCtx = new AudioContext();
+            for (let i = 0; i < total; i++) {
+                if (!_expTtsBuffers[i]) continue;
+                try {
+                    const dec = await tmpCtx.decodeAudioData(_expTtsBuffers[i].slice(0));
+                    _expTtsDuraciones[i] = (dec.duration + 0.15) * 1000;
+                } catch (e) { }
+            }
+            tmpCtx.close();
+        } catch (e) { }
+    }
+
+    // Loop frase por frase esperando la duracion real de cada una
+    let i = _expPreviewFrase;
+    while (loopId === _expPlayLoopId && i < total) {
+        _expPreviewFrase = i;
+        _expPreviewRender();
+        _expTimelineRender();
+        _expUpdateCounter();
+        if (_expAudioTracks.length > 0) {
+            document.querySelectorAll('.exp-track-canvas-wrap canvas').forEach((cv, idx) => {
+                if (_expAudioTracks[idx]) _expAudioDrawTrack(cv, _expAudioTracks[idx]);
+            });
+        }
+        const ms = _expTtsDuraciones[i] || (EXPORT_SEC_FRASE * 1000);
+        await new Promise(r => setTimeout(r, ms));
+        i++;
+    }
+
+    // Al terminar naturalmente: usar _expStopPlay para limpiar todo el estado
+    if (loopId === _expPlayLoopId) {
+        _expPlayLoopId = 0;
+        _expStopPlay();
+    }
+}
+
+function _expStopPlay() {
+    _expIsPlaying = false;
+    if (_expPlayTimer) { clearInterval(_expPlayTimer); _expPlayTimer = null; }
+    if (typeof _expPlayLoopId !== 'undefined') _expPlayLoopId++; // cancela loop async TTS
+    const btn = document.getElementById('exp-play-btn');
+    if (btn) { btn.textContent = '▶ Play'; btn.style.color = '#c8a96e'; btn.style.borderColor = '#3a3a3a'; }
+    _expAudioPlayStop();
+    // Resetear botón solo
+    const soloBtn = document.getElementById('exp-audio-solo-btn');
+    if (soloBtn) { soloBtn.dataset.playing = '0'; soloBtn.textContent = '🔊 Escuchar preview'; soloBtn.style.color = '#c8a96e'; soloBtn.style.borderColor = '#3a3a3a'; }
+}
+
+function _expUpdateCounter() {
+    const el = document.getElementById('exp-play-counter');
+    if (el) el.textContent = `Frase ${_expPreviewFrase + 1} / ${sentences.length}`;
+}
+
+// Calcula el currentTime en segundos dentro del WAV TTS concatenado para una frase dada
+function _expTtsGetCurrentTime(fraseIdx) {
+    if (!_expTtsDuraciones || !_expTtsDuraciones.length) return 0;
+    let t = 0;
+    for (let i = 0; i < fraseIdx && i < _expTtsDuraciones.length; i++) {
+        t += (_expTtsDuraciones[i] || (EXPORT_SEC_FRASE * 1000)) / 1000;
+    }
+    return t;
+}
+
+// Reinicia la reproducción desde el principio (frase 0, sin importar si está playing)
+function _expRestartPlay() {
+    const wasPlaying = _expIsPlaying;
+    if (wasPlaying) _expPausePlay();
+    _expPreviewFrase = 0;
+    _expPreviewRender();
+    _expTimelineRender();
+    _expUpdateCounter();
+    // Sincronizar audio TTS al inicio
+    _expAudioTracks.forEach(t => {
+        if (t.audioEl) t.audioEl.currentTime = 0;
+    });
+    if (wasPlaying) _expStartPlay(true);
+}
+
+// ─── TIMELINE ───────────────────────────────────────────────────────
+// Paleta de colores para los segmentos (cíclica)
+const _TL_COLORS = [
+    '#c8a96e', '#7eb89a', '#8899cc', '#cc8877', '#aa88cc',
+    '#88bbaa', '#ccaa55', '#9977bb', '#77aabb', '#cc7788'
+];
+
+let _tlDragState = null;  // { divider: int, startX: int, startFrases: [...] }
+
+function _expTimelineInit() {
+    const canvas = document.getElementById('exp-timeline-canvas');
+    if (!canvas) return;
+
+    // Ajustar tamaño físico al ancho real del elemento
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width || 800;
+    canvas.height = 52;
+
+    _expTimelineRender();
+
+    // Eventos mouse
+    canvas.addEventListener('mousedown', _tlMouseDown);
+    canvas.addEventListener('mousemove', _tlMouseMove);
+    canvas.addEventListener('mouseup', _tlMouseUp);
+    canvas.addEventListener('mouseleave', _tlMouseUp);
+
+    // Touch support
+    canvas.addEventListener('touchstart', e => _tlMouseDown(_tlTouchToMouse(e)), { passive: false });
+    canvas.addEventListener('touchmove', e => { e.preventDefault(); _tlMouseMove(_tlTouchToMouse(e)); }, { passive: false });
+    canvas.addEventListener('touchend', _tlMouseUp);
+}
+
+function _tlTouchToMouse(e) {
+    const t = e.touches[0] || e.changedTouches[0];
+    return { clientX: t.clientX, clientY: t.clientY, preventDefault: () => e.preventDefault() };
+}
+
+function _expTimelineRender() {
+    const canvas = document.getElementById('exp-timeline-canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width, H = canvas.height;
+    const total = sentences.length;
+    if (total === 0 || _expImageRanges.length === 0) return;
+
+    ctx.clearRect(0, 0, W, H);
+
+    const TRACK_Y = 8, TRACK_H = 24;
+
+    // Dibujar segmentos de imágenes
+    _expImageRanges.forEach((range, g) => {
+        const x1 = Math.round((range.desde / total) * W);
+        const x2 = Math.round(((range.hasta + 1) / total) * W);
+        const color = _TL_COLORS[g % _TL_COLORS.length];
+
+        // Fondo del segmento
+        ctx.fillStyle = color + '28';
+        ctx.fillRect(x1, TRACK_Y, x2 - x1, TRACK_H);
+
+        // Borde izquierdo y derecho
+        ctx.fillStyle = color + 'aa';
+        ctx.fillRect(x1, TRACK_Y, 2, TRACK_H);
+        ctx.fillRect(x2 - 2, TRACK_Y, 2, TRACK_H);
+
+        // Miniatura de imagen si está cargada
+        const imgItem = _expImagenes[g];
+        if (imgItem && imgItem.img && (x2 - x1) > 16) {
+            const thumbW = Math.min(x2 - x1 - 4, 36);
+            const thumbH = TRACK_H - 2;
+            const cx = x1 + 2 + (x2 - x1 - 4 - thumbW) / 2;
+            try {
+                ctx.globalAlpha = 0.5;
+                ctx.drawImage(imgItem.img, cx, TRACK_Y + 1, thumbW, thumbH);
+                ctx.globalAlpha = 1.0;
+            } catch (e) { }
+        }
+
+        // Label del grupo (número de frases)
+        const labelX = x1 + (x2 - x1) / 2;
+        ctx.fillStyle = color;
+        ctx.font = `bold 9px 'DM Mono', monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const label = `${range.desde + 1}–${range.hasta + 1}`;
+        if (x2 - x1 > 30) ctx.fillText(label, labelX, TRACK_Y + TRACK_H + 9);
+
+        // Separador arrastrable (solo entre segmentos, no al inicio ni al final)
+        if (g < _expImageRanges.length - 1) {
+            const sepX = x2;
+            ctx.fillStyle = color + 'cc';
+            ctx.fillRect(sepX - 3, TRACK_Y - 3, 6, TRACK_H + 6);
+            // Asas visuales
+            ctx.fillStyle = '#fff3';
+            ctx.fillRect(sepX - 1, TRACK_Y + TRACK_H / 2 - 5, 2, 10);
+        }
+    });
+
+    // Línea de posición actual (frase activa)
+    const curX = Math.round(((_expPreviewFrase + 0.5) / total) * W);
+    ctx.fillStyle = '#ffffff99';
+    ctx.fillRect(curX - 1, TRACK_Y - 4, 2, TRACK_H + 8);
+
+    // Triángulo indicador arriba
+    ctx.fillStyle = '#ffffffcc';
+    ctx.beginPath();
+    ctx.moveTo(curX - 5, TRACK_Y - 4);
+    ctx.lineTo(curX + 5, TRACK_Y - 4);
+    ctx.lineTo(curX, TRACK_Y + 1);
+    ctx.fill();
+}
+
+// Detectar si el click está en un separador arrastrable
+function _tlGetDividerAt(x, canvasW) {
+    const total = sentences.length;
+    const HIT = 8; // px de tolerancia
+    for (let g = 0; g < _expImageRanges.length - 1; g++) {
+        const sepX = Math.round(((_expImageRanges[g].hasta + 1) / total) * canvasW);
+        if (Math.abs(x - sepX) <= HIT) return g;
+    }
+    return -1;
+}
+
+function _tlMouseDown(e) {
+    const canvas = document.getElementById('exp-timeline-canvas');
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+    const total = sentences.length;
+
+    const divIdx = _tlGetDividerAt(x, canvas.width);
+    if (divIdx >= 0) {
+        // Arrastrar separador
+        _expStopPlay();
+        _tlDragState = { divider: divIdx, startX: x };
+        canvas.style.cursor = 'col-resize';
+    } else {
+        // Click → ir a esa frase
+        const fraseIdx = Math.min(Math.floor((x / canvas.width) * total), total - 1);
+        _expPreviewFrase = Math.max(0, fraseIdx);
+        _expPreviewRender();
+        _expTimelineRender();
+        _expUpdateCounter();
+    }
+}
+
+function _tlMouseMove(e) {
+    const canvas = document.getElementById('exp-timeline-canvas');
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+    const total = sentences.length;
+
+    // Cambiar cursor si está sobre un separador
+    if (!_tlDragState) {
+        const divIdx = _tlGetDividerAt(x, canvas.width);
+        canvas.style.cursor = divIdx >= 0 ? 'col-resize' : 'pointer';
+        return;
+    }
+
+    // Arrastrando: reasignar rangos
+    const g = _tlDragState.divider;
+    // Convertir posición x a índice de frase
+    let newBoundary = Math.round((x / canvas.width) * total);
+    // Límites: mínimo 1 frase por grupo
+    const minBoundary = _expImageRanges[g].desde + 1;
+    const maxBoundary = _expImageRanges[g + 1].hasta;
+    newBoundary = Math.max(minBoundary, Math.min(maxBoundary, newBoundary));
+
+    _expImageRanges[g].hasta = newBoundary - 1;
+    _expImageRanges[g + 1].desde = newBoundary;
+
+    _expTimelineRender();
+
+    // Actualizar hint con info del rango
+    const hint = document.getElementById('exp-timeline-hint');
+    if (hint) hint.textContent =
+        `Img ${g + 1}: frases ${_expImageRanges[g].desde + 1}–${_expImageRanges[g].hasta + 1}  |  Img ${g + 2}: frases ${_expImageRanges[g + 1].desde + 1}–${_expImageRanges[g + 1].hasta + 1}`;
+}
+
+function _tlMouseUp() {
+    if (_tlDragState) {
+        _tlDragState = null;
+        const canvas = document.getElementById('exp-timeline-canvas');
+        if (canvas) canvas.style.cursor = 'pointer';
+        // Redibujar con estado actualizado
+        _expTimelineRender();
+    }
+}
+
+// ─── EFECTOS ────────────────────────────────────────────────────────
+
+// ─── SECCIONES COLAPSABLES ───────────────────────────────────────────
+function _expToggleSection(id, header) {
+    const body = document.getElementById(id);
+    const arrow = document.getElementById(id + '-arrow');
+    if (!body) return;
+    const open = body.style.display === 'none' || body.style.display === '';
+    body.style.display = open ? 'block' : 'none';
+    if (arrow) {
+        arrow.textContent = open ? '▼' : '▶';
+        arrow.style.color = open ? '#c8a96e' : '#555';
+    }
+    if (header) header.style.borderBottom = open ? '1px solid #1e1e1e' : '';
 }
 
 function _expFxChange() {
@@ -1262,6 +2051,13 @@ function _expFxChange() {
     const textColor = document.getElementById('exp-fx-color')?.value ?? '#c8a96e';
     const zoom = (document.getElementById('exp-fx-zoom')?.value ?? 100) / 100;
     const fontFamily = document.getElementById('exp-fx-font')?.value ?? 'Georgia,serif';
+    const strokeEnabled = document.getElementById('exp-fx-stroke')?.checked ?? false;
+    const strokeColor = document.getElementById('exp-fx-strokecolor')?.value ?? '#000000';
+    const strokeWidth = parseInt(document.getElementById('exp-fx-strokewidth')?.value ?? 2);
+
+    // Mostrar/ocultar controles de borde
+    const strokeControls = document.getElementById('exp-stroke-controls');
+    if (strokeControls) strokeControls.style.display = strokeEnabled ? 'block' : 'none';
 
     // Actualizar preview de tipografía
     const fontPrev = document.getElementById('exp-font-preview');
@@ -1269,7 +2065,8 @@ function _expFxChange() {
 
     _expEffects = {
         grayscale: bw, vignette: vig, imgOpacity: opacity, brightness, contrast,
-        vigIntensity: vigInt, vigSize, textColor, textOpacity: textOp, zoom, fontFamily
+        vigIntensity: vigInt, vigSize, textColor, textOpacity: textOp, zoom, fontFamily,
+        strokeEnabled, strokeColor, strokeWidth
     };
 
     // Actualizar labels
@@ -1282,6 +2079,8 @@ function _expFxChange() {
     set('exp-fx-textopacity-val', Math.round(textOp * 100) + '%');
     set('exp-fx-color-val', textColor);
     set('exp-fx-zoom-val', zoom.toFixed(2) + 'x');
+    set('exp-fx-strokecolor-val', strokeColor);
+    set('exp-fx-strokewidth-val', strokeWidth + 'px');
 
     _expPreviewRender();
 }
@@ -1291,14 +2090,17 @@ function _expPreviewRender() {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
 
-    // Buscar primera imagen cargada
-    const imgItem = _expImagenes.find(i => i.img) || _expImagenes[0];
-    // Usar frase del medio del primer grupo
-    const midSentence = Math.floor(Math.min(EXPORT_IMGS_PER / 2, sentences.length - 1));
+    // Usar la frase activa del player de preview
+    const fraseIdx = Math.max(0, Math.min(_expPreviewFrase, sentences.length - 1));
+    const grupoIdx = _expGetGrupoParaFrase(fraseIdx);
+    const imgItem = _expImagenes[grupoIdx] || _expImagenes[0];
 
-    _expDibujarFrame(ctx, EXPORT_W, EXPORT_H, imgItem?.img || null, midSentence,
+    _expDibujarFrame(ctx, EXPORT_W, EXPORT_H, imgItem?.img || null, fraseIdx,
         sentences.length, sentences, imgItem, _expEffects);
+
+    _expUpdateCounter();
 }
+
 
 
 async function _expGenerarAudioXTTSWidget(updateFn) {
@@ -1440,7 +2242,7 @@ async function _expRenderizar(audioBuffers, updateFn) {
             }
 
             // Dibujar frame
-            const imgItem = _expImagenes[Math.floor(sentenceIdx / EXPORT_IMGS_PER)];
+            const imgItem = _expImagenes[_expGetGrupoParaFrase(sentenceIdx)];
             _expDibujarFrame(ctx, EXPORT_W, EXPORT_H, imgItem?.img || null, sentenceIdx, total, _sentences, imgItem, _expEffects);
 
             // Progreso
@@ -1495,6 +2297,638 @@ async function _expRenderizar(audioBuffers, updateFn) {
         mostrarNotificacion('✓ Video exportado correctamente');
     }
 }
+
+// ───────────────────────────────────────────────────────────────────
+// AUDIO TRACKS DEL PREVIEW — estado, render, eventos
+// ───────────────────────────────────────────────────────────────────
+let _expAudioTracks = [];        // [{id, name, color, volume, muted, segments, splitHistory, audioBuffer, audioUrl}]
+let _expAudioTrackIdCounter = 0;
+let _expAudioSelectedSeg = null; // {trackId, segIdx}
+let _expAudioCtxTarget = null;
+let _expAudioFadeDrag = null;
+let _expAudioMode = 'normal';    // 'normal' | 'split'
+
+function _expAudioInit() {
+    // Limpiar al abrir el preview
+    // (no reiniciar si ya hay tracks cargados — permite volver atrás)
+    _expAudioRenderTracks();
+    _expAudioUpdatePanelList();
+
+    // Seccion AUDIO TTS: visibilidad segun servidor disponible
+    const ttsWrap = document.getElementById('sec-tts-wrap');
+    if (ttsWrap) {
+        const xttsOk = (typeof servidorTTSDisponible !== 'undefined') && servidorTTSDisponible;
+        ttsWrap.style.display = xttsOk ? '' : 'none';
+    }
+    // Poblar select de voces Edge TTS copiando del selector global
+    const srcSel = document.getElementById('edge-voice-select');
+    const dstSel = document.getElementById('exp-tts-voice-select');
+    if (srcSel && dstSel && dstSel.options.length === 0) {
+        dstSel.innerHTML = srcSel.innerHTML;
+        const curVoice = (typeof _edgeTtsVoice !== 'undefined') ? _edgeTtsVoice : '';
+        if (curVoice) dstSel.value = curVoice;
+    }
+    // Restaurar estado visual si ya hay buffers pre-generados
+    if (typeof _expTtsActualizarUI === 'function') _expTtsActualizarUI();
+    // Invalidar cache de duraciones si el capitulo cambio
+    if (typeof _expTtsDuraciones !== 'undefined' && _expTtsDuraciones && _expTtsDuraciones.length !== sentences.length) _expTtsDuraciones = null;
+    // Conectar labels de audio a _expAudioLabelClick para abrir en Music
+    document.querySelectorAll('input[data-default-dir="music"]').forEach(inp => {
+        const lbl = inp.closest('label');
+        if (lbl && !lbl._musicPickerAttached) {
+            lbl._musicPickerAttached = true;
+            _expAudioLabelClick(lbl, inp);
+        }
+    });
+    // Crear tooltip y context menu si no existen
+    if (!document.getElementById('exp-fade-tooltip')) {
+        const tt = document.createElement('div');
+        tt.id = 'exp-fade-tooltip';
+        tt.className = 'exp-fade-tooltip';
+        document.body.appendChild(tt);
+    }
+    if (!document.getElementById('exp-ctx-menu')) {
+        const cm = document.createElement('div');
+        cm.id = 'exp-ctx-menu';
+        cm.className = 'exp-ctx-menu';
+        cm.innerHTML = `
+            <div class="exp-ctx-item" onclick="_expAudioCtxSplit()">✂ Split aquí</div>
+            <div class="exp-ctx-sep"></div>
+            <div class="exp-ctx-item" onclick="_expAudioCtxFadeIn()">◁ Aplicar fade in (25%)</div>
+            <div class="exp-ctx-item" onclick="_expAudioCtxFadeOut()">▷ Aplicar fade out (25%)</div>
+            <div class="exp-ctx-sep"></div>
+            <div class="exp-ctx-item danger" onclick="_expAudioCtxDelete()">🗑 Eliminar segmento</div>
+        `;
+        document.body.appendChild(cm);
+    }
+}
+
+
+// ─── REPRODUCCIÓN DE AUDIO EN PREVIEW ─────────────────────────────
+// Web Audio API context para fade in/out real
+let _expWebAudioCtx = null;
+
+function _expAudioPlayStart(isResume) {
+    if (!isResume) _expAudioPlayStop();
+    const tracks = _expAudioTracks.filter(t => !t.muted && t.audioUrl);
+    if (!tracks.length) return;
+
+    // Crear contexto Web Audio (en respuesta directa al click)
+    try {
+        if (!_expWebAudioCtx || _expWebAudioCtx.state === 'closed') {
+            _expWebAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        } else if (_expWebAudioCtx.state === 'suspended') {
+            _expWebAudioCtx.resume();
+        }
+    } catch (e) { }
+
+    tracks.forEach(t => {
+        try {
+            // ¿Es un resume? Si el elemento ya existe y está pausado, solo reanudar
+            const isTrackResume = isResume && t.audioEl && t.audioEl.paused;
+
+            // Crear/reutilizar el elemento video
+            if (!t.audioEl) {
+                t.audioEl = document.createElement('video');
+                t.audioEl.src = t.audioUrl;
+                t.audioEl.loop = true;
+                t.audioEl.muted = false;
+                t.audioEl.style.cssText = 'position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;top:-9999px;';
+                document.body.appendChild(t.audioEl);
+            }
+
+            // Conectar al Web Audio API para control de gain (fade)
+            if (_expWebAudioCtx && !t.audioSource) {
+                try {
+                    t.audioSource = _expWebAudioCtx.createMediaElementSource(t.audioEl);
+                    t.gainNode = _expWebAudioCtx.createGain();
+                    t.audioSource.connect(t.gainNode);
+                    t.gainNode.connect(_expWebAudioCtx.destination);
+                } catch (e) { /* ya conectado */ }
+            }
+
+            // Volumen base
+            if (t.gainNode) t.gainNode.gain.value = t.volume / 100;
+            else t.audioEl.volume = t.volume / 100;
+
+            // Sincronización de posición:
+            // - Track TTS (_isTtsTrack): siempre posicionar al tiempo exacto de _expPreviewFrase
+            //   para corregir cualquier drift acumulado y garantizar sincronía con las frases
+            // - Otros tracks: si es resume, continuar desde donde estaban; si es inicio, resetear a 0
+            if (t._isTtsTrack && _expTtsDuraciones && _expTtsDuraciones.length) {
+                t.audioEl.currentTime = _expTtsGetCurrentTime(_expPreviewFrase);
+            } else if (!isTrackResume) {
+                t.audioEl.currentTime = 0;
+            }
+            const p = t.audioEl.play();
+            if (p) p
+                .then(() => {
+                    console.log('[🎵 audio] ✅ Playing:', t.name);
+                    // Iniciar loop de fade
+                    _expAudioFadeLoop(t);
+                })
+                .catch(e => console.error('[🎵 audio] ❌', e));
+        } catch (e) { console.error('[🎵 audio] ❌', e); }
+    });
+}
+
+// Loop que aplica fade in/out en tiempo real según posición del audio
+function _expAudioFadeLoop(t) {
+    if (!t.audioEl || t.audioEl.paused) return;
+    if (!t.gainNode) { requestAnimationFrame(() => _expAudioFadeLoop(t)); return; }
+
+    const duration = t.audioEl.duration || 1;
+    const current = t.audioEl.currentTime;
+    const frac = current / duration; // posición 0–1 dentro del audio
+
+    // Calcular volumen según segmentos con fade in/out
+    let fadeMultiplier = 1.0;
+    for (const seg of t.segments) {
+        if (seg.deleted) continue;
+        if (frac >= seg.from && frac <= seg.to) {
+            const segLen = seg.to - seg.from;
+            if (segLen <= 0) break;
+            const posInSeg = (frac - seg.from) / segLen; // 0–1 dentro del segmento
+
+            // Fade in: al inicio del segmento
+            if (seg.fadeIn > 0 && posInSeg < seg.fadeIn) {
+                fadeMultiplier = Math.min(fadeMultiplier, posInSeg / seg.fadeIn);
+            }
+            // Fade out: al final del segmento
+            if (seg.fadeOut > 0 && posInSeg > (1 - seg.fadeOut)) {
+                fadeMultiplier = Math.min(fadeMultiplier, (1 - posInSeg) / seg.fadeOut);
+            }
+            // Segmento eliminado
+            if (seg.deleted) fadeMultiplier = 0;
+            break;
+        }
+        // Si estamos en una zona de segmento deleted, silenciar
+        if (frac >= seg.from && frac <= seg.to && seg.deleted) {
+            fadeMultiplier = 0; break;
+        }
+    }
+
+    // Aplicar volumen resultante (base × fade)
+    const targetGain = (t.volume / 100) * Math.max(0, Math.min(1, fadeMultiplier));
+    // Suavizar con pequeño ramp para evitar clicks
+    try {
+        t.gainNode.gain.setTargetAtTime(targetGain, _expWebAudioCtx.currentTime, 0.05);
+    } catch (e) {
+        t.gainNode.gain.value = targetGain;
+    }
+
+    requestAnimationFrame(() => _expAudioFadeLoop(t));
+}
+
+function _expAudioPlayStop() {
+    _expAudioTracks.forEach(t => {
+        if (t.audioEl && !t.audioEl.paused) t.audioEl.pause();
+    });
+    _expAudioActiveSources = [];
+}
+
+// Elementos <audio> activos durante la reproducción
+let _expAudioCtx = null;
+let _expAudioActiveSources = []; // no usado, mantenido para compatibilidad
+
+function _expAudioGetCtx() {
+    if (!_expAudioCtx || _expAudioCtx.state === 'closed') {
+        _expAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (_expAudioCtx.state === 'suspended') _expAudioCtx.resume();
+    return _expAudioCtx;
+}
+
+function _expAudioAddTrack(name, color, audioBuffer, audioUrl) {
+    const track = {
+        id: ++_expAudioTrackIdCounter,
+        name, color,
+        volume: 80, muted: false,
+        segments: [{ from: 0, to: 1, deleted: false, fadeIn: 0, fadeOut: 0 }],
+        splitHistory: [],
+        audioBuffer: audioBuffer || null,  // no usado, compatibilidad
+        audioUrl: audioUrl || null,
+        audioEl: null,  // HTMLAudioElement — se crea al reproducir
+    };
+    _expAudioTracks.push(track);
+    _expAudioRenderTracks();
+    _expAudioUpdatePanelList();
+    return track.id;
+}
+
+function _expAudioAddFromFile(inp) {
+    if (!inp.files?.length) return;
+    const file = inp.files[0];
+    const color = _TL_COLORS[(_expAudioTracks.length + 2) % _TL_COLORS.length];
+    const url = URL.createObjectURL(file);
+    _expAudioAddTrack(file.name, color, null, url);
+    inp.value = '';
+}
+
+// Abre el selector de audio en la carpeta Music usando File System Access API
+function _expAudioLabelClick(labelEl, inp) {
+    if (typeof window.showOpenFilePicker !== 'function') return;
+    labelEl.addEventListener('click', async function (e) {
+        e.preventDefault();
+        try {
+            const [fh] = await window.showOpenFilePicker({
+                startIn: 'music',
+                types: [{
+                    description: 'Audio', accept: {
+                        'audio/*': ['.mp3', '.wav', '.ogg', '.flac', '.aac', '.m4a', '.opus', '.weba']
+                    }
+                }],
+                multiple: false
+            });
+            const file = await fh.getFile();
+            const dt = new DataTransfer();
+            dt.items.add(file);
+            inp.files = dt.files;
+            inp.dispatchEvent(new Event('change'));
+        } catch (err) {
+            if (err.name !== 'AbortError') inp.click();
+        }
+    });
+}
+
+
+function _expAudioRemoveTrack(id) {
+    const t = _expAudioTracks.find(t => t.id === id);
+    if (t) {
+        if (t.audioEl) { t.audioEl.pause(); t.audioEl.src = ''; t.audioEl.remove(); t.audioEl = null; }
+        try { if (t.audioSource) t.audioSource.disconnect(); } catch (e) { }
+        try { if (t.gainNode) t.gainNode.disconnect(); } catch (e) { }
+        t.audioSource = null; t.gainNode = null;
+    }
+    _expAudioTracks = _expAudioTracks.filter(t => t.id !== id);
+    if (_expAudioSelectedSeg?.trackId === id) _expAudioSelectedSeg = null;
+    _expAudioRenderTracks();
+    _expAudioUpdatePanelList();
+}
+
+function _expAudioSetVol(id, val) {
+    const t = _expAudioTracks.find(t => t.id === id);
+    if (t) {
+        t.volume = +val;
+        // gainNode toma prioridad — el fade loop actualiza el gain en el próximo frame
+        if (!t.gainNode && t.audioEl) t.audioEl.volume = val / 100;
+        _expAudioRenderTracks();
+        _expAudioUpdatePanelList();
+    }
+}
+
+function _expAudioSetMode(m) {
+    _expAudioMode = _expAudioMode === m ? 'normal' : m;
+    const btn = document.getElementById('exp-btn-split');
+    if (btn) btn.classList.toggle('active', _expAudioMode === 'split');
+    document.querySelectorAll('.exp-track-canvas-wrap').forEach(w => {
+        w.style.cursor = _expAudioMode === 'split' ? 'crosshair' : 'pointer';
+    });
+}
+
+function _expAudioDeleteSelected() {
+    if (!_expAudioSelectedSeg) return;
+    const t = _expAudioTracks.find(t => t.id === _expAudioSelectedSeg.trackId);
+    if (t) { t.segments[_expAudioSelectedSeg.segIdx].deleted = true; _expAudioSelectedSeg = null; _expAudioRenderTracks(); }
+}
+
+function _expAudioUndoSplit() {
+    for (let i = _expAudioTracks.length - 1; i >= 0; i--) {
+        const t = _expAudioTracks[i];
+        if (t.splitHistory.length > 0) {
+            const last = t.splitHistory.pop();
+            t.segments.splice(last.segIdx, 2, last.orig);
+            _expAudioSelectedSeg = null; _expAudioRenderTracks(); return;
+        }
+    }
+}
+
+function _expAudioSplitAt(t, frac) {
+    const si = t.segments.findIndex(s => !s.deleted && frac >= s.from && frac <= s.to);
+    if (si < 0) return;
+    const orig = t.segments[si];
+    t.splitHistory.push({ segIdx: si, orig: { ...orig } });
+    t.segments.splice(si, 1,
+        { from: orig.from, to: frac, deleted: false, fadeIn: orig.fadeIn, fadeOut: 0 },
+        { from: frac, to: orig.to, deleted: false, fadeIn: 0, fadeOut: orig.fadeOut }
+    );
+    _expAudioMode = 'normal';
+    const btn = document.getElementById('exp-btn-split');
+    if (btn) btn.classList.remove('active');
+    _expAudioRenderTracks();
+}
+
+// ─── Render del timeline de tracks ─────────────────────────────────
+function _expAudioRenderTracks() {
+    const container = document.getElementById('exp-audio-tracks');
+    if (!container) return;
+    container.innerHTML = '';
+    _expAudioTracks.forEach(t => {
+        const row = document.createElement('div');
+        row.className = 'exp-track-row';
+
+        const lbl = document.createElement('div');
+        lbl.className = 'exp-track-label';
+        lbl.textContent = t.name; lbl.title = t.name;
+
+        const wrap = document.createElement('div');
+        wrap.className = 'exp-track-canvas-wrap';
+        wrap.style.cursor = _expAudioMode === 'split' ? 'crosshair' : 'pointer';
+
+        const cv = document.createElement('canvas');
+        cv.height = 34;
+        wrap.appendChild(cv);
+
+        const volSlider = document.createElement('input');
+        volSlider.type = 'range'; volSlider.min = 0; volSlider.max = 100; volSlider.value = t.volume;
+        volSlider.style.cssText = 'width:52px;accent-color:#c8a96e;';
+        volSlider.oninput = () => _expAudioSetVol(t.id, volSlider.value);
+
+        const muteBtn = document.createElement('button');
+        muteBtn.style.cssText = `background:none;border:1px solid ${t.muted ? '#cc6655' : '#2a2a2a'};border-radius:3px;
+            color:${t.muted ? '#cc6655' : '#666'};font-size:.41rem;padding:2px 5px;cursor:pointer;transition:all .12s;font-family:'DM Mono',monospace;`;
+        muteBtn.textContent = 'M';
+        muteBtn.onclick = () => { t.muted = !t.muted; _expAudioRenderTracks(); _expAudioUpdatePanelList(); };
+
+        const delBtn = document.createElement('button');
+        delBtn.style.cssText = 'background:none;border:none;color:#3a3a3a;font-size:.6rem;cursor:pointer;padding:2px 4px;transition:color .12s;line-height:1;';
+        delBtn.textContent = '✕';
+        delBtn.onmouseover = () => delBtn.style.color = '#cc6655';
+        delBtn.onmouseout = () => delBtn.style.color = '#3a3a3a';
+        delBtn.onclick = () => _expAudioRemoveTrack(t.id);
+
+        row.append(lbl, wrap, volSlider, muteBtn, delBtn);
+        container.appendChild(row);
+
+        requestAnimationFrame(() => {
+            cv.width = wrap.clientWidth || 400;
+            _expAudioDrawTrack(cv, t);
+            _expAudioBindTrackEvents(wrap, cv, t);
+        });
+    });
+}
+
+function _expAudioDrawTrack(canvas, t) {
+    const c = canvas.getContext('2d'), W = canvas.width, H = canvas.height;
+    c.clearRect(0, 0, W, H);
+    c.fillStyle = '#0a0a0a'; c.fillRect(0, 0, W, H);
+
+    t.segments.forEach((seg, idx) => {
+        if (seg.deleted) return;
+        const x1 = seg.from * W, x2 = seg.to * W, sw = x2 - x1;
+        if (sw < 1) return;
+        const isSel = _expAudioSelectedSeg?.trackId === t.id && _expAudioSelectedSeg?.segIdx === idx;
+
+        // ── Calcular envelope de volumen para cada pixel del segmento ──────
+        // gainAt(relPos 0-1) devuelve multiplicador 0-1
+        function gainAt(n) {
+            let g = 1;
+            if (seg.fadeIn > 0 && n < seg.fadeIn) g = Math.min(g, n / seg.fadeIn);
+            if (seg.fadeOut > 0 && n > (1 - seg.fadeOut)) g = Math.min(g, (1 - n) / seg.fadeOut);
+            return Math.max(0, Math.min(1, g));
+        }
+
+        // ── Relleno del segmento usando el envelope como altura ────────────
+        c.beginPath();
+        // Trazar la curva superior del envelope (de izquierda a derecha)
+        for (let px = x1; px <= x2; px++) {
+            const n = sw > 0 ? (px - x1) / sw : 0;
+            const g = gainAt(n);
+            const envY = H - g * H; // g=1 → tope, g=0 → fondo
+            if (px === x1) c.moveTo(px, envY); else c.lineTo(px, envY);
+        }
+        // Cerrar por abajo
+        c.lineTo(x2, H); c.lineTo(x1, H); c.closePath();
+        c.fillStyle = t.muted ? '#1a1a1a' : (isSel ? t.color + '40' : t.color + '18');
+        c.fill();
+
+        if (!t.muted) {
+            // ── Waveform simulada, recortada al envelope ────────────────────
+            c.save();
+            // Clip al área del envelope
+            c.beginPath();
+            for (let px = x1; px <= x2; px++) {
+                const n = sw > 0 ? (px - x1) / sw : 0;
+                const g = gainAt(n);
+                const envY = H - g * H;
+                if (px === x1) c.moveTo(px, envY); else c.lineTo(px, envY);
+            }
+            c.lineTo(x2, H); c.lineTo(x1, H); c.closePath();
+            c.clip();
+
+            // Dibujar waveform dentro del clip
+            c.strokeStyle = t.color + (isSel ? 'cc' : '66');
+            c.lineWidth = 1; c.beginPath();
+            const seed = t.id * 137;
+            for (let px = x1; px < x2; px++) {
+                const n = (px - x1) / sw;
+                const amp = Math.sin(n * 80 + seed) * Math.sin(n * 13 + seed * .3) * Math.cos(n * 5);
+                const g = gainAt(n);
+                const mid = H - g * H / 2;          // centro vertical del envelope en este punto
+                const range = g * (H / 2 - 2);       // amplitud proporcional al gain
+                const y = mid + amp * range;
+                px === x1 ? c.moveTo(px, y) : c.lineTo(px, y);
+            }
+            c.stroke();
+            c.restore();
+
+            // ── Línea de envelope (la línea visible de volumen) ─────────────
+            c.beginPath();
+            c.strokeStyle = t.color + 'cc';
+            c.lineWidth = 1.5;
+            for (let px = x1; px <= x2; px++) {
+                const n = sw > 0 ? (px - x1) / sw : 0;
+                const g = gainAt(n);
+                const envY = H - g * H;
+                if (px === x1) c.moveTo(px, envY); else c.lineTo(px, envY);
+            }
+            c.stroke();
+
+            // ── Handles de fade (triángulos arrastrables) ──────────────────
+            if (seg.fadeIn > 0) {
+                const fiX = x1 + sw * seg.fadeIn;
+                const fiY = 0; // tope del fade in
+                c.fillStyle = t.color + 'ee';
+                c.beginPath();
+                c.moveTo(fiX - 6, 1); c.lineTo(fiX + 6, 1); c.lineTo(fiX, 10);
+                c.closePath(); c.fill();
+                if (sw * seg.fadeIn > 28) {
+                    c.fillStyle = t.color + '99';
+                    c.font = '8px "DM Mono",monospace'; c.textAlign = 'left'; c.textBaseline = 'top';
+                    c.fillText('fade in', x1 + 3, 12);
+                }
+            }
+            if (seg.fadeOut > 0) {
+                const foX = x2 - sw * seg.fadeOut;
+                c.fillStyle = t.color + 'ee';
+                c.beginPath();
+                c.moveTo(foX - 6, 1); c.lineTo(foX + 6, 1); c.lineTo(foX, 10);
+                c.closePath(); c.fill();
+                if (sw * seg.fadeOut > 28) {
+                    c.fillStyle = t.color + '99';
+                    c.font = '8px "DM Mono",monospace'; c.textAlign = 'right'; c.textBaseline = 'top';
+                    c.fillText('fade out', x2 - 3, 12);
+                }
+            }
+
+            // Borde izquierdo del segmento
+            c.fillStyle = t.color + 'cc'; c.fillRect(x1, 0, 2, H);
+        }
+
+        if (isSel) {
+            c.strokeStyle = t.color + 'aa'; c.lineWidth = 1.5;
+            c.strokeRect(x1 + 1, 1, sw - 2, H - 2);
+        }
+    });
+
+    // ── Cursor de posición ──────────────────────────────────────────────
+    let cursorFrac = _expPreviewFrase / Math.max(1, sentences.length);
+    const _activeAudio = _expAudioTracks.find(tr => tr.id === t.id && tr.audioEl && !tr.audioEl.paused);
+    if (_activeAudio && _activeAudio.audioEl.duration) {
+        cursorFrac = (_activeAudio.audioEl.currentTime % _activeAudio.audioEl.duration) / _activeAudio.audioEl.duration;
+    }
+    const px = Math.round(cursorFrac * W);
+    c.fillStyle = 'rgba(255,255,255,.6)'; c.fillRect(px - 1, 0, 2, H);
+}
+
+// ─── Eventos de track ───────────────────────────────────────────────
+const _EXP_FADE_HIT = 10;
+
+function _expAudioGetFadeHandle(canvas, t, cx) {
+    const W = canvas.width;
+    for (let idx = 0; idx < t.segments.length; idx++) {
+        const seg = t.segments[idx]; if (seg.deleted) continue;
+        const x1 = seg.from * W, x2 = seg.to * W, sw = x2 - x1;
+        if (seg.fadeIn > 0 && Math.abs(cx - (x1 + sw * seg.fadeIn)) <= _EXP_FADE_HIT) return { idx, side: 'in' };
+        if (seg.fadeOut > 0 && Math.abs(cx - (x2 - sw * seg.fadeOut)) <= _EXP_FADE_HIT) return { idx, side: 'out' };
+    }
+    return null;
+}
+
+function _expAudioBindTrackEvents(wrap, canvas, t) {
+    const tooltip = document.getElementById('exp-fade-tooltip');
+
+    wrap.addEventListener('mousedown', e => {
+        const rect = wrap.getBoundingClientRect();
+        const cx = (e.clientX - rect.left) * (canvas.width / rect.width);
+        const fh = _expAudioGetFadeHandle(canvas, t, cx);
+        if (fh) {
+            const seg = t.segments[fh.idx];
+            _expAudioFadeDrag = {
+                trackId: t.id, segIdx: fh.idx, side: fh.side, canvasEl: canvas,
+                startX: e.clientX, origFade: fh.side === 'in' ? seg.fadeIn : seg.fadeOut
+            };
+            document.addEventListener('mousemove', _expAudioOnFadeDrag);
+            document.addEventListener('mouseup', _expAudioOnFadeDragEnd, { once: true });
+            return;
+        }
+        const frac = cx / canvas.width;
+        if (_expAudioMode === 'split') { _expAudioSplitAt(t, frac); return; }
+        const si = t.segments.findIndex(s => !s.deleted && frac >= s.from && frac <= s.to);
+        _expAudioSelectedSeg = si >= 0 ? { trackId: t.id, segIdx: si } : null;
+        _expAudioRenderTracks();
+    });
+
+    wrap.addEventListener('mousemove', e => {
+        const rect = wrap.getBoundingClientRect();
+        const cx = (e.clientX - rect.left) * (canvas.width / rect.width);
+        const fh = _expAudioGetFadeHandle(canvas, t, cx);
+        if (fh) {
+            wrap.style.cursor = 'ew-resize';
+            const seg = t.segments[fh.idx];
+            const pct = Math.round((fh.side === 'in' ? seg.fadeIn : seg.fadeOut) * 100);
+            if (tooltip) { tooltip.style.display = 'block'; tooltip.style.left = (e.clientX + 12) + 'px'; tooltip.style.top = (e.clientY - 24) + 'px'; tooltip.textContent = fh.side === 'in' ? `◁ Fade in: ${pct}%` : `▷ Fade out: ${pct}%`; }
+        } else {
+            wrap.style.cursor = _expAudioMode === 'split' ? 'crosshair' : 'pointer';
+            if (tooltip) tooltip.style.display = 'none';
+        }
+    });
+
+    wrap.addEventListener('mouseleave', () => { if (tooltip) tooltip.style.display = 'none'; });
+
+    wrap.addEventListener('contextmenu', e => {
+        e.preventDefault();
+        const rect = wrap.getBoundingClientRect();
+        const frac = (e.clientX - rect.left) / rect.width;
+        const si = t.segments.findIndex(s => !s.deleted && frac >= s.from && frac <= s.to);
+        _expAudioCtxTarget = si >= 0 ? { t, segIdx: si, frac } : null;
+        const menu = document.getElementById('exp-ctx-menu');
+        if (menu) { menu.style.display = 'block'; menu.style.left = e.clientX + 'px'; menu.style.top = e.clientY + 'px'; }
+        document.addEventListener('click', _expAudioCloseCtxMenu, { once: true });
+    });
+}
+
+function _expAudioOnFadeDrag(e) {
+    if (!_expAudioFadeDrag) return;
+    const t = _expAudioTracks.find(t => t.id === _expAudioFadeDrag.trackId); if (!t) return;
+    const seg = t.segments[_expAudioFadeDrag.segIdx];
+    const W = _expAudioFadeDrag.canvasEl.width, sw = (seg.to - seg.from) * W;
+    const dx = e.clientX - _expAudioFadeDrag.startX;
+    let nf = _expAudioFadeDrag.origFade + (_expAudioFadeDrag.side === 'in' ? dx : -dx) / sw;
+    nf = Math.max(0, Math.min(0.95, nf));
+    if (_expAudioFadeDrag.side === 'in') seg.fadeIn = nf; else seg.fadeOut = nf;
+    _expAudioDrawTrack(_expAudioFadeDrag.canvasEl, t);
+    const tooltip = document.getElementById('exp-fade-tooltip');
+    if (tooltip) { tooltip.style.display = 'block'; tooltip.style.left = (e.clientX + 12) + 'px'; tooltip.style.top = (e.clientY - 24) + 'px'; tooltip.textContent = _expAudioFadeDrag.side === 'in' ? `◁ Fade in: ${Math.round(nf * 100)}%` : `▷ Fade out: ${Math.round(nf * 100)}%`; }
+}
+
+function _expAudioOnFadeDragEnd() {
+    _expAudioFadeDrag = null;
+    document.removeEventListener('mousemove', _expAudioOnFadeDrag);
+    const tooltip = document.getElementById('exp-fade-tooltip');
+    if (tooltip) tooltip.style.display = 'none';
+}
+
+function _expAudioCloseCtxMenu() {
+    const menu = document.getElementById('exp-ctx-menu');
+    if (menu) menu.style.display = 'none';
+}
+function _expAudioCtxSplit() { if (_expAudioCtxTarget) _expAudioSplitAt(_expAudioCtxTarget.t, _expAudioCtxTarget.frac); _expAudioCloseCtxMenu(); }
+function _expAudioCtxDelete() { if (_expAudioCtxTarget) { _expAudioCtxTarget.t.segments[_expAudioCtxTarget.segIdx].deleted = true; _expAudioSelectedSeg = null; _expAudioRenderTracks(); } _expAudioCloseCtxMenu(); }
+function _expAudioCtxFadeIn() { if (_expAudioCtxTarget) { _expAudioCtxTarget.t.segments[_expAudioCtxTarget.segIdx].fadeIn = 0.25; _expAudioRenderTracks(); } _expAudioCloseCtxMenu(); }
+function _expAudioCtxFadeOut() { if (_expAudioCtxTarget) { _expAudioCtxTarget.t.segments[_expAudioCtxTarget.segIdx].fadeOut = 0.25; _expAudioRenderTracks(); } _expAudioCloseCtxMenu(); }
+
+function _expAudioSoloToggle() {
+    const btn = document.getElementById('exp-audio-solo-btn');
+    if (!btn) return;
+    const isPlaying = btn.dataset.playing === '1';
+    if (isPlaying) {
+        _expAudioPlayStop();
+        btn.dataset.playing = '0';
+        btn.textContent = '🔊 Escuchar preview';
+        btn.style.color = '#c8a96e';
+        btn.style.borderColor = '#3a3a3a';
+    } else {
+        _expAudioPlayStart();
+        btn.dataset.playing = '1';
+        btn.textContent = '⏸ Pausar audio';
+        btn.style.color = '#7eb89a';
+        btn.style.borderColor = '#7eb89a';
+    }
+}
+
+function _expAudioUpdatePanelList() {
+    const el = document.getElementById('exp-panel-tracks-list'); if (!el) return;
+    el.innerHTML = _expAudioTracks.map(t => `
+        <div style="background:#0d0d0d;border:1px solid #1e1e1e;border-radius:5px;
+                    padding:6px 9px;display:flex;align-items:center;gap:7px;margin-bottom:5px;">
+            <div style="width:7px;height:7px;border-radius:2px;flex-shrink:0;background:${t.color}44;border:1px solid ${t.color}88;"></div>
+            <div style="font-size:.46rem;color:#888;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${t.name}">${t.name}</div>
+            <div style="display:flex;align-items:center;gap:4px;">
+                <span style="font-size:.46rem;color:#666;">${t.muted ? '🔇' : '🔊'}</span>
+                <input type="range" style="width:50px;accent-color:#c8a96e;" min="0" max="100" value="${t.volume}"
+                       oninput="_expAudioSetVol(${t.id},this.value)">
+                <span style="font-size:.42rem;color:#555;width:24px;">${t.volume}%</span>
+            </div>
+            <button onclick="_expAudioRemoveTrack(${t.id})"
+                    style="background:none;border:none;color:#3a3a3a;font-size:.6rem;cursor:pointer;padding:2px 4px;line-height:1;"
+                    onmouseover="this.style.color='#cc6655'" onmouseout="this.style.color='#3a3a3a'">✕</button>
+        </div>`).join('') || '<div style="font-size:.45rem;color:#2e2e2e;text-align:center;padding:5px 0;">Sin tracks</div>';
+    // Mostrar botón solo si hay tracks
+    const ctrl = document.getElementById('exp-audio-preview-controls');
+    if (ctrl) ctrl.style.display = _expAudioTracks.length ? 'block' : 'none';
+}
+
 
 // ───────────────────────────────────────────────────────────────────
 // MEZCLA DE AUDIO (OfflineAudioContext → WAV blob)
@@ -1560,6 +2994,9 @@ function _expDibujarFrame(ctx, W, H, img, current, total, _sentencesSnap, imgIte
     const textColor = fx.textColor ?? (typeof _videoTextColor !== 'undefined' ? _videoTextColor : '#c8a96e');
     const textOpacity = fx.textOpacity ?? (typeof _videoTextOpacity !== 'undefined' ? _videoTextOpacity : 1);
     const fontFamily = fx.fontFamily ?? 'Georgia,serif';
+    const strokeEnabled = fx.strokeEnabled ?? false;
+    const strokeColor = fx.strokeColor ?? '#000000';
+    const strokeWidth = fx.strokeWidth ?? 2;
     const offX = imgItem?.offsetX ?? 0;  // % de offset para centrado
     const offY = imgItem?.offsetY ?? 0;
 
@@ -1630,6 +3067,12 @@ function _expDibujarFrame(ctx, W, H, img, current, total, _sentencesSnap, imgIte
     }
     ctx.font = `italic ${CUR_SZ}px ${fontFamily}`;
     ctx.fillStyle = textColor;
+    if (strokeEnabled) {
+        ctx.strokeStyle = strokeColor;
+        ctx.lineWidth = strokeWidth * 2;
+        ctx.lineJoin = 'round';
+        curL.forEach((l, i) => { ctx.strokeText(l, CX, y + i * CUR_LH); });
+    }
     curL.forEach((l, i) => ctx.fillText(l, CX, y + i * CUR_LH));
     y += curL.length * CUR_LH + GAP;
 
@@ -1645,4 +3088,174 @@ function _expDibujarFrame(ctx, W, H, img, current, total, _sentencesSnap, imgIte
     ctx.fillStyle = 'rgba(200,169,110,0.15)';
     ctx.textAlign = 'right';
     ctx.fillText(EXPORT_SITE_TAG, W - 18, H - 14);
+}
+
+// ═══════════════════════════════════════
+// PANEL AUDIO TTS — Pre-generacion desde preview
+// ═══════════════════════════════════════
+
+function _expTtsActualizarUI() {
+    const dot = document.getElementById('exp-tts-dot');
+    const lbl = document.getElementById('exp-tts-status-lbl');
+    const btn = document.getElementById('exp-tts-gen-btn');
+    const clrBtn = document.getElementById('exp-tts-clear-btn');
+    const progWrap = document.getElementById('exp-tts-progress-wrap');
+    if (!dot) return;
+    if (_expTtsBuffers && _expTtsBuffers.length > 0) {
+        const conAudio = _expTtsBuffers.filter(b => b != null).length;
+        dot.style.background = conAudio === _expTtsBuffers.length ? '#7eb89a' : '#c8a96e';
+        lbl.textContent = conAudio + '/' + _expTtsBuffers.length + ' frases listas';
+        lbl.style.color = '#7eb89a';
+        if (btn) { btn.textContent = 'Regenerar audio TTS'; }
+        if (clrBtn) clrBtn.style.display = '';
+        if (progWrap) progWrap.style.display = 'none';
+        _expTtsMode = 'xtts';
+    } else {
+        dot.style.background = '#333';
+        lbl.textContent = 'Sin pre-generar';
+        lbl.style.color = '#555';
+        if (btn) { btn.textContent = 'Pre-generar audio TTS'; btn.disabled = false; btn.style.opacity = '1'; btn.style.color = '#7eb89a'; btn.style.borderColor = '#3a3a3a'; }
+        if (clrBtn) clrBtn.style.display = 'none';
+        if (progWrap) progWrap.style.display = 'none';
+    }
+}
+
+function _expTtsClear() {
+    _expTtsBuffers = null;
+    _expTtsDuraciones = null;
+    const ttsTrack = _expAudioTracks.find(t => t._isTtsTrack);
+    if (ttsTrack) _expAudioRemoveTrack(ttsTrack.id);
+    _expTtsActualizarUI();
+    mostrarNotificacion('Audio TTS descartado');
+}
+
+async function _expTtsPregenerar() {
+    const btn = document.getElementById('exp-tts-gen-btn');
+    const progWrap = document.getElementById('exp-tts-progress-wrap');
+    const progBar = document.getElementById('exp-tts-progress-bar');
+    const progLbl = document.getElementById('exp-tts-progress-lbl');
+    const dot = document.getElementById('exp-tts-dot');
+    const lbl = document.getElementById('exp-tts-status-lbl');
+    try {
+        const hRes = await fetch(TTS_API_URL + '/health', { method: 'GET' });
+        if (!hRes.ok) throw new Error('no ok');
+    } catch (e) { mostrarNotificacion('Servidor TTS no disponible'); return; }
+
+    const voiceSel = document.getElementById('exp-tts-voice-select');
+    if (voiceSel && voiceSel.value && typeof setEdgeTtsVoice === 'function') setEdgeTtsVoice(voiceSel.value);
+
+    if (btn) { btn.disabled = true; btn.style.opacity = '0.5'; btn.style.color = '#555'; }
+    if (dot) dot.style.background = '#c8a96e';
+    if (lbl) { lbl.style.color = '#c8a96e'; lbl.textContent = 'Generando...'; }
+    if (progWrap) progWrap.style.display = '';
+    const clrBtn = document.getElementById('exp-tts-clear-btn');
+    if (clrBtn) clrBtn.style.display = 'none';
+
+    const updateProg = (pct, label) => {
+        if (progBar) progBar.style.width = pct + '%';
+        if (progLbl) progLbl.textContent = Math.round(pct) + '%';
+        if (lbl) lbl.textContent = label;
+    };
+
+    // Resetear flag de cancelacion
+    _expCancelled = false;
+
+    window._exportEnCurso = true;
+    let buffers = null;
+    try { buffers = await _expGenerarAudioXTTSWidget(updateProg); }
+    catch (e) { mostrarNotificacion('Error generando audio TTS: ' + e.message); }
+    window._exportEnCurso = false;
+
+    const bufferesReales = buffers ? buffers.filter(b => b != null).length : 0;
+    if (!buffers || bufferesReales === 0) {
+        if (btn) { btn.disabled = false; btn.style.opacity = '1'; btn.style.color = '#7eb89a'; }
+        if (lbl) { lbl.textContent = 'Error - reintenta'; lbl.style.color = '#e07070'; }
+        if (dot) dot.style.background = '#e07070';
+        return;
+    }
+
+    _expTtsBuffers = buffers;
+    _expTtsDuraciones = null; // forzar re-decodificacion
+    _expTtsMode = 'xtts';
+
+    // Calcular duraciones para el track visual y el player
+    const total = buffers.length;
+    const duraciones = new Array(total).fill(EXPORT_SEC_FRASE);
+    try {
+        const tmpCtx = new AudioContext();
+        for (let i = 0; i < total; i++) {
+            if (!buffers[i]) continue;
+            try { const dec = await tmpCtx.decodeAudioData(buffers[i].slice(0)); duraciones[i] = dec.duration + 0.15; } catch (e) { }
+        }
+        tmpCtx.close();
+    } catch (e) { }
+
+    // Cachear duraciones en ms para el player
+    _expTtsDuraciones = duraciones.map(d => d * 1000);
+
+    // Construir WAV concatenado para el track del timeline
+    let trackUrl = null;
+    try {
+        const sr = 24000, ch = 1;
+        const totalSamples = Math.ceil(duraciones.reduce((a, b) => a + b, 0) * sr);
+        const offCtx = new OfflineAudioContext(ch, Math.max(totalSamples, 1), sr);
+        const tmpCtx2 = new AudioContext();
+        let offset = 0;
+        for (let i = 0; i < total; i++) {
+            if (buffers[i]) {
+                try {
+                    const dec = await tmpCtx2.decodeAudioData(buffers[i].slice(0));
+                    const src = offCtx.createBufferSource();
+                    src.buffer = dec;
+                    src.connect(offCtx.destination);
+                    src.start(offset);
+                } catch (e) { }
+            }
+            offset += duraciones[i];
+        }
+        tmpCtx2.close();
+        const rendered = await offCtx.startRendering();
+        trackUrl = URL.createObjectURL(_expTtsAudioBufferToWav(rendered));
+    } catch (e) { console.warn('[TTS track] wav error:', e); }
+
+    // Eliminar track TTS previo
+    const prev = _expAudioTracks.find(t => t._isTtsTrack);
+    if (prev) _expAudioRemoveTrack(prev.id);
+
+    // Agregar nuevo track
+    if (trackUrl) {
+        const id = _expAudioAddTrack('Voz TTS', '#7eb89a', null, trackUrl);
+        const t = _expAudioTracks.find(t => t.id === id);
+        if (t) t._isTtsTrack = true;
+        const ctrl = document.getElementById('exp-audio-preview-controls');
+        if (ctrl) ctrl.style.display = '';
+    }
+
+    _expTtsActualizarUI();
+    mostrarNotificacion('Audio TTS listo: ' + buffers.filter(b => b).length + '/' + total + ' frases');
+}
+
+function _expTtsAudioBufferToWav(audioBuffer) {
+    const numCh = audioBuffer.numberOfChannels;
+    const sr = audioBuffer.sampleRate;
+    const len = audioBuffer.length;
+    const bytesPerSample = 2;
+    const blockAlign = numCh * bytesPerSample;
+    const dataSize = len * blockAlign;
+    const buf = new ArrayBuffer(44 + dataSize);
+    const view = new DataView(buf);
+    const ws = (off, str) => { for (let i = 0; i < str.length; i++) view.setUint8(off + i, str.charCodeAt(i)); };
+    ws(0, 'RIFF'); view.setUint32(4, 36 + dataSize, true); ws(8, 'WAVE'); ws(12, 'fmt ');
+    view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, numCh, true);
+    view.setUint32(24, sr, true); view.setUint32(28, sr * blockAlign, true);
+    view.setUint16(32, blockAlign, true); view.setUint16(34, 16, true);
+    ws(36, 'data'); view.setUint32(40, dataSize, true);
+    let off = 44;
+    for (let i = 0; i < len; i++) {
+        for (let c = 0; c < numCh; c++) {
+            const s = Math.max(-1, Math.min(1, audioBuffer.getChannelData(c)[i]));
+            view.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7FFF, true); off += 2;
+        }
+    }
+    return new Blob([buf], { type: 'audio/wav' });
 }

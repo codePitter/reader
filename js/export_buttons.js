@@ -61,6 +61,16 @@ function exportarVideoDirecto() {
         return;
     }
 
+    // ── Pausar reproducción antes de abrir el modal ──
+    if (typeof isReading !== 'undefined' && isReading) {
+        if (typeof pausarTTS === 'function') pausarTTS();
+    }
+
+    // ── Pausar música ambiental ──
+    if (typeof freesoundAudio !== 'undefined' && freesoundAudio && !freesoundAudio.paused) {
+        freesoundAudio.pause();
+    }
+
     // Resetear estado de exportación y saltar directo a thumbnails (paso 2)
     if (typeof _expCancelled !== 'undefined') window._expCancelled = false;
     if (typeof _expImagenes !== 'undefined') window._expImagenes = [];
