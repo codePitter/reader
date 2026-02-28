@@ -8,7 +8,7 @@ const EXPORT_SITE_TAG = 'reader.com';
 const EXPORT_FPS = 30;
 const EXPORT_W = 1280;
 const EXPORT_H = 720;
-const EXPORT_IMGS_PER = 10;    // frases por grupo de imagen
+let EXPORT_IMGS_PER = 10;    // frases por grupo de imagen (modificable desde el modal)
 const EXPORT_SEC_FRASE = 4.0;   // segundos/frase cuando no hay XTTS
 
 let _expTtsMode = 'browser'; // se setea en el modal de config, se lee en _iniciarExportacion
@@ -250,7 +250,16 @@ async function _abrirModalConfig() {
         <div style="background:#0d0d0d;border-radius:6px;padding:11px 14px;
                     font-size:.57rem;color:#666;line-height:2;margin-bottom:18px;">
             <span>📝 Frases: <b style="color:#e8e0d0">${sentences.length}</b></span> &nbsp;·&nbsp;
-            <span>🖼 Grupos: <b style="color:#e8e0d0">${grupos}</b></span> &nbsp;·&nbsp;
+            <span>🖼 Grupos:
+                <span style="display:inline-flex;align-items:center;gap:3px;vertical-align:middle;">
+                    <button onclick="_expCambiarGrupos(-1)"
+                            style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:3px;color:#888;font-size:.65rem;width:18px;height:18px;line-height:1;cursor:pointer;padding:0;display:inline-flex;align-items:center;justify-content:center;">−</button>
+                    <b id="exp-grupos-val" style="color:#c8a96e;min-width:20px;text-align:center;">${grupos}</b>
+                    <button onclick="_expCambiarGrupos(1)"
+                            style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:3px;color:#888;font-size:.65rem;width:18px;height:18px;line-height:1;cursor:pointer;padding:0;display:inline-flex;align-items:center;justify-content:center;">+</button>
+                    <span id="exp-fxg-val" style="color:#444;font-size:.5rem;">(${EXPORT_IMGS_PER} fr/img)</span>
+                </span>
+            </span> &nbsp;·&nbsp;
             <span>⏱ ~<b style="color:#e8e0d0">${durEst} min</b></span><br>
             <span style="color:#555;">💾 </span><span style="color:#c8a96e;word-break:break-all;">${fileName}</span>
         </div>
@@ -283,6 +292,20 @@ async function _abrirModalConfig() {
     // Sincronizar selector de voz con el valor guardado
     const _expVoiceSel = document.getElementById('exp-voice-select');
     if (_expVoiceSel && typeof _edgeTtsVoice !== 'undefined') _expVoiceSel.value = _edgeTtsVoice;
+}
+
+function _expCambiarGrupos(delta) {
+    const total = sentences.length;
+    // Calcular nuevo EXPORT_IMGS_PER: grupos+delta → frases/grupo = ceil(total / nuevosGrupos)
+    const gruposActuales = Math.ceil(total / EXPORT_IMGS_PER);
+    const nuevosGrupos = Math.max(1, Math.min(total, gruposActuales + delta));
+    EXPORT_IMGS_PER = Math.ceil(total / nuevosGrupos);
+    // Actualizar display
+    const realGrupos = Math.ceil(total / EXPORT_IMGS_PER);
+    const gVal = document.getElementById('exp-grupos-val');
+    const fVal = document.getElementById('exp-fxg-val');
+    if (gVal) gVal.textContent = realGrupos;
+    if (fVal) fVal.textContent = `(${EXPORT_IMGS_PER} fr/img)`;
 }
 
 function _expTtsChange() {
@@ -484,6 +507,45 @@ function _renderModalImagenes() {
     </div>`;
     document.body.appendChild(m);
 
+    // Ajustar altura de thumbnails si el grid desborda el viewport
+    (function _adjustThumbHeight() {
+        const gridEl = m.querySelector('div[style*="grid-template-columns"]');
+        if (!gridEl) return;
+        const thumbWraps = m.querySelectorAll('[id^="exp-thumb-wrap-"]');
+        if (!thumbWraps.length) return;
+
+        const HEADER_H = 60;
+        const CARD_EXTRA = 90;
+        const MIN_PCT = 25;
+        const DEFAULT_PCT = 56.25;
+
+        const applyPct = (pct) => {
+            thumbWraps.forEach(w => { w.style.paddingBottom = pct + '%'; });
+        };
+
+        const recalc = () => {
+            applyPct(DEFAULT_PCT);
+            requestAnimationFrame(() => {
+                const vh = window.innerHeight;
+                const cols = Math.max(1, Math.round(gridEl.offsetWidth / 212));
+                const rows = Math.ceil(thumbWraps.length / cols);
+                const cardW = (gridEl.offsetWidth / cols) - 12;
+                const thumbH_default = cardW * (DEFAULT_PCT / 100);
+                const totalContentH = HEADER_H + rows * (thumbH_default + CARD_EXTRA) + 32;
+                if (totalContentH <= vh) { applyPct(DEFAULT_PCT); return; }
+                const availableForThumbs = vh - HEADER_H - rows * CARD_EXTRA - 32;
+                const thumbHNeeded = availableForThumbs / rows;
+                const pct = Math.max(MIN_PCT, (thumbHNeeded / cardW) * 100);
+                applyPct(pct);
+            });
+        };
+
+        recalc();
+        const ro = new ResizeObserver(recalc);
+        ro.observe(m);
+        m._thumbRO = ro;
+    })();
+
     // Precargar los HTMLImageElement en background
     _expImagenes.forEach((item, g) => {
         const img = new Image();
@@ -654,6 +716,7 @@ function _quitarModal() {
     const m = document.getElementById('export-modal');
     if (m) {
         if (m._resizeObs) m._resizeObs.disconnect();
+        if (m._thumbRO) m._thumbRO.disconnect();
         m.remove();
     }
     document.getElementById('exp-float-widget')?.remove();
@@ -1192,16 +1255,6 @@ function _abrirPreviewEfectos() {
         }
         #exp-right-panel::-webkit-scrollbar { width: 3px; }
         #exp-right-panel::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 2px; }
-        #exp-bottombar {
-            flex-shrink: 0;
-            display: flex;
-            gap: 8px;
-            justify-content: flex-end;
-            align-items: center;
-            padding: 9px 14px;
-            border-top: 1px solid #1e1e1e;
-            background: #0a0908;
-        }
         #exp-tl-toolbar {
             display: flex;
             align-items: center;
@@ -1278,22 +1331,7 @@ function _abrirPreviewEfectos() {
         .exp-tl-btn:hover { border-color: #c8a96e; color: #c8a96e; }
         .exp-tl-btn.active { border-color: #c8a96e; color: #c8a96e; }
         .exp-tl-btn.danger:hover { border-color: #cc6655; color: #cc6655; }
-        .exp-add-track-btn {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            width: 100%;
-            padding: 4px 10px;
-            background: none;
-            border: 1px dashed #272727;
-            border-radius: 4px;
-            color: #333;
-            font-family: 'DM Mono', monospace;
-            font-size: .46rem;
-            cursor: pointer;
-            transition: all .15s;
-        }
-        .exp-add-track-btn:hover { border-color: #7eb89a; color: #7eb89a; }
+
         .exp-img-tl-wrap { padding: 3px 10px 7px; border-top: 1px solid #1e1e1e; }
         .exp-img-tl-inner { margin-left: 72px; }
         #exp-img-timeline-inner { width: 100%; display: block; cursor: pointer; }
@@ -1337,8 +1375,23 @@ function _abrirPreviewEfectos() {
 
     m.innerHTML = `
         <div id="exp-topbar">
-            <div style="font-size:.62rem;color:#c8a96e;letter-spacing:.1em;">🎨 PREVIEW — EFECTOS DE VIDEO</div>
-            <div style="font-size:.47rem;color:#444;">Los efectos se aplican a todo el video</div>
+            <div style="display:flex;align-items:center;gap:14px;flex:1;min-width:0;">
+                <div style="font-size:.62rem;color:#c8a96e;letter-spacing:.1em;white-space:nowrap;">🎨 PREVIEW — EFECTOS DE VIDEO</div>
+                <div style="font-size:.47rem;color:#444;white-space:nowrap;">Los efectos se aplican a todo el video</div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;flex-shrink:0;">
+                <button onclick="_expStopPlay();_renderModalImagenes()"
+                        style="background:none;border:1px solid #2a2a2a;border-radius:5px;color:#555;font-family:'DM Mono',monospace;font-size:.56rem;padding:5px 14px;cursor:pointer;transition:all .15s;"
+                        onmouseover="this.style.borderColor='#555';this.style.color='#e8e0d0'"
+                        onmouseout="this.style.borderColor='#2a2a2a';this.style.color='#555'">← Atrás</button>
+                <button onclick="_expStopPlay();_cerrarModalExport()"
+                        style="background:none;border:1px solid #2a2a2a;border-radius:5px;color:#555;font-family:'DM Mono',monospace;font-size:.56rem;padding:5px 14px;cursor:pointer;transition:all .15s;"
+                        onmouseover="this.style.borderColor='#555';this.style.color='#e8e0d0'"
+                        onmouseout="this.style.borderColor='#2a2a2a';this.style.color='#555'">Cancelar</button>
+                <button onclick="_expStopPlay();_iniciarExportacion()"
+                        style="background:#c8a96e;border:none;border-radius:5px;color:#0a0908;font-family:'DM Mono',monospace;font-size:.57rem;font-weight:700;padding:5px 18px;cursor:pointer;transition:opacity .15s;"
+                        onmouseover="this.style.opacity='.88'" onmouseout="this.style.opacity='1'">▶ Exportar</button>
+            </div>
         </div>
 
         <div id="exp-body">
@@ -1389,16 +1442,6 @@ function _abrirPreviewEfectos() {
                             <div id="exp-tl-scroll-inner" style="min-width:100%;">
                                 <div id="exp-audio-tracks"></div>
                             </div>
-                        </div>
-                    </div>
-
-                    <div style="display:flex;padding:4px 0 5px;">
-                        <div style="flex-shrink:0;width:240px;"></div>
-                        <div style="flex:1;min-width:0;padding-right:10px;">
-                            <label class="exp-add-track-btn">
-                                + Agregar track de audio
-                                <input type="file" accept="audio/*" style="display:none" onchange="_expAudioAddFromFile(this)" data-default-dir="music">
-                            </label>
                         </div>
                     </div>
 
@@ -1733,32 +1776,6 @@ function _abrirPreviewEfectos() {
             </div><!-- fin right panel -->
         </div><!-- fin body -->
 
-        <div id="exp-bottombar">
-            <button onclick="_expStopPlay();_renderModalImagenes()"
-                    style="background:none;border:1px solid #2a2a2a;border-radius:5px;
-                           color:#555;font-family:'DM Mono',monospace;font-size:.56rem;
-                           padding:7px 16px;cursor:pointer;transition:all .15s;"
-                    onmouseover="this.style.borderColor='#555';this.style.color='#e8e0d0'"
-                    onmouseout="this.style.borderColor='#2a2a2a';this.style.color='#555'">
-                ← Atrás
-            </button>
-            <button onclick="_expStopPlay();_cerrarModalExport()"
-                    style="background:none;border:1px solid #2a2a2a;border-radius:5px;
-                           color:#555;font-family:'DM Mono',monospace;font-size:.56rem;
-                           padding:7px 16px;cursor:pointer;transition:all .15s;"
-                    onmouseover="this.style.borderColor='#555';this.style.color='#e8e0d0'"
-                    onmouseout="this.style.borderColor='#2a2a2a';this.style.color='#555'">
-                Cancelar
-            </button>
-            <button onclick="_expStopPlay();_iniciarExportacion()"
-                    style="background:#c8a96e;border:none;border-radius:5px;
-                           color:#0a0908;font-family:'DM Mono',monospace;font-size:.57rem;
-                           font-weight:700;padding:7px 22px;cursor:pointer;transition:opacity .15s;"
-                    onmouseover="this.style.opacity='.88'"
-                    onmouseout="this.style.opacity='1'">
-                ▶ Exportar
-            </button>
-        </div>
     `;
 
     document.body.appendChild(m);
@@ -1948,25 +1965,28 @@ function _expSeekToFrase(fraseIdx) {
             // Track TTS: posición exacta según la frase
             t.audioEl.currentTime = totalSecsAtFrase;
         } else {
-            // Tracks de música: posicionar según offset del track
-            const trackOffsetSecs = (t.offset || 0) * _expGetTotalDuration();
-            const audioPos = totalSecsAtFrase - trackOffsetSecs;
-            const dur = t.audioEl.duration;
-            const applySeek = (d) => {
-                if (audioPos < 0 || audioPos > d) {
-                    t._skipPlay = true; // fuera del rango
-                } else {
-                    t._skipPlay = false;
-                    t.audioEl.currentTime = Math.max(0, audioPos);
+            // Tracks de música: buscar en qué clip NLE estamos según el tiempo de video actual.
+            // Cada clip define timeStart/timeEnd (timeline) y sourceStart/sourceEnd (fuente).
+            const totalDurSecs = _expGetTotalDuration();
+            const videoFrac = totalDurSecs > 0 ? totalSecsAtFrase / totalDurSecs : 0;
+            const audioDur = t.audioDuration || t.audioEl.duration || null;
+            let found = null;
+            for (const clip of (t.clips || [])) {
+                if (videoFrac >= clip.timeStart && videoFrac < clip.timeEnd && audioDur) {
+                    // Qué fracción dentro del clip estamos
+                    const fracInClip = (videoFrac - clip.timeStart) / Math.max(1e-9, clip.timeEnd - clip.timeStart);
+                    // Mapear a espacio fuente
+                    const sourceFrac = clip.sourceStart + fracInClip * (clip.sourceEnd - clip.sourceStart);
+                    found = sourceFrac * audioDur;
+                    break;
                 }
-            };
-            if (dur && dur > 0 && isFinite(dur)) {
-                applySeek(dur);
+            }
+            if (found === null) {
+                t._skipPlay = true;
+                if (t.audioEl) t.audioEl.currentTime = 0;
             } else {
-                t.audioEl.addEventListener('loadedmetadata', function onMeta() {
-                    t.audioEl.removeEventListener('loadedmetadata', onMeta);
-                    if (t.audioEl.duration) applySeek(t.audioEl.duration);
-                });
+                t._skipPlay = false;
+                if (t.audioEl) t.audioEl.currentTime = Math.max(0, found);
             }
         }
     });
@@ -2331,10 +2351,13 @@ async function _expGenerarAudioXTTSWidget(updateFn) {
         for (let k = 0; k < BATCH && base + k < total; k++) indices.push(base + k);
         await Promise.all(indices.map(async i => {
             try {
+                const textoNorm = (typeof _normalizarTextoTTS === 'function')
+                    ? _normalizarTextoTTS(sentences[i])
+                    : sentences[i];
                 const resp = await fetch(`${TTS_API_URL}/tts`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text: sentences[i], voice: (typeof _edgeTtsVoice !== 'undefined' ? _edgeTtsVoice : 'es-MX-JorgeNeural') })
+                    body: JSON.stringify({ text: textoNorm, voice: (typeof _edgeTtsVoice !== 'undefined' ? _edgeTtsVoice : 'es-MX-JorgeNeural') })
                 });
                 if (resp.ok) buffers[i] = await resp.arrayBuffer();
             } catch (e) { console.warn(`[export] audio frase ${i}:`, e.message); }
@@ -2370,9 +2393,11 @@ async function _expRenderizar(audioBuffers, updateFn) {
     }
 
     // ── Mezclar audio ──
+    // Si hay TTS → mezcla normal. Si no hay TTS pero hay tracks de música → también mezclar.
     let audioBlob = null;
-    if (audioBuffers) {
-        try { audioBlob = await _expMezclarAudio(audioBuffers, duraciones); }
+    const hasMusicTracks = (_expAudioTracks || []).some(t => !t._isTtsTrack && !t.muted && t.audioUrl);
+    if (audioBuffers || hasMusicTracks) {
+        try { audioBlob = await _expMezclarAudio(audioBuffers || [], duraciones); }
         catch (e) { console.warn('[export] mezcla audio:', e.message); }
     }
 
@@ -2617,8 +2642,9 @@ function _expAudioPlayStart(isResume) {
                 document.body.appendChild(t.audioEl);
                 // Actualizar audioDuration cuando esté disponible (para el canvas)
                 t.audioEl.addEventListener('loadedmetadata', () => {
-                    if (t.audioEl && t.audioEl.duration) {
-                        t.audioDuration = t.audioEl.duration;
+                    const d = t.audioEl?.duration;
+                    if (d && isFinite(d) && d > 0) {
+                        t.audioDuration = d;
                         _expAudioRenderTracks();
                     }
                 }, { once: true });
@@ -2651,20 +2677,19 @@ function _expAudioPlayStart(isResume) {
                 const audioDur = (!isNaN(dur) && isFinite(dur) && dur > 0)
                     ? dur : (t.audioDuration || null);
 
-                // Buscar en qué bloque estamos: offset principal + extraOffsets
-                const allOffsets = [t.offset || 0, ...(t.extraOffsets || [])];
+                // NLE: buscar en qué clip estamos según la posición del video
+                const videoFrac5 = totalDurSecs > 0 ? videoTimeSecs / totalDurSecs : 0;
                 let foundAudioPos = null;
-                for (const off of allOffsets) {
-                    const blockStartSecs = off * totalDurSecs;
-                    const blockEndSecs = audioDur ? blockStartSecs + audioDur : Infinity;
-                    if (videoTimeSecs >= blockStartSecs && videoTimeSecs < blockEndSecs) {
-                        foundAudioPos = videoTimeSecs - blockStartSecs;
+                for (const clip of (t.clips || [])) {
+                    if (videoFrac5 >= clip.timeStart && videoFrac5 < clip.timeEnd && audioDur) {
+                        const fracInClip = (videoFrac5 - clip.timeStart) / Math.max(1e-9, clip.timeEnd - clip.timeStart);
+                        const sourceFrac = clip.sourceStart + fracInClip * (clip.sourceEnd - clip.sourceStart);
+                        foundAudioPos = sourceFrac * audioDur;
                         break;
                     }
                 }
 
                 if (foundAudioPos === null) {
-                    // Fuera de todos los bloques — no reproducir
                     t._skipPlay = true;
                     t.audioEl.currentTime = 0;
                 } else {
@@ -2696,63 +2721,41 @@ function _expAudioFadeLoop(t) {
     const duration = t.audioEl.duration;
     const current = t.audioEl.currentTime;
 
-    // Para tracks de música (no TTS): usar currentTime real del audioEl
-    // El audioEl ya fue posicionado correctamente al iniciar/seek
-    let frac;
+    // Calcular fracción en el TIMELINE DEL VIDEO (igual que el sistema de reproducción)
+    // para poder comparar con clip.timeStart/timeEnd que están en ese mismo espacio.
+    let videoFrac;
     if (!t._isTtsTrack) {
-        const dur = (duration && isFinite(duration)) ? duration : (t.audioDuration || 0);
-        if (dur > 0) {
-            // Si el audio llegó al final, comprobar si hay un extraOffset próximo
-            if (current >= dur - 0.05) {
-                // Buscar si el video está ahora en un bloque extra
-                const videoNow = _expTtsGetCurrentTime(_expPreviewFrase);
-                const totalD = _expGetTotalDuration();
-                const allOff = [t.offset || 0, ...(t.extraOffsets || [])];
-                let nextPos = null;
-                for (const off of allOff) {
-                    const bs = off * totalD;
-                    const be = bs + dur;
-                    if (videoNow >= bs && videoNow < be) { nextPos = videoNow - bs; break; }
-                }
-                if (nextPos !== null && Math.abs(t.audioEl.currentTime - nextPos) > 0.3) {
-                    // Hacer seek al punto correcto dentro del bloque activo
-                    t.audioEl.currentTime = Math.max(0, nextPos);
-                } else if (nextPos === null) {
-                    if (t.gainNode) t.gainNode.gain.value = 0;
-                    return; // fuera de todos los bloques — detener
-                }
+        const totalDurSecs = _expGetTotalDuration();
+        const videoTimeSecs = _expTtsGetCurrentTime(_expPreviewFrase);
+        if (totalDurSecs > 0) {
+            // Si el audio llegó al final, silenciar
+            const audioDur = (duration && isFinite(duration)) ? duration : (t.audioDuration || 0);
+            if (audioDur > 0 && current >= audioDur - 0.05) {
+                if (t.gainNode) t.gainNode.gain.value = 0;
+                return;
             }
-            frac = current / dur;
+            videoFrac = videoTimeSecs / totalDurSecs;
         } else {
-            // Duración aún no disponible: mantener volumen y seguir
-            frac = 0;
+            videoFrac = 0;
         }
     } else {
-        frac = current / ((duration && isFinite(duration)) ? duration : 1);
+        videoFrac = current / ((duration && isFinite(duration)) ? duration : 1);
     }
 
-    // Calcular volumen según segmentos con fade in/out
+    // Calcular volumen según el clip NLE activo y sus fade in/out
+    // clip.timeStart/timeEnd → fracción del video (mismo espacio que videoFrac)
+    // clip.fadeIn/fadeOut → fracción de la duración del clip (0-1)
     let fadeMultiplier = 1.0;
-    for (const seg of t.segments) {
-        if (seg.deleted) continue;
-        if (frac >= seg.from && frac <= seg.to) {
-            const segLen = seg.to - seg.from;
-            if (segLen <= 0) break;
-            const posInSeg = (frac - seg.from) / segLen; // 0–1 dentro del segmento
-
-            // Fade in: al inicio del segmento
-            if (seg.fadeIn > 0 && posInSeg < seg.fadeIn) {
-                fadeMultiplier = Math.min(fadeMultiplier, posInSeg / seg.fadeIn);
-            }
-            // Fade out: al final del segmento
-            if (seg.fadeOut > 0 && posInSeg > (1 - seg.fadeOut)) {
-                fadeMultiplier = Math.min(fadeMultiplier, (1 - posInSeg) / seg.fadeOut);
-            }
-            if (seg.deleted) fadeMultiplier = 0;
+    for (const clip of (t.clips || [])) {
+        if (videoFrac >= clip.timeStart && videoFrac <= clip.timeEnd) {
+            const clipLen = clip.timeEnd - clip.timeStart;
+            if (clipLen <= 0) break;
+            const posInClip = (videoFrac - clip.timeStart) / clipLen; // 0-1 dentro del clip
+            if (clip.fadeIn > 0 && posInClip < clip.fadeIn)
+                fadeMultiplier = Math.min(fadeMultiplier, posInClip / clip.fadeIn);
+            if (clip.fadeOut > 0 && posInClip > (1 - clip.fadeOut))
+                fadeMultiplier = Math.min(fadeMultiplier, (1 - posInClip) / clip.fadeOut);
             break;
-        }
-        if (frac >= seg.from && frac <= seg.to && seg.deleted) {
-            fadeMultiplier = 0; break;
         }
     }
 
@@ -2787,32 +2790,86 @@ function _expAudioGetCtx() {
 }
 
 function _expAudioAddTrack(name, color, audioBuffer, audioUrl, isTts) {
+    // Modelo NLE: cada clip tiene posición en el TIMELINE (timeStart/timeEnd)
+    // y ventana dentro del SOURCE (sourceStart/sourceEnd, ambos 0-1).
+    // Un track nuevo arranca con un único clip que ocupa todo el timeline
+    // y reproduce el audio completo.
     const track = {
         id: ++_expAudioTrackIdCounter,
         name, color,
-        volume: isTts ? 80 : 15,  // música: 15% por defecto
+        volume: isTts ? 80 : 15,
         muted: false,
-        segments: [{ from: 0, to: 1, deleted: false, fadeIn: 0, fadeOut: 0 }],
-        splitHistory: [],
+        // clips[]: [{id, timeStart, timeEnd, sourceStart, sourceEnd, fadeIn, fadeOut}]
+        //   timeStart/timeEnd  → posición en el video (0-1 del total)
+        //   sourceStart/sourceEnd → qué fracción del archivo de audio reproduce (0-1)
+        clips: [{ id: 1, timeStart: 0, timeEnd: 1, sourceStart: 0, sourceEnd: 1, fadeIn: 0, fadeOut: 0 }],
+        _clipIdCounter: 1,
+        clipHistory: [],
         audioBuffer: audioBuffer || null,
         audioUrl: audioUrl || null,
         audioEl: null,
-        offset: 0,
-        rate: 1.0,            // velocidad de reproducción (0.5 – 2.0)
-        audioDuration: null,  // se precarga abajo para poder dibujar el bloque
+        rate: 1.0,
+        audioDuration: null,
     };
     _expAudioTracks.push(track);
 
-    // Precargar duración del audio para poder dibujarlo correctamente desde el inicio
+    // Precargar duración: cuando cargue, corregir timeEnd del clip inicial
+    // para que el bloque visual ocupe solo su fracción real del timeline.
     if (audioUrl && !isTts) {
-        const probe = new Audio();
+        // Bug de Chrome (abierto desde 2016, sin resolver): audio.duration === Infinity
+        // con blob/object URLs porque el browser no recibe Content-Length header.
+        // Solución canónica (usada por get-blob-duration, StackOverflow, etc.):
+        // setear currentTime = 1e101 fuerza al browser a calcular la duración real.
+        // Referencia: https://github.com/evictor/get-blob-duration
+        const probe = document.createElement('audio');
+        probe.preload = 'metadata';
         probe.src = audioUrl;
-        probe.addEventListener('loadedmetadata', () => {
-            track.audioDuration = probe.duration;
-            probe.src = '';
+
+        const _applyDuration = (dur) => {
+            if (!dur || !isFinite(dur) || dur <= 0) return;
+            track.audioDuration = dur;
+            // Corregir timeEnd de clips que aún tienen el placeholder (1).
+            // Un clip placeholder es el que se creó con timeEnd=1 antes de conocer
+            // la duración real. Solo se corrige si el clip cubre desde timeStart=0
+            // hasta el final (timeEnd≈1) y no fue movido manualmente.
+            const totalDur = _expGetTotalDuration() || 1;
+            const audioFrac = Math.min(1, dur / totalDur);
+            for (const clip of track.clips) {
+                // Solo ajustar clips cuyo timeEnd sea 1 (placeholder inicial)
+                // y que abarquen desde su timeStart hasta el final.
+                const clipDurFrac = clip.timeEnd - clip.timeStart;
+                if (clip.timeEnd >= 0.9999) {
+                    // Duración real esperada del clip según fracción del source
+                    const sourceFrac = clip.sourceEnd - clip.sourceStart;
+                    clip.timeEnd = Math.min(1, clip.timeStart + audioFrac * sourceFrac);
+                }
+            }
             _expAudioRenderTracks();
+        };
+
+        // Timeout de seguridad: si loadedmetadata nunca llega (formato no soportado, etc.)
+        const _probeTimeout = setTimeout(() => { probe.src = ''; }, 15000);
+
+        probe.addEventListener('loadedmetadata', () => {
+            if (isFinite(probe.duration) && probe.duration > 0) {
+                // Duración disponible directamente (WAV, OGG, etc.)
+                clearTimeout(_probeTimeout);
+                const dur = probe.duration;
+                probe.src = '';
+                _applyDuration(dur);
+            } else {
+                // Chrome + MP3 VBR: duration === Infinity → forzar cálculo con seek trick
+                probe.currentTime = 1e101;
+                probe.ontimeupdate = function () {
+                    probe.ontimeupdate = null;
+                    clearTimeout(_probeTimeout);
+                    const dur = probe.duration;
+                    probe.currentTime = 0; // resetear posición
+                    probe.src = '';
+                    _applyDuration(dur);
+                };
+            }
         }, { once: true });
-        probe.load();
     }
 
     _expAudioRenderTracks();
@@ -2829,26 +2886,33 @@ function _expAudioAddFromFile(inp) {
     inp.value = '';
 }
 
-// Agrega una repetición del track al final, en el mismo canvas
+// Agrega una repetición del track al final como clip independiente en el timeline
 function _expAudioLoopTrack(id) {
     const src = _expAudioTracks.find(t => t.id === id);
     if (!src || src._isTtsTrack) return;
     const totalDur = _expGetTotalDuration() || 1;
-    const audioDur = src.audioDuration || totalDur;
+    const audioDur = src.audioDuration;
+    if (!audioDur) { mostrarNotificacion('⚠ Esperando duración del audio…'); return; }
 
-    // Calcular el offset donde termina la última instancia
-    const allOffsets = [src.offset || 0, ...(src.extraOffsets || [])];
-    const lastOffset = allOffsets[allOffsets.length - 1];
-    const nextOffset = lastOffset + audioDur / totalDur;
+    // NLE puro: el nuevo clip ocupa en el timeline justo después del último clip existente.
+    // sourceStart=0 / sourceEnd=1 → reproduce el archivo completo (independiente del original).
+    const audioFrac = Math.min(1, audioDur / totalDur);
+    const lastEnd = src.clips.reduce((max, c) => Math.max(max, c.timeEnd), 0);
+    if (lastEnd >= 1) { mostrarNotificacion('⚠ No hay espacio para más repeticiones'); return; }
 
-    if (nextOffset >= 1) { mostrarNotificacion('⚠ No hay espacio para más repeticiones'); return; }
-
-    if (!src.extraOffsets) src.extraOffsets = [];
-    src.extraOffsets.push(nextOffset);
+    const newStart = lastEnd;
+    const newEnd = Math.min(1, newStart + audioFrac);
+    src._clipIdCounter = (src._clipIdCounter || 1) + 1;
+    src.clips.push({
+        id: src._clipIdCounter,
+        timeStart: newStart, timeEnd: newEnd,
+        sourceStart: 0, sourceEnd: 1,
+        fadeIn: 0, fadeOut: 0
+    });
 
     _expAudioRenderTracks();
     _expAudioUpdatePanelList();
-    mostrarNotificacion('🔁 Repetición añadida al track');
+    mostrarNotificacion('🔁 Repetición añadida');
 }
 
 // Abre el selector de audio en la carpeta Music usando File System Access API
@@ -2922,30 +2986,52 @@ function _expAudioSetMode(m) {
 }
 
 function _expAudioDeleteSelected() {
-    if (!_expAudioSelectedSeg) return;
-    const t = _expAudioTracks.find(t => t.id === _expAudioSelectedSeg.trackId);
-    if (t) { t.segments[_expAudioSelectedSeg.segIdx].deleted = true; _expAudioSelectedSeg = null; _expAudioRenderTracks(); }
+    // handled via context menu
 }
 
 function _expAudioUndoSplit() {
+    // Undo: fusionar los dos ultimos clips del ultimo track con historial
     for (let i = _expAudioTracks.length - 1; i >= 0; i--) {
         const t = _expAudioTracks[i];
-        if (t.splitHistory.length > 0) {
-            const last = t.splitHistory.pop();
-            t.segments.splice(last.segIdx, 2, last.orig);
+        if (t.clipHistory && t.clipHistory.length > 0) {
+            t.clips = t.clipHistory.pop();
             _expAudioSelectedSeg = null; _expAudioRenderTracks(); return;
         }
     }
 }
 
 function _expAudioSplitAt(t, frac) {
-    const si = t.segments.findIndex(s => !s.deleted && frac >= s.from && frac <= s.to);
+    // frac: posición en el TIMELINE (0-1 del video total)
+    const si = t.clips.findIndex(c => frac > c.timeStart && frac < c.timeEnd);
     if (si < 0) return;
-    const orig = t.segments[si];
-    t.splitHistory.push({ segIdx: si, orig: { ...orig } });
-    t.segments.splice(si, 1,
-        { from: orig.from, to: frac, deleted: false, fadeIn: orig.fadeIn, fadeOut: 0 },
-        { from: frac, to: orig.to, deleted: false, fadeIn: 0, fadeOut: orig.fadeOut }
+    const orig = t.clips[si];
+
+    // Calcular sourceStart/sourceEnd para cada mitad
+    const origSourceLen = orig.sourceEnd - orig.sourceStart;
+    const origTimeLen = orig.timeEnd - orig.timeStart;
+    // Qué fracción del source corresponde al punto de corte
+    const fracInClip = (frac - orig.timeStart) / origTimeLen;
+    const sourceSplit = orig.sourceStart + fracInClip * origSourceLen;
+
+    if (!t.clipHistory) t.clipHistory = [];
+    t.clipHistory.push(t.clips.map(c => ({ ...c }))); // snapshot undo
+
+    t._clipIdCounter = (t._clipIdCounter || 1) + 1;
+    const idB = t._clipIdCounter;
+
+    t.clips.splice(si, 1,
+        // Clip izquierdo: misma posición de inicio, termina en el punto de corte
+        {
+            id: orig.id, timeStart: orig.timeStart, timeEnd: frac,
+            sourceStart: orig.sourceStart, sourceEnd: sourceSplit,
+            fadeIn: orig.fadeIn, fadeOut: 0
+        },
+        // Clip derecho: nuevo id, arranca en el punto de corte
+        {
+            id: idB, timeStart: frac, timeEnd: orig.timeEnd,
+            sourceStart: sourceSplit, sourceEnd: orig.sourceEnd,
+            fadeIn: 0, fadeOut: orig.fadeOut
+        }
     );
     _expAudioMode = 'normal';
     const btn = document.getElementById('exp-btn-split');
@@ -3133,6 +3219,7 @@ function _expAudioRenderTracks() {
 
         const cv = document.createElement('canvas');
         cv.height = isExpanded ? 50 : ROW_COLLAPSED;
+        cv.dataset.trackId = t.id;
         wrap.appendChild(cv);
         canvasRow.appendChild(wrap);
         container.appendChild(canvasRow);
@@ -3149,166 +3236,152 @@ function _expAudioRenderTracks() {
 function _expAudioDrawTrack(canvas, t) {
     const c = canvas.getContext('2d'), W = canvas.width, H = canvas.height;
     c.clearRect(0, 0, W, H);
-    c.fillStyle = '#0a0a0a'; c.fillRect(0, 0, W, H);
 
-    // Todos los canvas usan espacio de VIDEO: 0=inicio, W=fin del video.
-    // TTS: bloque de 0 a W (100%). Música: de offset*W a (offset+audioDur/totalDur)*W.
+    // Fondo base
+    c.fillStyle = t._isTtsTrack ? '#0a0a0a' : '#101010';
+    c.fillRect(0, 0, W, H);
+
+    // Para tracks de música: calcular el ancho real de cada clip en tiempo real.
+    // clip.timeEnd puede ser un placeholder (1) si audioDuration aún no cargó.
+    // Se usa audioDuration / totalDuration para obtener la fracción proporcional real.
     const totalDur = _expGetTotalDuration() || 1;
-    const audioDur = (t.audioEl && t.audioEl.duration && isFinite(t.audioEl.duration))
-        ? t.audioEl.duration
-        : (t.audioDuration && isFinite(t.audioDuration) ? t.audioDuration : totalDur);
-    const trackOffset = t._isTtsTrack ? 0 : (t.offset || 0);
-    const audioFrac = t._isTtsTrack ? 1 : audioDur / totalDur;
-    const blockX1 = trackOffset * W;
-    const blockX2 = Math.min(W, blockX1 + audioFrac * W);
+    const audioFracPerClip = (!t._isTtsTrack && t.audioDuration)
+        ? Math.min(1, t.audioDuration / totalDur)
+        : null; // null = usar clip.timeEnd tal cual (TTS o duración desconocida)
 
-    // Calcular todos los bloques: principal + repeticiones (extraOffsets)
-    const _allOffsets = t._isTtsTrack ? [0] : [trackOffset, ...(t.extraOffsets || [])];
-    const _allBlocks = _allOffsets.map(off => ({
-        x1: off * W,
-        x2: Math.min(W, off * W + audioFrac * W)
-    })).filter(b => b.x1 < W && b.x2 > b.x1);
-
-    // Zonas fuera de todos los bloques → oscuro
-    if (!t._isTtsTrack) {
-        c.fillStyle = '#101010';
-        // Pintar fondo completo oscuro y luego "borrar" donde hay bloques
-        c.fillRect(0, 0, W, H);
-        _allBlocks.forEach(b => {
-            c.clearRect(b.x1, 0, b.x2 - b.x1, H);
-            c.fillStyle = '#0a0a0a'; c.fillRect(b.x1, 0, b.x2 - b.x1, H);
-        });
-        // Bordes de inicio de cada bloque
+    // Si aún no tenemos audioDuration para música, mostrar placeholder
+    if (!t._isTtsTrack && !t.audioDuration) {
+        c.fillStyle = t.color + '22'; c.fillRect(0, 0, W, H);
         c.fillStyle = t.color + '66';
-        _allBlocks.forEach(b => c.fillRect(b.x1, 0, 2, H));
-        // Separadores entre repeticiones (línea punteada)
-        if (_allBlocks.length > 1) {
-            c.strokeStyle = t.color + '44'; c.lineWidth = 1;
-            c.setLineDash([2, 3]);
-            _allBlocks.slice(1).forEach(b => {
-                c.beginPath(); c.moveTo(b.x1, 0); c.lineTo(b.x1, H); c.stroke();
-            });
-            c.setLineDash([]);
-        }
+        c.font = '9px "DM Mono",monospace'; c.textAlign = 'center'; c.textBaseline = 'middle';
+        c.fillText('cargando…', W / 2, H / 2);
+        const _vt = _expTtsGetCurrentTime(_expPreviewFrase);
+        const _cpx = Math.round(Math.max(0, Math.min(1, _vt / totalDur)) * W);
+        c.fillStyle = 'rgba(255,255,255,.7)'; c.fillRect(_cpx - 1, 0, 2, H);
+        return;
     }
 
-    // Dibujar segmentos para cada bloque
-    _allBlocks.forEach((blk, blkIdx) => {
-        const blockX1 = blk.x1, blockX2 = blk.x2;
-        t.segments.forEach((seg, idx) => {
-            if (seg.deleted) return;
-            // seg.from/to son fracción 0-1 DENTRO del audio → mapear al espacio del canvas
-            const x1 = blockX1 + seg.from * (blockX2 - blockX1);
-            const x2 = blockX1 + seg.to * (blockX2 - blockX1);
-            const sw = x2 - x1;
-            if (sw < 1) return;
-            const isSel = _expAudioSelectedSeg?.trackId === t.id && _expAudioSelectedSeg?.segIdx === idx;
+    // Cada clip se dibuja en su posición del TIMELINE (timeStart - timeEnd real)
+    t.clips.forEach((clip, idx) => {
+        const x1 = clip.timeStart * W;
+        // Para música: x2 = timeStart + audioFracPerClip (duración real del clip fuente)
+        // Para TTS: x2 = clip.timeEnd (gestionado por el sistema de pre-generación)
+        const x2 = audioFracPerClip !== null
+            ? Math.min(W, (clip.timeStart + audioFracPerClip * (clip.sourceEnd - clip.sourceStart)) * W)
+            : clip.timeEnd * W;
+        const sw = x2 - x1;
+        if (sw < 1) return;
 
-            // ── Calcular envelope de volumen para cada pixel del segmento ──────
-            // gainAt(relPos 0-1) devuelve multiplicador 0-1
-            function gainAt(n) {
-                let g = 1;
-                if (seg.fadeIn > 0 && n < seg.fadeIn) g = Math.min(g, n / seg.fadeIn);
-                if (seg.fadeOut > 0 && n > (1 - seg.fadeOut)) g = Math.min(g, (1 - n) / seg.fadeOut);
-                return Math.max(0, Math.min(1, g));
-            }
+        const isSel = _expAudioSelectedSeg?.trackId === t.id && _expAudioSelectedSeg?.segIdx === idx;
 
-            // ── Relleno del segmento usando el envelope como altura ────────────
+        // Fondo del clip
+        if (!t._isTtsTrack) {
+            c.fillStyle = '#0a0a0a'; c.fillRect(x1, 0, sw, H);
+        }
+
+        function gainAt(n) {
+            let g = 1;
+            if (clip.fadeIn > 0 && n < clip.fadeIn) g = Math.min(g, n / clip.fadeIn);
+            if (clip.fadeOut > 0 && n > (1 - clip.fadeOut)) g = Math.min(g, (1 - n) / clip.fadeOut);
+            return Math.max(0, Math.min(1, g));
+        }
+
+        // Relleno con envelope
+        c.beginPath();
+        for (let px = x1; px <= x2; px++) {
+            const n = sw > 0 ? (px - x1) / sw : 0;
+            const g = gainAt(n);
+            const envY = H - g * H;
+            if (px === x1) c.moveTo(px, envY); else c.lineTo(px, envY);
+        }
+        c.lineTo(x2, H); c.lineTo(x1, H); c.closePath();
+        c.fillStyle = t.muted ? '#1a1a1a' : (isSel ? t.color + '40' : t.color + '18');
+        c.fill();
+
+        if (!t.muted) {
+            // Waveform simulada
+            c.save();
             c.beginPath();
-            // Trazar la curva superior del envelope (de izquierda a derecha)
             for (let px = x1; px <= x2; px++) {
                 const n = sw > 0 ? (px - x1) / sw : 0;
-                const g = gainAt(n);
-                const envY = H - g * H; // g=1 → tope, g=0 → fondo
+                const envY = H - gainAt(n) * H;
                 if (px === x1) c.moveTo(px, envY); else c.lineTo(px, envY);
             }
-            // Cerrar por abajo
             c.lineTo(x2, H); c.lineTo(x1, H); c.closePath();
-            c.fillStyle = t.muted ? '#1a1a1a' : (isSel ? t.color + '40' : t.color + '18');
-            c.fill();
+            c.clip();
 
-            if (!t.muted) {
-                // ── Waveform simulada, recortada al envelope ────────────────────
-                c.save();
-                // Clip al área del envelope
+            c.strokeStyle = t.color + (isSel ? 'cc' : '66');
+            c.lineWidth = 1; c.beginPath();
+            const seed = t.id * 137;
+            for (let px = x1; px < x2; px++) {
+                const n = (px - x1) / sw;
+                const amp = Math.sin(n * 80 + seed) * Math.sin(n * 13 + seed * .3) * Math.cos(n * 5);
+                const g = gainAt(n);
+                const mid = H - g * H / 2;
+                const range = g * (H / 2 - 2);
+                const y = mid + amp * range;
+                px === x1 ? c.moveTo(px, y) : c.lineTo(px, y);
+            }
+            c.stroke();
+            c.restore();
+
+            // Línea de envelope
+            c.beginPath();
+            c.strokeStyle = t.color + 'cc';
+            c.lineWidth = 1.5;
+            for (let px = x1; px <= x2; px++) {
+                const n = sw > 0 ? (px - x1) / sw : 0;
+                const envY = H - gainAt(n) * H;
+                if (px === x1) c.moveTo(px, envY); else c.lineTo(px, envY);
+            }
+            c.stroke();
+
+            // Handle fade IN
+            {
+                const fiX = clip.fadeIn > 0 ? x1 + sw * clip.fadeIn : x1;
+                c.fillStyle = clip.fadeIn > 0 ? t.color + 'ee' : t.color + '44';
                 c.beginPath();
-                for (let px = x1; px <= x2; px++) {
-                    const n = sw > 0 ? (px - x1) / sw : 0;
-                    const g = gainAt(n);
-                    const envY = H - g * H;
-                    if (px === x1) c.moveTo(px, envY); else c.lineTo(px, envY);
+                c.moveTo(fiX - 6, 1); c.lineTo(fiX + 6, 1); c.lineTo(fiX, 10);
+                c.closePath(); c.fill();
+                if (clip.fadeIn > 0 && sw * clip.fadeIn > 28) {
+                    c.fillStyle = t.color + '99';
+                    c.font = '8px "DM Mono",monospace'; c.textAlign = 'left'; c.textBaseline = 'top';
+                    c.fillText('fade in', x1 + 3, 12);
                 }
-                c.lineTo(x2, H); c.lineTo(x1, H); c.closePath();
-                c.clip();
-
-                // Dibujar waveform dentro del clip
-                c.strokeStyle = t.color + (isSel ? 'cc' : '66');
-                c.lineWidth = 1; c.beginPath();
-                const seed = t.id * 137;
-                for (let px = x1; px < x2; px++) {
-                    const n = (px - x1) / sw;
-                    const amp = Math.sin(n * 80 + seed) * Math.sin(n * 13 + seed * .3) * Math.cos(n * 5);
-                    const g = gainAt(n);
-                    const mid = H - g * H / 2;          // centro vertical del envelope en este punto
-                    const range = g * (H / 2 - 2);       // amplitud proporcional al gain
-                    const y = mid + amp * range;
-                    px === x1 ? c.moveTo(px, y) : c.lineTo(px, y);
-                }
-                c.stroke();
-                c.restore();
-
-                // ── Línea de envelope (la línea visible de volumen) ─────────────
+            }
+            // Handle fade OUT
+            {
+                const foX = clip.fadeOut > 0 ? x2 - sw * clip.fadeOut : x2;
+                c.fillStyle = clip.fadeOut > 0 ? t.color + 'ee' : t.color + '44';
                 c.beginPath();
-                c.strokeStyle = t.color + 'cc';
-                c.lineWidth = 1.5;
-                for (let px = x1; px <= x2; px++) {
-                    const n = sw > 0 ? (px - x1) / sw : 0;
-                    const g = gainAt(n);
-                    const envY = H - g * H;
-                    if (px === x1) c.moveTo(px, envY); else c.lineTo(px, envY);
+                c.moveTo(foX - 6, 1); c.lineTo(foX + 6, 1); c.lineTo(foX, 10);
+                c.closePath(); c.fill();
+                if (clip.fadeOut > 0 && sw * clip.fadeOut > 28) {
+                    c.fillStyle = t.color + '99';
+                    c.font = '8px "DM Mono",monospace'; c.textAlign = 'right'; c.textBaseline = 'top';
+                    c.fillText('fade out', x2 - 3, 12);
                 }
-                c.stroke();
-
-                // ── Handles de fade (triángulos arrastrables) ──────────────────
-                if (seg.fadeIn > 0) {
-                    const fiX = x1 + sw * seg.fadeIn;
-                    const fiY = 0; // tope del fade in
-                    c.fillStyle = t.color + 'ee';
-                    c.beginPath();
-                    c.moveTo(fiX - 6, 1); c.lineTo(fiX + 6, 1); c.lineTo(fiX, 10);
-                    c.closePath(); c.fill();
-                    if (sw * seg.fadeIn > 28) {
-                        c.fillStyle = t.color + '99';
-                        c.font = '8px "DM Mono",monospace'; c.textAlign = 'left'; c.textBaseline = 'top';
-                        c.fillText('fade in', x1 + 3, 12);
-                    }
-                }
-                if (seg.fadeOut > 0) {
-                    const foX = x2 - sw * seg.fadeOut;
-                    c.fillStyle = t.color + 'ee';
-                    c.beginPath();
-                    c.moveTo(foX - 6, 1); c.lineTo(foX + 6, 1); c.lineTo(foX, 10);
-                    c.closePath(); c.fill();
-                    if (sw * seg.fadeOut > 28) {
-                        c.fillStyle = t.color + '99';
-                        c.font = '8px "DM Mono",monospace'; c.textAlign = 'right'; c.textBaseline = 'top';
-                        c.fillText('fade out', x2 - 3, 12);
-                    }
-                }
-
-                // Borde izquierdo del segmento
-                c.fillStyle = t.color + 'cc'; c.fillRect(x1, 0, 2, H);
             }
 
-            if (isSel) {
-                c.strokeStyle = t.color + 'aa'; c.lineWidth = 1.5;
-                c.strokeRect(x1 + 1, 1, sw - 2, H - 2);
-            }
-        }); // end t.segments.forEach
-    }); // end _allBlocks.forEach
+            // Borde izquierdo del clip
+            c.fillStyle = t.color + 'cc'; c.fillRect(x1, 0, 2, H);
+        }
 
-    // ── Cursor de posición — TODOS los tracks usan fracción del video ────
-    // cursorFrac = videoTimeSecs / totalDuration → siempre alineado entre tracks
+        if (isSel) {
+            c.strokeStyle = t.color + 'aa'; c.lineWidth = 1.5;
+            c.strokeRect(x1 + 1, 1, sw - 2, H - 2);
+        }
+
+        // Separador entre clips (línea punteada)
+        if (idx > 0) {
+            c.strokeStyle = t.color + '44'; c.lineWidth = 1;
+            c.setLineDash([2, 3]);
+            c.beginPath(); c.moveTo(x1, 0); c.lineTo(x1, H); c.stroke();
+            c.setLineDash([]);
+        }
+    });
+
+    // Cursor de posición
     const _totalDurCursor = _expGetTotalDuration() || 1;
     const _videoTimeCursor = _expTtsGetCurrentTime(_expPreviewFrase);
     const cursorFrac = _videoTimeCursor / _totalDurCursor;
@@ -3359,15 +3432,17 @@ function _expApplyZoom() {
 
 // ─── Eventos de track ───────────────────────────────────────────────
 const _EXP_FADE_HIT = 10;
-let _expAudioOffsetDrag = null; // { trackId, canvasEl, startX, origOffset }
+let _expAudioOffsetDrag = null; // { trackId, canvasEl, startX, clipIdx, origStart }
 
-function _expAudioGetFadeHandle(canvas, t, cx) {
-    const W = canvas.width;
-    for (let idx = 0; idx < t.segments.length; idx++) {
-        const seg = t.segments[idx]; if (seg.deleted) continue;
-        const x1 = seg.from * W, x2 = seg.to * W, sw = x2 - x1;
-        if (seg.fadeIn > 0 && Math.abs(cx - (x1 + sw * seg.fadeIn)) <= _EXP_FADE_HIT) return { idx, side: 'in' };
-        if (seg.fadeOut > 0 && Math.abs(cx - (x2 - sw * seg.fadeOut)) <= _EXP_FADE_HIT) return { idx, side: 'out' };
+function _expAudioGetFadeHandle(canvas, t, cxVisual, rectWidth) {
+    const W = rectWidth || canvas.getBoundingClientRect().width || canvas.width;
+    for (let idx = 0; idx < (t.clips || []).length; idx++) {
+        const clip = t.clips[idx];
+        const x1 = clip.timeStart * W, x2 = clip.timeEnd * W, sw = x2 - x1;
+        const fiHitX = clip.fadeIn > 0 ? (x1 + sw * clip.fadeIn) : x1;
+        if (Math.abs(cxVisual - fiHitX) <= _EXP_FADE_HIT && cxVisual <= x1 + sw * 0.5) return { idx, side: 'in' };
+        const foHitX = clip.fadeOut > 0 ? (x2 - sw * clip.fadeOut) : x2;
+        if (Math.abs(cxVisual - foHitX) <= _EXP_FADE_HIT && cxVisual >= x1 + sw * 0.5) return { idx, side: 'out' };
     }
     return null;
 }
@@ -3380,7 +3455,7 @@ function _expAudioBindTrackEvents(wrap, canvas, t) {
         const cx = (e.clientX - rect.left) * (canvas.width / rect.width);
         const fh = _expAudioGetFadeHandle(canvas, t, cx);
         if (fh) {
-            const seg = t.segments[fh.idx];
+            const seg = t.clips[fh.idx];
             _expAudioFadeDrag = {
                 trackId: t.id, segIdx: fh.idx, side: fh.side, canvasEl: canvas,
                 startX: e.clientX, origFade: fh.side === 'in' ? seg.fadeIn : seg.fadeOut
@@ -3391,27 +3466,19 @@ function _expAudioBindTrackEvents(wrap, canvas, t) {
         }
         const frac = cx / canvas.width;
         if (_expAudioMode === 'split') { _expAudioSplitAt(t, frac); return; }
-        // Para tracks de música (no TTS): detectar en qué bloque se hizo click y arrastrarlo
+        // Para tracks de música (no TTS): detectar en qué clip NLE está el click y arrastrarlo
         if (!t._isTtsTrack) {
-            const totalDur = _expGetTotalDuration() || 1;
-            const audioDur = t.audioDuration || totalDur;
-            const audioFrac = audioDur / totalDur;
-            const allOffsets = [t.offset || 0, ...(t.extraOffsets || [])];
-            // Determinar qué bloque contiene el click
-            let dragBlockIdx = 0; // 0 = offset principal, 1+ = extraOffsets
-            for (let bi = 0; bi < allOffsets.length; bi++) {
-                const bx1 = allOffsets[bi] * canvas.width;
-                const bx2 = Math.min(canvas.width, bx1 + audioFrac * canvas.width);
-                if (cx >= bx1 - 4 && cx <= bx2 + 4) { dragBlockIdx = bi; break; }
+            const clipIdx = (t.clips || []).findIndex(c => frac >= c.timeStart && frac <= c.timeEnd);
+            if (clipIdx >= 0) {
+                const origStart = t.clips[clipIdx].timeStart;
+                _expAudioOffsetDrag = { trackId: t.id, canvasEl: canvas, startX: e.clientX, clipIdx, origStart };
+                wrap.style.cursor = 'grabbing';
+                document.addEventListener('mousemove', _expAudioOnOffsetDrag);
+                document.addEventListener('mouseup', _expAudioOnOffsetDragEnd, { once: true });
             }
-            const origOff = dragBlockIdx === 0 ? (t.offset || 0) : t.extraOffsets[dragBlockIdx - 1];
-            _expAudioOffsetDrag = { trackId: t.id, canvasEl: canvas, startX: e.clientX, origOffset: origOff, blockIdx: dragBlockIdx };
-            wrap.style.cursor = 'grabbing';
-            document.addEventListener('mousemove', _expAudioOnOffsetDrag);
-            document.addEventListener('mouseup', _expAudioOnOffsetDragEnd, { once: true });
             return;
         }
-        const si = t.segments.findIndex(s => !s.deleted && frac >= s.from && frac <= s.to);
+        const si = (t.clips || []).findIndex(c => frac >= c.timeStart && frac <= c.timeEnd);
         _expAudioSelectedSeg = si >= 0 ? { trackId: t.id, segIdx: si } : null;
         _expAudioRenderTracks();
     });
@@ -3422,7 +3489,7 @@ function _expAudioBindTrackEvents(wrap, canvas, t) {
         const fh = _expAudioGetFadeHandle(canvas, t, cx);
         if (fh) {
             wrap.style.cursor = 'ew-resize';
-            const seg = t.segments[fh.idx];
+            const seg = t.clips[fh.idx];
             const pct = Math.round((fh.side === 'in' ? seg.fadeIn : seg.fadeOut) * 100);
             if (tooltip) { tooltip.style.display = 'block'; tooltip.style.left = (e.clientX + 12) + 'px'; tooltip.style.top = (e.clientY - 24) + 'px'; tooltip.textContent = fh.side === 'in' ? `◁ Fade in: ${pct}%` : `▷ Fade out: ${pct}%`; }
         } else {
@@ -3441,7 +3508,7 @@ function _expAudioBindTrackEvents(wrap, canvas, t) {
         e.preventDefault();
         const rect = wrap.getBoundingClientRect();
         const frac = (e.clientX - rect.left) / rect.width;
-        const si = t.segments.findIndex(s => !s.deleted && frac >= s.from && frac <= s.to);
+        const si = (t.clips || []).findIndex(c => frac >= c.timeStart && frac <= c.timeEnd);
         _expAudioCtxTarget = si >= 0 ? { t, segIdx: si, frac } : null;
         const menu = document.getElementById('exp-ctx-menu');
         if (menu) { menu.style.display = 'block'; menu.style.left = e.clientX + 'px'; menu.style.top = e.clientY + 'px'; }
@@ -3451,30 +3518,32 @@ function _expAudioBindTrackEvents(wrap, canvas, t) {
 
 function _expAudioOnOffsetDrag(e) {
     if (!_expAudioOffsetDrag) return;
-    const t = _expAudioTracks.find(t => t.id === _expAudioOffsetDrag.trackId);
-    if (!t) return;
+    const t = _expAudioTracks.find(t => t.id === _expAudioOffsetDrag.trackId); if (!t) return;
     const canvas = _expAudioOffsetDrag.canvasEl;
     const W = canvas.getBoundingClientRect().width || canvas.width;
     const dx = e.clientX - _expAudioOffsetDrag.startX;
     const deltaFrac = dx / W;
-    const newOff = Math.max(0, Math.min(0.999, _expAudioOffsetDrag.origOffset + deltaFrac));
-    const bi = _expAudioOffsetDrag.blockIdx || 0;
-    if (bi === 0) {
-        t.offset = newOff;
-    } else {
-        if (!t.extraOffsets) t.extraOffsets = [];
-        t.extraOffsets[bi - 1] = newOff;
-    }
+
+    const clipIdx = _expAudioOffsetDrag.clipIdx;
+    const clip = t.clips[clipIdx];
+    if (!clip) return;
+
+    const clipLen = clip.timeEnd - clip.timeStart;
+    const newStart = Math.max(0, Math.min(1 - clipLen, _expAudioOffsetDrag.origStart + deltaFrac));
+    clip.timeStart = newStart;
+    clip.timeEnd = newStart + clipLen;
+
     _expAudioDrawTrack(canvas, t);
     const tooltip = document.getElementById('exp-fade-tooltip');
     if (tooltip) {
-        const pct = Math.round(newOff * 100);
+        const pct = Math.round(newStart * 100);
         tooltip.style.display = 'block';
         tooltip.style.left = (e.clientX + 12) + 'px';
         tooltip.style.top = (e.clientY - 24) + 'px';
         tooltip.textContent = `⟺ Inicio: ${pct}%`;
     }
 }
+
 
 function _expAudioOnOffsetDragEnd(e) {
     if (!_expAudioOffsetDrag) return;
@@ -3495,8 +3564,9 @@ function _expAudioOnOffsetDragEnd(e) {
 function _expAudioOnFadeDrag(e) {
     if (!_expAudioFadeDrag) return;
     const t = _expAudioTracks.find(t => t.id === _expAudioFadeDrag.trackId); if (!t) return;
-    const seg = t.segments[_expAudioFadeDrag.segIdx];
-    const W = _expAudioFadeDrag.canvasEl.width, sw = (seg.to - seg.from) * W;
+    const seg = t.clips[_expAudioFadeDrag.segIdx];
+    const W = _expAudioFadeDrag.rectWidth || _expAudioFadeDrag.canvasEl.getBoundingClientRect().width;
+    const sw = (seg.timeEnd - seg.timeStart) * W;
     const dx = e.clientX - _expAudioFadeDrag.startX;
     let nf = _expAudioFadeDrag.origFade + (_expAudioFadeDrag.side === 'in' ? dx : -dx) / sw;
     nf = Math.max(0, Math.min(0.95, nf));
@@ -3517,11 +3587,181 @@ function _expAudioCloseCtxMenu() {
     const menu = document.getElementById('exp-ctx-menu');
     if (menu) menu.style.display = 'none';
 }
-function _expAudioCtxSplit() { if (_expAudioCtxTarget) _expAudioSplitAt(_expAudioCtxTarget.t, _expAudioCtxTarget.frac); _expAudioCloseCtxMenu(); }
-function _expAudioCtxDelete() { if (_expAudioCtxTarget) { _expAudioCtxTarget.t.segments[_expAudioCtxTarget.segIdx].deleted = true; _expAudioSelectedSeg = null; _expAudioRenderTracks(); } _expAudioCloseCtxMenu(); }
-function _expAudioCtxFadeIn() { if (_expAudioCtxTarget) { _expAudioCtxTarget.t.segments[_expAudioCtxTarget.segIdx].fadeIn = 0.25; _expAudioRenderTracks(); } _expAudioCloseCtxMenu(); }
-function _expAudioCtxFadeOut() { if (_expAudioCtxTarget) { _expAudioCtxTarget.t.segments[_expAudioCtxTarget.segIdx].fadeOut = 0.25; _expAudioRenderTracks(); } _expAudioCloseCtxMenu(); }
 
+// ── Fade: pedir porcentaje por input ────────────────────────────────
+function _expAudioCtxFadeIn() {
+    _expAudioCloseCtxMenu();
+    if (!_expAudioCtxTarget) return;
+    _expPromptPct('◁ Fade IN — ¿Cuánto % del segmento?', val => {
+        _expAudioCtxTarget.t.clips[_expAudioCtxTarget.segIdx].fadeIn = val;
+        _expAudioRenderTracks();
+    });
+}
+function _expAudioCtxFadeOut() {
+    _expAudioCloseCtxMenu();
+    if (!_expAudioCtxTarget) return;
+    _expPromptPct('▷ Fade OUT — ¿Cuánto % del segmento?', val => {
+        _expAudioCtxTarget.t.clips[_expAudioCtxTarget.segIdx].fadeOut = val;
+        _expAudioRenderTracks();
+    });
+}
+function _expPromptPct(label, cb) {
+    const old = document.getElementById('exp-pct-prompt');
+    if (old) old.remove();
+    const d = document.createElement('div');
+    d.id = 'exp-pct-prompt';
+    d.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#111;border:1px solid #3a3a3a;border-radius:8px;padding:18px 22px;z-index:100000;font-family:"DM Mono",monospace;color:#e8e0d0;min-width:220px;box-shadow:0 12px 40px rgba(0,0,0,.8);';
+    d.innerHTML = `
+        <div style="font-size:.52rem;color:#c8a96e;margin-bottom:10px;">${label}</div>
+        <div style="display:flex;align-items:center;gap:8px;">
+            <input id="exp-pct-input" type="number" min="1" max="95" value="25"
+                   style="width:64px;background:#1a1a1a;border:1px solid #3a3a3a;border-radius:4px;
+                          color:#e8e0d0;font-family:'DM Mono',monospace;font-size:.6rem;
+                          padding:4px 8px;outline:none;text-align:center;">
+            <span style="font-size:.5rem;color:#666;">% (1–95)</span>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:12px;justify-content:flex-end;">
+            <button onclick="document.getElementById('exp-pct-prompt').remove()"
+                    style="background:none;border:1px solid #2a2a2a;border-radius:4px;color:#555;
+                           font-family:'DM Mono',monospace;font-size:.5rem;padding:4px 12px;cursor:pointer;">
+                Cancelar
+            </button>
+            <button id="exp-pct-ok"
+                    style="background:#c8a96e;border:none;border-radius:4px;color:#0a0908;
+                           font-family:'DM Mono',monospace;font-size:.5rem;font-weight:700;
+                           padding:4px 14px;cursor:pointer;">
+                Aplicar
+            </button>
+        </div>`;
+    document.body.appendChild(d);
+    const inp = document.getElementById('exp-pct-input');
+    inp.focus(); inp.select();
+    document.getElementById('exp-pct-ok').onclick = () => {
+        const v = Math.max(1, Math.min(95, parseInt(inp.value) || 25)) / 100;
+        d.remove(); cb(v);
+    };
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('exp-pct-ok').click(); if (e.key === 'Escape') d.remove(); });
+}
+
+// ── Split: marcador arrastrable sobre el canvas ─────────────────────
+function _expAudioCtxSplit() {
+    _expAudioCloseCtxMenu();
+    if (!_expAudioCtxTarget) return;
+    const { t, frac } = _expAudioCtxTarget;
+    const canvasEl = document.querySelector(`canvas[data-track-id="${t.id}"]`);
+    if (!canvasEl) { _expAudioSplitAt(t, frac); return; }
+    const wrap = canvasEl.closest('.exp-track-canvas-wrap');
+    if (!wrap) { _expAudioSplitAt(t, frac); return; }
+    const old = document.getElementById('exp-split-marker');
+    if (old) old.remove();
+    const marker = document.createElement('div');
+    marker.id = 'exp-split-marker';
+    marker.style.cssText = 'position:absolute;top:0;bottom:0;width:2px;background:#c8a96e;cursor:ew-resize;z-index:10;pointer-events:auto;';
+    marker.style.left = (frac * 100) + '%';
+    const tri = document.createElement('div');
+    tri.style.cssText = 'position:absolute;top:0;left:50%;transform:translateX(-50%);width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:7px solid #c8a96e;';
+    marker.appendChild(tri);
+    const lbl = document.createElement('div');
+    lbl.style.cssText = 'position:absolute;top:-26px;left:50%;transform:translateX(-50%);background:#c8a96e;color:#0a0908;font-family:"DM Mono",monospace;font-size:.42rem;font-weight:700;padding:2px 7px;border-radius:3px;white-space:nowrap;pointer-events:none;';
+    lbl.textContent = '✂ arrastrar · click para cortar';
+    marker.appendChild(lbl);
+    wrap.style.position = 'relative';
+    wrap.appendChild(marker);
+    let currentFrac = frac;
+    marker.addEventListener('mousedown', e => {
+        e.stopPropagation();
+        const rect = wrap.getBoundingClientRect();
+        const onMove = ev => {
+            currentFrac = Math.max(0.01, Math.min(0.99, (ev.clientX - rect.left) / rect.width));
+            marker.style.left = (currentFrac * 100) + '%';
+        };
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', () => document.removeEventListener('mousemove', onMove), { once: true });
+    });
+    marker.addEventListener('click', e => { e.stopPropagation(); marker.remove(); _expAudioSplitAt(t, currentFrac); });
+    setTimeout(() => {
+        const cancel = ev => {
+            if (!marker.isConnected) { document.removeEventListener('mousedown', cancel); return; }
+            if (!marker.contains(ev.target)) { marker.remove(); document.removeEventListener('mousedown', cancel); }
+        };
+        document.addEventListener('mousedown', cancel);
+    }, 200);
+}
+
+// ── Eliminar: listar segmentos y preguntar cuál ─────────────────────
+function _expAudioCtxDelete() {
+    _expAudioCloseCtxMenu();
+    if (!_expAudioCtxTarget) return;
+    const t = _expAudioCtxTarget.t;
+    const clips = t.clips || [];
+    const active = clips.map((c, i) => ({ c, i }));
+    if (active.length === 0) return;
+
+    function _removeClip(clipIdx) {
+        const clips = t.clips;
+        const target = clips[clipIdx];
+        const prev = clips[clipIdx - 1];
+        const next = clips[clipIdx + 1];
+        if (prev && next) {
+            const mid = target.timeStart + (target.timeEnd - target.timeStart) / 2;
+            prev.timeEnd = mid;
+            next.timeStart = mid;
+        } else if (prev) {
+            prev.timeEnd = target.timeEnd;
+        } else if (next) {
+            next.timeStart = target.timeStart;
+        }
+        t.clips.splice(clipIdx, 1);
+        _expAudioSelectedSeg = null;
+        _expAudioRenderTracks();
+    }
+
+    if (active.length === 1) {
+        _removeClip(active[0].i);
+        return;
+    }
+    const old = document.getElementById('exp-del-prompt');
+    if (old) old.remove();
+    const d = document.createElement('div');
+    d.id = 'exp-del-prompt';
+    d.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#111;border:1px solid #3a3a3a;border-radius:8px;padding:18px 22px;z-index:100000;font-family:"DM Mono",monospace;color:#e8e0d0;min-width:240px;box-shadow:0 12px 40px rgba(0,0,0,.8);';
+    const items = active.map((x, n) => {
+        const pct1 = Math.round(x.c.timeStart * 100), pct2 = Math.round(x.c.timeEnd * 100);
+        return `<div class="exp-del-item" data-segidx="${x.i}"
+            style="padding:6px 10px;border-radius:4px;cursor:pointer;font-size:.5rem;color:#888;
+                   border:1px solid #1e1e1e;margin-bottom:5px;transition:all .12s;"
+            onmouseover="this.style.background='#1a1a1a';this.style.color='#cc6655';this.style.borderColor='#cc6655';"
+            onmouseout="this.style.background='';this.style.color='#888';this.style.borderColor='#1e1e1e';">
+            Segmento ${n + 1} &nbsp;<span style="color:#444;">(${pct1}% - ${pct2}%)</span>
+        </div>`;
+    }).join('');
+    d.innerHTML = `
+        <div style="font-size:.52rem;color:#c8a96e;margin-bottom:12px;">Que segmento eliminar?</div>
+        ${items}
+        <div style="margin-top:10px;text-align:right;">
+            <button onclick="document.getElementById('exp-del-prompt').remove()"
+                    style="background:none;border:1px solid #2a2a2a;border-radius:4px;color:#555;
+                           font-family:'DM Mono',monospace;font-size:.5rem;padding:4px 12px;cursor:pointer;">
+                Cancelar
+            </button>
+        </div>`;
+    document.body.appendChild(d);
+    d.querySelectorAll('.exp-del-item').forEach(el => {
+        el.addEventListener('mousedown', e => e.stopPropagation());
+        el.addEventListener('click', () => {
+            d.remove();
+            _removeClip(parseInt(el.dataset.segidx));
+        });
+    });
+    // Cerrar al click fuera
+    setTimeout(() => {
+        const cancel = ev => {
+            if (!d.isConnected) { document.removeEventListener('mousedown', cancel); return; }
+            if (!d.contains(ev.target)) { d.remove(); document.removeEventListener('mousedown', cancel); }
+        };
+        document.addEventListener('mousedown', cancel);
+    }, 200);
+}
 function _expAudioSoloToggle() {
     const btn = document.getElementById('exp-audio-solo-btn');
     if (!btn) return;
@@ -3575,10 +3815,10 @@ function _expAudioUpdatePanelList() {
 
 // ───────────────────────────────────────────────────────────────────
 // MEZCLA DE AUDIO (OfflineAudioContext → WAV blob)
+// Mezcla TTS + todos los tracks de música con fade in/out aplicado sample a sample.
 // ───────────────────────────────────────────────────────────────────
 async function _expMezclarAudio(buffers, duraciones) {
     // Detectar el sampleRate real del primer buffer disponible
-    // (XTTS suele ser 24000, Edge TTS 24000 o 48000 — no asumir 22050)
     let sampleRate = 24000;
     const tmpCtx = new AudioContext();
     for (let i = 0; i < buffers.length; i++) {
@@ -3594,6 +3834,8 @@ async function _expMezclarAudio(buffers, duraciones) {
 
     const totalSecs = duraciones.reduce((a, b) => a + b, 0);
     const totalSamples = Math.ceil(totalSecs * sampleRate);
+
+    // ── Paso 1: render TTS en OfflineAudioContext ──
     const offCtx = new OfflineAudioContext(1, totalSamples, sampleRate);
     let offset = 0;
     for (let i = 0; i < buffers.length; i++) {
@@ -3608,8 +3850,91 @@ async function _expMezclarAudio(buffers, duraciones) {
         }
         offset += duraciones[i];
     }
-    const rendered = await offCtx.startRendering();
-    return _audioBufferToWavBlob(rendered);
+    const ttsRendered = await offCtx.startRendering();
+    const ttsData = ttsRendered.getChannelData(0); // Float32Array
+
+    // ── Paso 2: mezclar tracks de música con fades sample a sample ──
+    const musicTracks = (_expAudioTracks || []).filter(t => !t._isTtsTrack && !t.muted && t.audioUrl);
+
+    if (musicTracks.length === 0) {
+        // Sin música — devolver solo TTS
+        return _audioBufferToWavBlob(ttsRendered);
+    }
+
+    // Buffer de salida final (stereo si hay música, mono si no)
+    const outSamples = totalSamples;
+    const outData = new Float32Array(outSamples);
+    // Copiar TTS al buffer de salida
+    for (let s = 0; s < outSamples; s++) outData[s] = ttsData[s] || 0;
+
+    // Decodificar y mezclar cada track de música
+    const decodeCtx = new AudioContext();
+    for (const track of musicTracks) {
+        let musicBuffer = null;
+        try {
+            const resp = await fetch(track.audioUrl);
+            const arrBuf = await resp.arrayBuffer();
+            musicBuffer = await decodeCtx.decodeAudioData(arrBuf);
+        } catch (e) {
+            console.warn('[export] no se pudo decodificar track:', track.name, e.message);
+            continue;
+        }
+
+        const musicSr = musicBuffer.sampleRate;
+        const musicData = musicBuffer.getChannelData(0);
+        const musicDur = musicBuffer.duration;
+        const volFactor = (track.volume || 100) / 100;
+
+        // Procesar cada clip del track NLE
+        for (const clip of (track.clips || [])) {
+            // clip.timeStart/timeEnd → fracción del video total (0-1)
+            // clip.sourceStart/sourceEnd → fracción del archivo de audio fuente (0-1)
+            const clipStartSec = clip.timeStart * totalSecs;
+            const clipEndSec = clip.timeEnd * totalSecs;
+            const clipDurSec = clipEndSec - clipStartSec;
+            if (clipDurSec <= 0) continue;
+
+            const srcStartSec = clip.sourceStart * musicDur;
+            const srcEndSec = clip.sourceEnd * musicDur;
+            const srcDurSec = srcEndSec - srcStartSec;
+            if (srcDurSec <= 0) continue;
+
+            const clipStartSample = Math.round(clipStartSec * sampleRate);
+            const clipEndSample = Math.min(outSamples, Math.round(clipEndSec * sampleRate));
+
+            for (let s = clipStartSample; s < clipEndSample; s++) {
+                // Posición normalizada dentro del clip (0-1)
+                const posInClip = (s - clipStartSample) / (clipEndSample - clipStartSample);
+
+                // Calcular envelope fade in/out (igual que mp3cut: lineal sample a sample)
+                let fade = 1.0;
+                if (clip.fadeIn > 0 && posInClip < clip.fadeIn)
+                    fade = Math.min(fade, posInClip / clip.fadeIn);
+                if (clip.fadeOut > 0 && posInClip > (1 - clip.fadeOut))
+                    fade = Math.min(fade, (1 - posInClip) / clip.fadeOut);
+                fade = Math.max(0, Math.min(1, fade));
+
+                // Mapear a muestra del source
+                const srcPos = srcStartSec + posInClip * srcDurSec;
+                const srcSample = Math.floor(srcPos * musicSr);
+                if (srcSample < 0 || srcSample >= musicData.length) continue;
+
+                outData[s] += musicData[srcSample] * volFactor * fade;
+            }
+        }
+    }
+    decodeCtx.close();
+
+    // Normalizar si hay clipping (> 1.0 o < -1.0)
+    let peak = 0;
+    for (let s = 0; s < outSamples; s++) { const a = Math.abs(outData[s]); if (a > peak) peak = a; }
+    if (peak > 1.0) { const inv = 1 / peak; for (let s = 0; s < outSamples; s++) outData[s] *= inv; }
+
+    // Construir AudioBuffer final y convertir a WAV
+    const outCtx = new OfflineAudioContext(1, outSamples, sampleRate);
+    const outBuf = outCtx.createBuffer(1, outSamples, sampleRate);
+    outBuf.copyToChannel(outData, 0);
+    return _audioBufferToWavBlob(outBuf);
 }
 
 function _audioBufferToWavBlob(ab) {

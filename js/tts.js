@@ -46,16 +46,41 @@ async function verificarServidorTTS() {
     return false;
 }
 
+// Normaliza el texto antes de enviarlo al TTS para evitar artefactos de audio.
+// Las interjecciones cortas como "uh", "oh", "ah" se renderizan mal en Edge TTS
+// porque son tokens raros de baja frecuencia — se expanden a formas equivalentes.
+function _normalizarTextoTTS(texto) {
+    if (!texto) return texto;
+    return texto
+        // Interjecciones sueltas (con o sin puntuación alrededor) → forma expandida
+        // Priorizar coincidencias de palabra completa (límite \b)
+        .replace(/\buh[,\.\!\?]*/gi, 'eh')
+        .replace(/\buhh+[,\.\!\?]*/gi, 'eh')
+        .replace(/\buhm+[,\.\!\?]*/gi, 'em')
+        .replace(/\bumm+[,\.\!\?]*/gi, 'em')
+        .replace(/\bhmm+[,\.\!\?]*/gi, 'mm')
+        .replace(/\bhm[,\.\!\?]*/gi, 'mm')
+        // "oh" solo cuando está aislado o como exclamación (no dentro de palabras)
+        .replace(/(?<![a-záéíóúüñA-ZÁÉÍÓÚÜÑ])oh[,\.\!\?]*(?![a-záéíóúüñA-ZÁÉÍÓÚÜÑ])/g, 'o')
+        // Guion largo al inicio (diálogo) seguido de interjección
+        .replace(/^[\u2013\u2014\-]\s*uh\b/i, '— eh')
+        .replace(/^[\u2013\u2014\-]\s*oh\b/i, '— o')
+        // Limpiar espacios dobles que puedan haber quedado
+        .replace(/\s{2,}/g, ' ')
+        .trim();
+}
+
 // Generar audio usando la API local.
 // IMPORTANTE: NO modifica servidorTTSDisponible — los errores transitorios
 // (timeout, frase vacía, red momentánea) no deben apagar el motor globalmente.
 // Solo verificarServidorTTS() puede cambiar ese flag.
 async function generarAudioLocal(texto, { silencioso = false } = {}) {
     try {
+        const textoNorm = _normalizarTextoTTS(texto);
         const response = await fetch(`${TTS_API_URL}/tts`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: texto, voice: _edgeTtsVoice })
+            body: JSON.stringify({ text: textoNorm, voice: _edgeTtsVoice })
         });
 
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
