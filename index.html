@@ -593,6 +593,7 @@
                         <button onclick="videoMusicaPrev()" style="background:none;border:none;color:var(--text-dim);font-size:0.85rem;cursor:pointer;padding:0;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-dim)'">&#9664;</button>
                         <button id="kbtn-ambient-playpause" onclick="videoToggleAmbient()" style="background:none;border:none;color:var(--accent);font-size:1.1rem;cursor:pointer;padding:0;">&#9654;</button>
                         <button onclick="videoMusicaSiguiente()" style="background:none;border:none;color:var(--text-dim);font-size:0.85rem;cursor:pointer;padding:0;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-dim)'">&#9654;</button>
+                        <button id="kbtn-ambient-loop" onclick="toggleAmbientLoop()" title="Loop música" style="background:none;border:none;color:var(--text-dim);font-size:0.85rem;cursor:pointer;padding:0;transition:color 0.2s;" onmouseover="this.style.color='var(--accent)'" onmouseout="if(!window._ambientLoopOn){this.style.color='var(--text-dim)'}">🔁</button>
                         <div style="flex:1;min-width:0;">
                             <div style="font-family:'DM Mono',monospace;font-size:0.6rem;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" id="video-music-label-full">─</div>
                             <div style="font-size:0.52rem;color:var(--text-dim);" id="video-music-genre-label">─</div>
@@ -836,6 +837,21 @@
     <script src="js/ui.js"></script>
     <!-- Inicialización de UI — debe cargarse después de ui.js -->
     <script src="js/init.js"></script>
+    <script>
+        // ── Loop música ambiente ──────────────────────────────────────────
+        window._ambientLoopOn = false;
+        function toggleAmbientLoop() {
+            window._ambientLoopOn = !window._ambientLoopOn;
+            // Aplicar al elemento de audio ambiente — video.js puede exponerlo con distintos nombres
+            const el = window.ambientAudio || window._ambientAudio || window._ambientEl
+                || document.getElementById('ambient-audio');
+            if (el) el.loop = window._ambientLoopOn;
+            const btn = document.getElementById('kbtn-ambient-loop');
+            if (btn) btn.style.color = window._ambientLoopOn ? 'var(--accent)' : 'var(--text-dim)';
+            if (typeof mostrarNotificacion === 'function')
+                mostrarNotificacion(window._ambientLoopOn ? '🔁 Loop música: ON' : '🔁 Loop música: OFF');
+        }
+    </script>
 
 
 </body>

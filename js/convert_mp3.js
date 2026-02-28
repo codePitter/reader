@@ -77,18 +77,31 @@ async function convertirWAVaMP3(wavBlob, nombreArchivo, bitrate = '192k') {
 
         // Descarga
         _actualizarBarraMP3(100, '✓ ¡Listo!');
-        const url = URL.createObjectURL(mp3Blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${nombreArchivo || 'audio'}.mp3`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        setTimeout(() => URL.revokeObjectURL(url), 15000);
+        const _mp3DoFallback = () => {
+            const url = URL.createObjectURL(mp3Blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${nombreArchivo || 'audio'}.mp3`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(url), 15000);
+        };
+        if (typeof window.showSaveFilePicker === 'function') {
+            try {
+                const fh = await window.showSaveFilePicker({
+                    suggestedName: `${nombreArchivo || 'audio'}.mp3`,
+                    startIn: 'music',
+                    types: [{ description: 'Audio MP3', accept: { 'audio/mpeg': ['.mp3'] } }]
+                });
+                const w = await fh.createWritable();
+                await w.write(mp3Blob); await w.close();
+            } catch (e) { if (e.name !== 'AbortError') _mp3DoFallback(); }
+        } else { _mp3DoFallback(); }
 
         // Mostrar tamaño final
         const sizeMB = (mp3Blob.size / 1024 / 1024).toFixed(1);
-        const wavMB  = (wavBlob.size  / 1024 / 1024).toFixed(1);
+        const wavMB = (wavBlob.size / 1024 / 1024).toFixed(1);
         console.log(`[MP3] ✓ MP3 listo — ${sizeMB} MB (WAV era ${wavMB} MB)`);
 
         setTimeout(() => _cerrarModalMP3(), 2000);
@@ -205,12 +218,12 @@ function _cancelarMP3() {
 }
 
 function _actualizarBarraMP3(pct, label) {
-    const bar   = document.getElementById('mp3-bar');
-    const lbl   = document.getElementById('mp3-label');
+    const bar = document.getElementById('mp3-bar');
+    const lbl = document.getElementById('mp3-label');
     const pctEl = document.getElementById('mp3-pct');
-    const log   = document.getElementById('mp3-log');
-    if (bar)   bar.style.width = pct + '%';
-    if (lbl)   lbl.textContent = label || '';
+    const log = document.getElementById('mp3-log');
+    if (bar) bar.style.width = pct + '%';
+    if (lbl) lbl.textContent = label || '';
     if (pctEl) pctEl.textContent = pct + '%';
     // También loguear mensajes que no sean numéricos
     if (log && label && !label.match(/^\d+%/)) {

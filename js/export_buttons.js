@@ -71,12 +71,9 @@ function exportarVideoDirecto() {
         freesoundAudio.pause();
     }
 
-    // Resetear estado de exportación y saltar directo a thumbnails (paso 2)
-    if (typeof _expCancelled !== 'undefined') window._expCancelled = false;
-    if (typeof _expImagenes !== 'undefined') window._expImagenes = [];
-
-    if (typeof _pasarASeleccionImagenes === 'function') {
-        _pasarASeleccionImagenes();
+    // Delegar a exportarVideo() que abre el modal desde el paso 1 (config TTS + imágenes)
+    if (typeof exportarVideo === 'function') {
+        exportarVideo();
     } else {
         mostrarNotificacion('⚠ Módulo export_video.js no disponible');
     }

@@ -1209,12 +1209,21 @@ function _abrirPreviewEfectos() {
             padding: 5px 10px;
             border-bottom: 1px solid #1e1e1e;
         }
-        #exp-audio-tracks { padding: 5px 10px 0; }
+        #exp-audio-tracks { padding: 0; }
+        /* Cada track row = [controles fijos] + [canvas scrollable] */
         .exp-track-row {
             display: flex;
             align-items: center;
-            gap: 6px;
             margin-bottom: 4px;
+        }
+        /* Columna izquierda: label + vol + mute + del — ancho fijo, no scrollea */
+        .exp-track-controls {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            flex-shrink: 0;
+            width: 200px;
+            padding: 0 6px 0 10px;
         }
         .exp-track-label {
             font-size: .42rem;
@@ -1225,11 +1234,16 @@ function _abrirPreviewEfectos() {
             overflow: hidden;
             text-overflow: ellipsis;
         }
-        .exp-track-canvas-wrap {
+        /* Columna derecha: solo el canvas, se alinea con el scroll wrapper de arriba */
+        .exp-track-canvas-col {
             flex: 1;
             min-width: 0;
+            overflow: hidden; /* el scroll lo maneja el wrapper padre */
+        }
+        .exp-track-canvas-wrap {
+            width: 100%;
             position: relative;
-            height: 34px;
+            height: 100%;   /* hereda del canvasRow — NO fijar aquí */
             border-radius: 3px;
             background: #0a0a0a;
             border: 1px solid #1e1e1e;
@@ -1237,6 +1251,18 @@ function _abrirPreviewEfectos() {
             overflow: visible;
         }
         .exp-track-canvas-wrap canvas { display:block; width:100%; height:100%; }
+        /* Scrollbars discretos */
+        #exp-tl-scroll-wrap,
+        #exp-img-tl-scroll-wrap {
+            scrollbar-width: thin;
+            scrollbar-color: #2a2a2a transparent;
+        }
+        #exp-tl-scroll-wrap::-webkit-scrollbar,
+        #exp-img-tl-scroll-wrap::-webkit-scrollbar { height: 3px; }
+        #exp-tl-scroll-wrap::-webkit-scrollbar-thumb,
+        #exp-img-tl-scroll-wrap::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 2px; }
+        #exp-tl-scroll-wrap::-webkit-scrollbar-track,
+        #exp-img-tl-scroll-wrap::-webkit-scrollbar-track { background: transparent; }
         .exp-tl-btn {
             background: none;
             border: 1px solid #2a2a2a;
@@ -1336,35 +1362,64 @@ function _abrirPreviewEfectos() {
                                    padding:4px 10px;cursor:pointer;transition:all .15s;margin-left:4px;"
                             onmouseover="this.style.borderColor='#c8a96e';this.style.color='#c8a96e';this.style.background='rgba(200,169,110,.07)'"
                             onmouseout="this.style.borderColor='#3a3a3a';this.style.color='#888';this.style.background='#1a1a1a'">⏮</button>
-                    <span id="exp-play-counter" style="font-size:.5rem;color:#555;">Frase 1 / ${sentences.length}</span>
+                    <span id="exp-play-counter" style="font-size:11px;color:#666;">Frase 1 / ${sentences.length}</span>
                     <div style="flex:1;"></div>
-                    <span style="font-size:.43rem;color:#2a2a2a;">Arrastrá los bordes del timeline para reasignar imágenes</span>
+                    <span style="font-size:10px;color:#555;">Arrastrá los bordes del timeline para reasignar imágenes</span>
                 </div>
 
                 <div id="exp-timeline-wrap">
                     <div id="exp-tl-toolbar">
-                        <span style="font-size:.43rem;color:#444;letter-spacing:.07em;text-transform:uppercase;flex:1;">Timeline</span>
+                        <span style="font-size:10px;color:#666;letter-spacing:.07em;text-transform:uppercase;flex:1;">Timeline</span>
                         <button class="exp-tl-btn" id="exp-btn-split" onclick="_expAudioSetMode('split')" title="Click en un track para dividirlo">✂ Split</button>
                         <button class="exp-tl-btn danger" onclick="_expAudioDeleteSelected()" title="Eliminar segmento seleccionado">🗑 Eliminar</button>
                         <button class="exp-tl-btn" onclick="_expAudioUndoSplit()">↩ Deshacer</button>
+                        <div style="display:flex;align-items:center;gap:4px;margin-left:6px;border-left:1px solid #1e1e1e;padding-left:6px;">
+                            <button class="exp-tl-btn" onclick="_expZoomOut()" title="Alejar">−</button>
+                            <span id="exp-zoom-label" style="font-size:10px;color:#666;min-width:26px;text-align:center;">1×</span>
+                            <button class="exp-tl-btn" onclick="_expZoomIn()" title="Acercar">+</button>
+                        </div>
                     </div>
 
-                    <div id="exp-audio-tracks"></div>
+                    <!-- Layout: [controles fijos 200px] + [canvas scrollable flex:1] -->
+                    <div style="display:flex;padding-top:5px;">
+                        <!-- Columna izquierda: labels y controles — NO scrollea -->
+                        <div id="exp-tl-controls-col" style="flex-shrink:0;width:240px;padding-top:0;"></div>
+                        <!-- Columna derecha: solo los canvas — scrollea -->
+                        <div id="exp-tl-scroll-wrap" style="flex:1;min-width:0;overflow-x:auto;overflow-y:hidden;">
+                            <div id="exp-tl-scroll-inner" style="min-width:100%;">
+                                <div id="exp-audio-tracks"></div>
+                            </div>
+                        </div>
+                    </div>
 
-                    <div style="padding:4px 10px 5px;">
-                        <label class="exp-add-track-btn">
-                            + Agregar track de audio
-                            <input type="file" accept="audio/*" style="display:none" onchange="_expAudioAddFromFile(this)" data-default-dir="music">
-                        </label>
+                    <div style="display:flex;padding:4px 0 5px;">
+                        <div style="flex-shrink:0;width:240px;"></div>
+                        <div style="flex:1;min-width:0;padding-right:10px;">
+                            <label class="exp-add-track-btn">
+                                + Agregar track de audio
+                                <input type="file" accept="audio/*" style="display:none" onchange="_expAudioAddFromFile(this)" data-default-dir="music">
+                            </label>
+                        </div>
                     </div>
 
                     <div class="exp-img-tl-wrap">
-                        <div style="font-size:.42rem;color:#444;letter-spacing:.07em;margin-bottom:3px;text-transform:uppercase;">Imágenes</div>
-                        <div class="exp-img-tl-inner">
-                            <canvas id="exp-timeline-canvas" height="50"
-                                    style="width:100%;display:block;cursor:pointer;"></canvas>
+                        <div style="display:flex;">
+                            <!-- Etiqueta alineada con los 200px de controles -->
+                            <div style="flex-shrink:0;width:240px;padding:0 6px 0 10px;display:flex;align-items:center;box-sizing:border-box;">
+                                <span style="font-size:10px;color:#666;letter-spacing:.07em;text-transform:uppercase;">Imágenes</span>
+                            </div>
+                            <!-- Canvas scrollable alineado con el área de canvas de tracks -->
+                            <div id="exp-img-tl-scroll-wrap" style="flex:1;min-width:0;overflow-x:hidden;padding-right:10px;box-sizing:border-box;">
+                                <div id="exp-img-tl-scroll-inner" style="min-width:100%;">
+                                    <canvas id="exp-timeline-canvas" height="50"
+                                            style="width:100%;display:block;cursor:pointer;"></canvas>
+                                    <!-- Ruler de tiempo con marcador de posición -->
+                                    <canvas id="exp-timeline-ruler" height="16"
+                                            style="width:100%;display:block;pointer-events:none;"></canvas>
+                                </div>
+                            </div>
                         </div>
-                        <div id="exp-timeline-hint" style="font-size:.41rem;color:#2a2a2a;margin-top:2px;text-align:right;">
+                        <div id="exp-timeline-hint" style="font-size:10px;color:#555;margin-top:2px;text-align:right;padding-left:200px;">
                             Click para ir a una frase · Arrastrá los separadores para cambiar rangos
                         </div>
                     </div>
@@ -1412,6 +1467,25 @@ function _abrirPreviewEfectos() {
                             <input type="range" id="exp-fx-contrast" min="50" max="200" value="${Math.round(_expEffects.contrast * 100)}"
                                    oninput="_expFxChange()" style="width:100%;accent-color:#c8a96e;">
                         </div>
+                    </div>
+                </div>
+
+                <!-- ══ SECCIÓN ZOOM ══ -->
+                <div style="background:#111;border:1px solid #2a2a2a;border-radius:8px;overflow:hidden;flex-shrink:0;">
+                    <div onclick="_expToggleSection('sec-zoom',this)"
+                         style="display:flex;align-items:center;justify-content:space-between;
+                                padding:9px 14px;cursor:pointer;user-select:none;transition:background .15s;"
+                         onmouseover="this.style.background='#161616'" onmouseout="this.style.background=''">
+                        <span style="font-size:.51rem;color:#c8a96e;letter-spacing:.08em;">ZOOM IMAGEN</span>
+                        <span id="sec-zoom-arrow" style="font-size:.47rem;color:#555;">▶</span>
+                    </div>
+                    <div id="sec-zoom" style="display:none;padding:11px 14px;">
+                        <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
+                            <span style="font-size:.5rem;color:#888;">Zoom</span>
+                            <span id="exp-fx-zoom-val" style="font-size:.5rem;color:#c8a96e;">${_expEffects.zoom.toFixed(2)}x</span>
+                        </div>
+                        <input type="range" id="exp-fx-zoom" min="100" max="200" value="${Math.round(_expEffects.zoom * 100)}"
+                               oninput="_expFxChange()" style="width:100%;accent-color:#c8a96e;">
                     </div>
                 </div>
 
@@ -1502,25 +1576,6 @@ function _abrirPreviewEfectos() {
                     </div>
                 </div>
 
-                <!-- ══ SECCIÓN ZOOM ══ -->
-                <div style="background:#111;border:1px solid #2a2a2a;border-radius:8px;overflow:hidden;flex-shrink:0;">
-                    <div onclick="_expToggleSection('sec-zoom',this)"
-                         style="display:flex;align-items:center;justify-content:space-between;
-                                padding:9px 14px;cursor:pointer;user-select:none;transition:background .15s;"
-                         onmouseover="this.style.background='#161616'" onmouseout="this.style.background=''">
-                        <span style="font-size:.51rem;color:#c8a96e;letter-spacing:.08em;">ZOOM IMAGEN</span>
-                        <span id="sec-zoom-arrow" style="font-size:.47rem;color:#555;">▶</span>
-                    </div>
-                    <div id="sec-zoom" style="display:none;padding:11px 14px;">
-                        <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
-                            <span style="font-size:.5rem;color:#888;">Zoom</span>
-                            <span id="exp-fx-zoom-val" style="font-size:.5rem;color:#c8a96e;">${_expEffects.zoom.toFixed(2)}x</span>
-                        </div>
-                        <input type="range" id="exp-fx-zoom" min="100" max="200" value="${Math.round(_expEffects.zoom * 100)}"
-                               oninput="_expFxChange()" style="width:100%;accent-color:#c8a96e;">
-                    </div>
-                </div>
-
                 <!-- ══ SECCIÓN TIPOGRAFÍA ══ -->
                 <div style="background:#111;border:1px solid #2a2a2a;border-radius:8px;overflow:hidden;flex-shrink:0;">
                     <div onclick="_expToggleSection('sec-typo',this)"
@@ -1585,9 +1640,9 @@ function _abrirPreviewEfectos() {
                             </button>
                         </div>
                         <div style="border-top:1px solid #1e1e1e;margin:8px 0;"></div>
-                        <div style="font-size:.44rem;color:#333;line-height:1.7;">
+                        <div style="font-size:10px;color:#666;line-height:1.7;">
                             ✂ Split: dividir en cualquier punto.<br>
-                            Arrastrá <span style="color:#555;">◁ ▷</span> en los bordes para fade.<br>
+                            Arrastrá <span style="color:#888;">◁ ▷</span> en los bordes para fade.<br>
                             Click derecho → menú rápido.
                         </div>
                     </div>
@@ -1606,19 +1661,31 @@ function _abrirPreviewEfectos() {
                     <div id="sec-tts" style="padding:11px 14px;">
                         <div id="exp-tts-status-row" style="display:flex;align-items:center;gap:7px;margin-bottom:9px;">
                             <div id="exp-tts-dot" style="width:7px;height:7px;border-radius:50%;background:#333;flex-shrink:0;"></div>
-                            <span id="exp-tts-status-lbl" style="font-size:.48rem;color:#555;flex:1;">Sin pre-generar</span>
+                            <span id="exp-tts-status-lbl" style="font-size:11px;color:#666;flex:1;">Sin pre-generar</span>
                             <button id="exp-tts-clear-btn" onclick="_expTtsClear()" title="Descartar"
                                 style="display:none;background:none;border:none;color:#555;font-size:.65rem;cursor:pointer;padding:0 2px;"
                                 onmouseover="this.style.color='#e07070'" onmouseout="this.style.color='#555'">✕</button>
+                        </div>
+                        <!-- Volumen TTS -->
+                        <div style="display:flex;align-items:center;gap:6px;margin-bottom:9px;">
+                            <span style="font-size:10px;color:#666;flex-shrink:0;">Vol</span>
+                            <input type="range" id="exp-tts-vol-slider" min="0" max="100" value="80"
+                                   style="flex:1;accent-color:#7eb89a;cursor:pointer;"
+                                   oninput="
+                                       document.getElementById('exp-tts-vol-pct').textContent=this.value+'%';
+                                       const tts=_expAudioTracks&&_expAudioTracks.find(t=>t._isTtsTrack);
+                                       if(tts){_expAudioSetVol(tts.id,this.value);}
+                                   ">
+                            <span id="exp-tts-vol-pct" style="font-size:10px;color:#7eb89a;min-width:28px;text-align:right;">80%</span>
                         </div>
                         <div id="exp-tts-progress-wrap" style="display:none;margin-bottom:9px;">
                             <div style="background:#1a1a1a;border-radius:3px;height:3px;overflow:hidden;">
                                 <div id="exp-tts-progress-bar" style="height:100%;width:0%;background:#7eb89a;transition:width .3s;"></div>
                             </div>
-                            <div id="exp-tts-progress-lbl" style="font-size:.43rem;color:#555;margin-top:3px;text-align:right;">0%</div>
+                            <div id="exp-tts-progress-lbl" style="font-size:10px;color:#666;margin-top:3px;text-align:right;">0%</div>
                         </div>
                         <div style="margin-bottom:9px;">
-                            <div style="font-size:.44rem;color:#444;margin-bottom:4px;">Voz Edge TTS</div>
+                            <div style="font-size:10px;color:#777;margin-bottom:4px;">Voz Edge TTS</div>
                             <select id="exp-tts-voice-select"
                                     onchange="if(typeof setEdgeTtsVoice==='function') setEdgeTtsVoice(this.value)"
                                     style="width:100%;background:#0d0d0d;border:1px solid #2a2a2a;border-radius:4px;
@@ -1634,7 +1701,28 @@ function _abrirPreviewEfectos() {
                             onmouseout="if(!this.disabled){this.style.borderColor='#3a3a3a'}">
                             🎙 Pre-generar audio TTS
                         </button>
-                        <div style="font-size:.43rem;color:#333;line-height:1.7;">
+
+                        <!-- Botones exportar WAV/MP3 — visibles solo cuando hay buffers listos -->
+                        <div id="exp-tts-export-row" style="display:none;gap:5px;margin-bottom:8px;">
+                            <button onclick="_expTtsExportarAudio('wav')"
+                                style="flex:1;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:5px;
+                                       color:#c8a96e;font-family:'DM Mono',monospace;font-size:.5rem;
+                                       padding:6px 4px;cursor:pointer;transition:all .15s;"
+                                onmouseover="this.style.borderColor='#c8a96e';this.style.background='rgba(200,169,110,.07)'"
+                                onmouseout="this.style.borderColor='#2a2a2a';this.style.background='#1a1a1a'">
+                                ⬇ WAV
+                            </button>
+                            <button onclick="_expTtsExportarAudio('mp3')"
+                                style="flex:1;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:5px;
+                                       color:#c8a96e;font-family:'DM Mono',monospace;font-size:.5rem;
+                                       padding:6px 4px;cursor:pointer;transition:all .15s;"
+                                onmouseover="this.style.borderColor='#c8a96e';this.style.background='rgba(200,169,110,.07)'"
+                                onmouseout="this.style.borderColor='#2a2a2a';this.style.background='#1a1a1a'">
+                                ⬇ MP3
+                            </button>
+                        </div>
+
+                        <div style="font-size:10px;color:#666;line-height:1.7;">
                             Genera el audio XTTS ahora para<br>
                             sincronizar el preview y adelantar<br>
                             trabajo al exportar.
@@ -1692,12 +1780,10 @@ function _abrirPreviewEfectos() {
 
     // Re-renderizar timeline al cambiar tamaño (ej: salir de pantalla completa)
     if (typeof ResizeObserver !== 'undefined') {
+        let _resizeTimer = null;
         const _expResizeObs = new ResizeObserver(() => {
-            _expTimelineInit();
-            _expTimelineRender();
-            document.querySelectorAll('.exp-track-canvas-wrap canvas').forEach((cv, i) => {
-                if (_expAudioTracks[i]) _expAudioDrawTrack(cv, _expAudioTracks[i]);
-            });
+            clearTimeout(_resizeTimer);
+            _resizeTimer = setTimeout(() => _expApplyZoom(), 80);
         });
         _expResizeObs.observe(m);
         m._resizeObs = _expResizeObs;
@@ -1751,6 +1837,7 @@ function _expStartPlay(isResume) {
         _expPreviewFrase = (_expPreviewFrase + 1) % sentences.length;
         _expPreviewRender();
         _expTimelineRender();
+        _expTimelineRulerRender();
         _expUpdateCounter();
         // Redibujar tracks de audio para mover el cursor
         if (_expAudioTracks.length > 0) {
@@ -1788,6 +1875,7 @@ async function _expStartPlayTtsSync() {
         _expPreviewFrase = i;
         _expPreviewRender();
         _expTimelineRender();
+        _expTimelineRulerRender();
         _expUpdateCounter();
         if (_expAudioTracks.length > 0) {
             document.querySelectorAll('.exp-track-canvas-wrap canvas').forEach((cv, idx) => {
@@ -1848,6 +1936,7 @@ function _expSeekToFrase(fraseIdx) {
     _expPreviewFrase = fraseIdx;
     _expPreviewRender();
     _expTimelineRender();
+    _expTimelineRulerRender();
     _expUpdateCounter();
 
     // Tiempo total acumulado hasta esta frase (en segundos)
@@ -1892,6 +1981,7 @@ function _expRestartPlay() {
     _expPreviewFrase = 0;
     _expPreviewRender();
     _expTimelineRender();
+    _expTimelineRulerRender();
     _expUpdateCounter();
     _expAudioTracks.forEach(t => {
         if (t.audioEl) t.audioEl.currentTime = 0;
@@ -1914,23 +2004,92 @@ function _expTimelineInit() {
     const canvas = document.getElementById('exp-timeline-canvas');
     if (!canvas) return;
 
-    // Ajustar tamaño físico al ancho real del elemento
     const rect = canvas.getBoundingClientRect();
     canvas.width = rect.width || 800;
     canvas.height = 52;
 
     _expTimelineRender();
+    _expTimelineRulerRender();
+    _expTimelineRulerRender();
 
-    // Eventos mouse
+    // Eventos mouse sobre el canvas de imágenes (no el ruler)
     canvas.addEventListener('mousedown', _tlMouseDown);
     canvas.addEventListener('mousemove', _tlMouseMove);
     canvas.addEventListener('mouseup', _tlMouseUp);
     canvas.addEventListener('mouseleave', _tlMouseUp);
 
-    // Touch support
     canvas.addEventListener('touchstart', e => _tlMouseDown(_tlTouchToMouse(e)), { passive: false });
     canvas.addEventListener('touchmove', e => { e.preventDefault(); _tlMouseMove(_tlTouchToMouse(e)); }, { passive: false });
     canvas.addEventListener('touchend', _tlMouseUp);
+}
+
+// ── Ruler de tiempo con marcador de posición ─────────────────────
+// Se dibuja en exp-timeline-ruler (debajo del canvas de imágenes)
+// El cursor (triángulo) vive aquí — no interfiere con las miniaturas
+function _expTimelineRulerRender() {
+    const ruler = document.getElementById('exp-timeline-ruler');
+    if (!ruler) return;
+    const imgCanvas = document.getElementById('exp-timeline-canvas');
+    ruler.width = imgCanvas ? imgCanvas.width : (ruler.getBoundingClientRect().width || 800);
+    ruler.height = 16;
+    const ctx = ruler.getContext('2d');
+    const W = ruler.width, H = ruler.height;
+    const total = sentences.length;
+    if (total === 0) return;
+
+    ctx.clearRect(0, 0, W, H);
+
+    // Línea base superior
+    ctx.fillStyle = '#1e1e1e';
+    ctx.fillRect(0, 0, W, 1);
+
+    // Duración total estimada
+    const totalSecs = (_expTtsDuraciones && _expTtsDuraciones.length === total)
+        ? _expTtsDuraciones.reduce((s, ms) => s + (ms || EXPORT_SEC_FRASE * 1000), 0) / 1000
+        : total * EXPORT_SEC_FRASE;
+
+    // Paso de ticks: buscamos que haya ~60px entre marcas
+    const pxPerFrase = W / total;
+    let tickEvery = 1;
+    for (const t of [1, 2, 5, 10, 20, 50, 100]) {
+        tickEvery = t;
+        if (pxPerFrase * t >= 55) break;
+    }
+
+    ctx.font = '8px "DM Mono",monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+
+    for (let f = 0; f <= total; f += tickEvery) {
+        const x = Math.round((f / total) * W);
+        const isMajor = (f % (tickEvery * 5) === 0) || tickEvery >= 10;
+        ctx.fillStyle = isMajor ? '#383838' : '#252525';
+        ctx.fillRect(x, 1, 1, isMajor ? 5 : 3);
+        if (isMajor && x < W - 12) {
+            const secs = (f / total) * totalSecs;
+            const label = secs >= 60
+                ? `${Math.floor(secs / 60)}:${String(Math.round(secs % 60)).padStart(2, '0')}`
+                : `${Math.round(secs)}s`;
+            ctx.fillStyle = '#383838';
+            ctx.fillText(label, x, 6);
+        }
+    }
+
+    // ── Cursor de posición (triángulo apuntando hacia arriba desde el ruler) ──
+    const curX = Math.round(((_expPreviewFrase + 0.5) / total) * W);
+
+    // Línea vertical
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.fillRect(curX - 1, 0, 2, H);
+
+    // Triángulo en la base del ruler apuntando hacia arriba (hacia el canvas de imágenes)
+    ctx.fillStyle = '#ffffffdd';
+    ctx.beginPath();
+    ctx.moveTo(curX - 5, H);
+    ctx.lineTo(curX + 5, H);
+    ctx.lineTo(curX, H - 7);
+    ctx.closePath();
+    ctx.fill();
 }
 
 function _tlTouchToMouse(e) {
@@ -1998,18 +2157,8 @@ function _expTimelineRender() {
         }
     });
 
-    // Línea de posición actual (frase activa)
-    const curX = Math.round(((_expPreviewFrase + 0.5) / total) * W);
-    ctx.fillStyle = '#ffffff99';
-    ctx.fillRect(curX - 1, TRACK_Y - 4, 2, TRACK_H + 8);
-
-    // Triángulo indicador arriba
-    ctx.fillStyle = '#ffffffcc';
-    ctx.beginPath();
-    ctx.moveTo(curX - 5, TRACK_Y - 4);
-    ctx.lineTo(curX + 5, TRACK_Y - 4);
-    ctx.lineTo(curX, TRACK_Y + 1);
-    ctx.fill();
+    // El cursor de posición se dibuja en el ruler (exp-timeline-ruler), no aquí
+    // para no interferir con las miniaturas de imágenes
 }
 
 // Detectar si el click está en un separador arrastrable
@@ -2070,6 +2219,7 @@ function _tlMouseMove(e) {
     _expImageRanges[g + 1].desde = newBoundary;
 
     _expTimelineRender();
+    _expTimelineRulerRender();
 
     // Actualizar hint con info del rango
     const hint = document.getElementById('exp-timeline-hint');
@@ -2084,6 +2234,7 @@ function _tlMouseUp() {
         if (canvas) canvas.style.cursor = 'pointer';
         // Redibujar con estado actualizado
         _expTimelineRender();
+        _expTimelineRulerRender();
     }
 }
 
@@ -2112,7 +2263,7 @@ function _expFxChange() {
     const vigInt = (document.getElementById('exp-fx-vigint')?.value ?? 65) / 100;
     const vigSize = (document.getElementById('exp-fx-vigsize')?.value ?? 85) / 100;
     const textOp = (document.getElementById('exp-fx-textopacity')?.value ?? 100) / 100;
-    const textColor = document.getElementById('exp-fx-color')?.value ?? '#c8a96e';
+    const textColor = document.getElementById('exp-fx-textcolor')?.value ?? '#c8a96e';
     const zoom = (document.getElementById('exp-fx-zoom')?.value ?? 100) / 100;
     const fontFamily = document.getElementById('exp-fx-font')?.value ?? 'Georgia,serif';
     const strokeEnabled = document.getElementById('exp-fx-stroke')?.checked ?? false;
@@ -2141,7 +2292,7 @@ function _expFxChange() {
     set('exp-fx-vigint-val', Math.round(vigInt * 100) + '%');
     set('exp-fx-vigsize-val', vigSize.toFixed(2));
     set('exp-fx-textopacity-val', Math.round(textOp * 100) + '%');
-    set('exp-fx-color-val', textColor);
+    set('exp-fx-textcolor-val', textColor);
     set('exp-fx-zoom-val', zoom.toFixed(2) + 'x');
     set('exp-fx-strokecolor-val', strokeColor);
     set('exp-fx-strokewidth-val', strokeWidth + 'px');
@@ -2366,11 +2517,15 @@ async function _expRenderizar(audioBuffers, updateFn) {
 // AUDIO TRACKS DEL PREVIEW — estado, render, eventos
 // ───────────────────────────────────────────────────────────────────
 let _expAudioTracks = [];        // [{id, name, color, volume, muted, segments, splitHistory, audioBuffer, audioUrl}]
+let _expTimelineZoom = 1;       // factor de zoom del timeline (1 = 100%, 4 = 400%)
 let _expAudioTrackIdCounter = 0;
 let _expAudioSelectedSeg = null; // {trackId, segIdx}
 let _expAudioCtxTarget = null;
 let _expAudioFadeDrag = null;
 let _expAudioMode = 'normal';    // 'normal' | 'split'
+let _expAudioExpandedId = null;  // id del track expandido (solo uno a la vez)
+let _expAudioExpandedSet = null; // Set de ids expandidos (null = sin inicializar)
+let _expAudioKnownIds = null; // Set de ids que ya se han visto (para no re-expandir al colapsar)
 
 function _expAudioInit() {
     // Limpiar al abrir el preview
@@ -2457,6 +2612,7 @@ function _expAudioPlayStart(isResume) {
                 t.audioEl.src = t.audioUrl;
                 t.audioEl.loop = false; // sin loop: el audio termina cuando termina
                 t.audioEl.muted = false;
+                t.audioEl.playbackRate = t.rate || 1.0;
                 t.audioEl.style.cssText = 'position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;top:-9999px;';
                 document.body.appendChild(t.audioEl);
                 // Actualizar audioDuration cuando esté disponible (para el canvas)
@@ -2486,21 +2642,37 @@ function _expAudioPlayStart(isResume) {
             // Tracks de música: sincronizar según offset del track en el video
             if (t._isTtsTrack && _expTtsDuraciones && _expTtsDuraciones.length) {
                 t.audioEl.currentTime = _expTtsGetCurrentTime(_expPreviewFrase);
+                t._skipPlay = false;
             } else {
                 // Calcular tiempo de video actual y posición dentro del audio según offset
                 const videoTimeSecs = _expTtsGetCurrentTime(_expPreviewFrase);
-                const trackOffsetSecs = (t.offset || 0) * _expGetTotalDuration();
-                const audioPos = videoTimeSecs - trackOffsetSecs;
-                const dur = t.audioEl.duration;
-                if (audioPos < 0 || (dur && audioPos > dur)) {
-                    // Fuera del rango del track: no reproducir (silenciar y pausar tras play)
-                    t.audioEl.currentTime = 0;
+                const totalDurSecs = _expGetTotalDuration();
+                const dur = t.audioEl.duration; // puede ser NaN si aún no cargó metadata
+                const audioDur = (!isNaN(dur) && isFinite(dur) && dur > 0)
+                    ? dur : (t.audioDuration || null);
+
+                // Buscar en qué bloque estamos: offset principal + extraOffsets
+                const allOffsets = [t.offset || 0, ...(t.extraOffsets || [])];
+                let foundAudioPos = null;
+                for (const off of allOffsets) {
+                    const blockStartSecs = off * totalDurSecs;
+                    const blockEndSecs = audioDur ? blockStartSecs + audioDur : Infinity;
+                    if (videoTimeSecs >= blockStartSecs && videoTimeSecs < blockEndSecs) {
+                        foundAudioPos = videoTimeSecs - blockStartSecs;
+                        break;
+                    }
+                }
+
+                if (foundAudioPos === null) {
+                    // Fuera de todos los bloques — no reproducir
                     t._skipPlay = true;
+                    t.audioEl.currentTime = 0;
                 } else {
-                    t.audioEl.currentTime = Math.max(0, audioPos);
+                    t.audioEl.currentTime = Math.max(0, foundAudioPos);
                     t._skipPlay = false;
                 }
             }
+
             if (t._skipPlay) {
                 console.log('[🎵 audio] ⏭ Track fuera de rango:', t.name);
             } else {
@@ -2521,27 +2693,42 @@ function _expAudioFadeLoop(t) {
     if (!t.audioEl || t.audioEl.paused) return;
     if (!t.gainNode) { requestAnimationFrame(() => _expAudioFadeLoop(t)); return; }
 
-    const duration = t.audioEl.duration || 1;
+    const duration = t.audioEl.duration;
     const current = t.audioEl.currentTime;
 
-    // Para tracks de música (no TTS): usar posición en el video (frac del video total)
-    // Para el track TTS: usar posición dentro del propio audio
+    // Para tracks de música (no TTS): usar currentTime real del audioEl
+    // El audioEl ya fue posicionado correctamente al iniciar/seek
     let frac;
     if (!t._isTtsTrack) {
-        // Calcular fracción del video basada en el tiempo de video actual
-        const videoTimeSecs = _expTtsGetCurrentTime(_expPreviewFrase);
-        const totalDur = _expGetTotalDuration() || 1;
-        const trackOffsetSecs = (t.offset || 0) * totalDur;
-        const audioPos = videoTimeSecs - trackOffsetSecs;
-        // Si estamos fuera del rango del audio, silenciar
-        if (audioPos < 0 || audioPos > duration) {
-            if (t.gainNode) t.gainNode.gain.value = 0;
-            requestAnimationFrame(() => _expAudioFadeLoop(t));
-            return;
+        const dur = (duration && isFinite(duration)) ? duration : (t.audioDuration || 0);
+        if (dur > 0) {
+            // Si el audio llegó al final, comprobar si hay un extraOffset próximo
+            if (current >= dur - 0.05) {
+                // Buscar si el video está ahora en un bloque extra
+                const videoNow = _expTtsGetCurrentTime(_expPreviewFrase);
+                const totalD = _expGetTotalDuration();
+                const allOff = [t.offset || 0, ...(t.extraOffsets || [])];
+                let nextPos = null;
+                for (const off of allOff) {
+                    const bs = off * totalD;
+                    const be = bs + dur;
+                    if (videoNow >= bs && videoNow < be) { nextPos = videoNow - bs; break; }
+                }
+                if (nextPos !== null && Math.abs(t.audioEl.currentTime - nextPos) > 0.3) {
+                    // Hacer seek al punto correcto dentro del bloque activo
+                    t.audioEl.currentTime = Math.max(0, nextPos);
+                } else if (nextPos === null) {
+                    if (t.gainNode) t.gainNode.gain.value = 0;
+                    return; // fuera de todos los bloques — detener
+                }
+            }
+            frac = current / dur;
+        } else {
+            // Duración aún no disponible: mantener volumen y seguir
+            frac = 0;
         }
-        frac = audioPos / duration; // posición 0–1 dentro del audio
     } else {
-        frac = current / duration;
+        frac = current / ((duration && isFinite(duration)) ? duration : 1);
     }
 
     // Calcular volumen según segmentos con fade in/out
@@ -2611,6 +2798,7 @@ function _expAudioAddTrack(name, color, audioBuffer, audioUrl, isTts) {
         audioUrl: audioUrl || null,
         audioEl: null,
         offset: 0,
+        rate: 1.0,            // velocidad de reproducción (0.5 – 2.0)
         audioDuration: null,  // se precarga abajo para poder dibujar el bloque
     };
     _expAudioTracks.push(track);
@@ -2639,6 +2827,28 @@ function _expAudioAddFromFile(inp) {
     const url = URL.createObjectURL(file);
     _expAudioAddTrack(file.name, color, null, url);
     inp.value = '';
+}
+
+// Agrega una repetición del track al final, en el mismo canvas
+function _expAudioLoopTrack(id) {
+    const src = _expAudioTracks.find(t => t.id === id);
+    if (!src || src._isTtsTrack) return;
+    const totalDur = _expGetTotalDuration() || 1;
+    const audioDur = src.audioDuration || totalDur;
+
+    // Calcular el offset donde termina la última instancia
+    const allOffsets = [src.offset || 0, ...(src.extraOffsets || [])];
+    const lastOffset = allOffsets[allOffsets.length - 1];
+    const nextOffset = lastOffset + audioDur / totalDur;
+
+    if (nextOffset >= 1) { mostrarNotificacion('⚠ No hay espacio para más repeticiones'); return; }
+
+    if (!src.extraOffsets) src.extraOffsets = [];
+    src.extraOffsets.push(nextOffset);
+
+    _expAudioRenderTracks();
+    _expAudioUpdatePanelList();
+    mostrarNotificacion('🔁 Repetición añadida al track');
 }
 
 // Abre el selector de audio en la carpeta Music usando File System Access API
@@ -2680,6 +2890,15 @@ function _expAudioRemoveTrack(id) {
     if (_expAudioSelectedSeg?.trackId === id) _expAudioSelectedSeg = null;
     _expAudioRenderTracks();
     _expAudioUpdatePanelList();
+}
+
+function _expAudioSetRate(id, delta) {
+    const t = _expAudioTracks.find(t => t.id === id);
+    if (!t) return;
+    t.rate = Math.round(Math.max(0.5, Math.min(2.0, (t.rate || 1.0) + delta)) * 1000) / 1000;
+    if (t.audioEl) t.audioEl.playbackRate = t.rate;
+    // NO llamar _expAudioRenderTracks — destruiría el DOM y el rateLabel
+    // El label se actualiza directamente en el onclick del botón
 }
 
 function _expAudioSetVol(id, val) {
@@ -2737,49 +2956,192 @@ function _expAudioSplitAt(t, frac) {
 // ─── Render del timeline de tracks ─────────────────────────────────
 function _expAudioRenderTracks() {
     const container = document.getElementById('exp-audio-tracks');
+    const controlsCol = document.getElementById('exp-tl-controls-col');
     if (!container) return;
     container.innerHTML = '';
-    _expAudioTracks.forEach(t => {
-        const row = document.createElement('div');
-        row.className = 'exp-track-row';
+    if (controlsCol) controlsCol.innerHTML = '';
 
-        const lbl = document.createElement('div');
-        lbl.className = 'exp-track-label';
-        lbl.textContent = t.name; lbl.title = t.name;
+    // Garantizar Sets
+    if (!_expAudioExpandedSet) _expAudioExpandedSet = new Set();
+    if (!_expAudioKnownIds) _expAudioKnownIds = new Set();
+    // Solo expandir tracks que nunca se han visto antes (tracks nuevos)
+    _expAudioTracks.forEach(t => {
+        if (!_expAudioKnownIds.has(t.id)) {
+            _expAudioExpandedSet.add(t.id);   // nuevo → expandido por defecto
+            _expAudioKnownIds.add(t.id);
+        }
+    });
+    // Limpiar IDs huérfanos (tracks eliminados)
+    const _validIds = new Set(_expAudioTracks.map(t => t.id));
+    _expAudioExpandedSet.forEach(id => { if (!_validIds.has(id)) _expAudioExpandedSet.delete(id); });
+    _expAudioKnownIds.forEach(id => { if (!_validIds.has(id)) _expAudioKnownIds.delete(id); });
+
+    _expAudioTracks.forEach(t => {
+        const ROW_H = 54;
+        const ROW_COLLAPSED = 18;
+        const isExpanded = _expAudioExpandedSet.has(t.id);
+
+        // ── Columna izquierda: controles ────
+        const ctrlRow = document.createElement('div');
+        ctrlRow.style.cssText = `display:flex;align-items:center;gap:4px;height:${isExpanded ? ROW_H : ROW_COLLAPSED}px;padding:0 6px 0 10px;margin-bottom:4px;box-sizing:border-box;overflow:hidden;transition:height .15s;`;
+
+        // Toggle expand/collapse para este track
+        const _toggleTrackExpand = () => {
+            if (!_expAudioExpandedSet) _expAudioExpandedSet = new Set();
+            if (_expAudioExpandedSet.has(t.id)) _expAudioExpandedSet.delete(t.id);
+            else _expAudioExpandedSet.add(t.id);
+            // Marcar como conocido para que el render no lo re-expanda
+            if (!_expAudioKnownIds) _expAudioKnownIds = new Set();
+            _expAudioKnownIds.add(t.id);
+            _expAudioRenderTracks();
+        };
+
+        if (isExpanded) {
+            // Cambiar ctrlRow a flex-column para 2 filas
+            ctrlRow.style.flexDirection = 'column';
+            ctrlRow.style.alignItems = 'stretch';
+            ctrlRow.style.gap = '2px';
+            ctrlRow.style.justifyContent = 'center';
+
+            // ── Fila 1: nombre + colapsar + eliminar ─────────────────
+            const row1 = document.createElement('div');
+            row1.style.cssText = 'display:flex;align-items:center;gap:3px;';
+
+            const dot1 = document.createElement('span');
+            dot1.style.cssText = `width:6px;height:6px;border-radius:50%;background:${t.color};flex-shrink:0;`;
+
+            const lbl = document.createElement('div');
+            lbl.className = 'exp-track-label';
+            lbl.textContent = t.name; lbl.title = t.name;
+            lbl.style.cssText = 'flex:1;font-size:10px;color:#aaa;font-family:"DM Mono",monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+
+            const collapseBtn = document.createElement('button');
+            collapseBtn.title = 'Colapsar';
+            collapseBtn.style.cssText = 'background:none;border:none;color:#c8a96e;font-size:11px;cursor:pointer;padding:0 2px;line-height:1;flex-shrink:0;';
+            collapseBtn.textContent = '▼';
+            collapseBtn.onmouseover = () => collapseBtn.style.color = '#e0c880';
+            collapseBtn.onmouseout = () => collapseBtn.style.color = '#c8a96e';
+            collapseBtn.onclick = _toggleTrackExpand;
+
+            const delBtn = document.createElement('button');
+            delBtn.style.cssText = 'background:none;border:none;color:#3a3a3a;font-size:12px;cursor:pointer;padding:0 2px;line-height:1;flex-shrink:0;';
+            delBtn.textContent = '✕';
+            delBtn.onmouseover = () => delBtn.style.color = '#cc6655';
+            delBtn.onmouseout = () => delBtn.style.color = '#3a3a3a';
+            delBtn.onclick = () => _expAudioRemoveTrack(t.id);
+
+            row1.append(dot1, lbl, collapseBtn, delBtn);
+
+            // ── Fila 2: controles ─────────────────────────────────────
+            const row2 = document.createElement('div');
+            row2.style.cssText = 'display:flex;align-items:center;gap:3px;';
+
+            const _mkBtn = (txt, title, onclick, color) => {
+                const b = document.createElement('button');
+                b.textContent = txt; b.title = title;
+                b.style.cssText = `background:none;border:1px solid #2a2a2a;border-radius:3px;color:${color || '#888'};font-size:11px;padding:1px 4px;cursor:pointer;transition:all .12s;flex-shrink:0;line-height:1;font-family:"DM Mono",monospace;`;
+                b.onmouseover = () => { b.style.borderColor = '#c8a96e'; b.style.color = '#c8a96e'; };
+                b.onmouseout = () => { b.style.borderColor = '#2a2a2a'; b.style.color = color || '#888'; };
+                b.onclick = onclick; return b;
+            };
+
+            const muteBtn = _mkBtn(t.muted ? 'M' : 'M', t.muted ? 'Activar' : 'Silenciar',
+                () => { t.muted = !t.muted; _expAudioRenderTracks(); _expAudioUpdatePanelList(); },
+                t.muted ? '#cc6655' : '#888');
+            muteBtn.style.borderColor = t.muted ? '#cc6655' : '#2a2a2a';
+
+            const volSlider = document.createElement('input');
+            volSlider.type = 'range'; volSlider.min = 0; volSlider.max = 100; volSlider.value = t.volume;
+            volSlider.style.cssText = 'flex:1;min-width:0;accent-color:#c8a96e;cursor:pointer;height:12px;';
+            volSlider.title = `Vol: ${t.volume}%`;
+            volSlider.oninput = () => { _expAudioSetVol(t.id, volSlider.value); volSlider.title = `Vol: ${volSlider.value}%`; };
+
+            const volPct = document.createElement('span');
+            volPct.style.cssText = 'font-size:10px;color:#666;font-family:"DM Mono",monospace;flex-shrink:0;min-width:26px;text-align:right;';
+            volPct.textContent = t.volume + '%';
+            volSlider.oninput = () => { _expAudioSetVol(t.id, volSlider.value); volPct.textContent = volSlider.value + '%'; };
+
+            row2.append(muteBtn, volSlider, volPct);
+
+            if (!t._isTtsTrack) {
+                // Vol − / +
+                const volMinus = _mkBtn('−', 'Vol −1%', () => {
+                    _expAudioSetVol(t.id, Math.max(0, t.volume - 1));
+                    volSlider.value = t.volume; volPct.textContent = t.volume + '%';
+                });
+                const volPlus = _mkBtn('+', 'Vol +1%', () => {
+                    _expAudioSetVol(t.id, Math.min(100, t.volume + 1));
+                    volSlider.value = t.volume; volPct.textContent = t.volume + '%';
+                });
+
+                // Tempo
+                const rateLabel = document.createElement('span');
+                rateLabel.title = 'Velocidad de reproducción';
+                rateLabel.style.cssText = 'font-size:10px;color:#666;font-family:"DM Mono",monospace;flex-shrink:0;min-width:38px;text-align:center;';
+                rateLabel.textContent = (t.rate || 1).toFixed(3) + '×';
+
+                const rateMinus = _mkBtn('◂', 'Tempo −0.001×', () => {
+                    _expAudioSetRate(t.id, -0.001);
+                    rateLabel.textContent = (t.rate || 1).toFixed(3) + '×';
+                });
+                const ratePlus = _mkBtn('▸', 'Tempo +0.001×', () => {
+                    _expAudioSetRate(t.id, +0.001);
+                    rateLabel.textContent = (t.rate || 1).toFixed(3) + '×';
+                });
+
+                const loopBtn = _mkBtn('🔁', 'Duplicar en loop', () => _expAudioLoopTrack(t.id));
+                loopBtn.onmouseover = () => { loopBtn.style.borderColor = '#7eb89a'; loopBtn.style.color = '#7eb89a'; };
+                loopBtn.onmouseout = () => { loopBtn.style.borderColor = '#2a2a2a'; loopBtn.style.color = '#888'; };
+
+                row2.append(volMinus, volPlus, rateMinus, rateLabel, ratePlus, loopBtn);
+            }
+
+            ctrlRow.append(row1, row2);
+        } else {
+            // Colapsado: barra de color + nombre + flecha ▶ para expandir
+            const bar = document.createElement('div');
+            bar.style.cssText = `width:100%;height:100%;background:${t.color}44;border-radius:2px;cursor:pointer;display:flex;align-items:center;padding:0 6px;box-sizing:border-box;gap:6px;`;
+            bar.title = `${t.name} — click para expandir`;
+            const dot = document.createElement('span');
+            dot.style.cssText = `width:7px;height:7px;border-radius:50%;background:${t.color};flex-shrink:0;`;
+            const nm = document.createElement('span');
+            nm.style.cssText = 'flex:1;font-size:10px;color:#888;font-family:"DM Mono",monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+            nm.textContent = t.name;
+            const arrow = document.createElement('span');
+            arrow.style.cssText = 'font-size:10px;color:#666;flex-shrink:0;';
+            arrow.textContent = '▶';
+            bar.append(dot, nm, arrow);
+            bar.onclick = _toggleTrackExpand;
+            ctrlRow.appendChild(bar);
+        }
+
+        if (controlsCol) controlsCol.appendChild(ctrlRow);
+
+        // ── Columna derecha: canvas ────
+        const canvasRow = document.createElement('div');
+        canvasRow.style.cssText = `height:${isExpanded ? ROW_H : ROW_COLLAPSED}px;display:flex;align-items:stretch;margin-bottom:4px;padding-right:10px;box-sizing:border-box;overflow:hidden;transition:height .15s;`;
 
         const wrap = document.createElement('div');
         wrap.className = 'exp-track-canvas-wrap';
-        wrap.style.cursor = _expAudioMode === 'split' ? 'crosshair' : 'pointer';
+        wrap.style.height = isExpanded ? '50px' : '100%';
+        wrap.style.cursor = !isExpanded ? 'pointer' : (_expAudioMode === 'split' ? 'crosshair' : (!t._isTtsTrack ? 'grab' : 'pointer'));
+        wrap.title = isExpanded ? '' : `${t.name} — click para expandir`;
+
+        if (!isExpanded) {
+            wrap.addEventListener('click', _toggleTrackExpand);
+        }
 
         const cv = document.createElement('canvas');
-        cv.height = 34;
+        cv.height = isExpanded ? 50 : ROW_COLLAPSED;
         wrap.appendChild(cv);
-
-        const volSlider = document.createElement('input');
-        volSlider.type = 'range'; volSlider.min = 0; volSlider.max = 100; volSlider.value = t.volume;
-        volSlider.style.cssText = 'width:52px;accent-color:#c8a96e;';
-        volSlider.oninput = () => _expAudioSetVol(t.id, volSlider.value);
-
-        const muteBtn = document.createElement('button');
-        muteBtn.style.cssText = `background:none;border:1px solid ${t.muted ? '#cc6655' : '#2a2a2a'};border-radius:3px;
-            color:${t.muted ? '#cc6655' : '#666'};font-size:.41rem;padding:2px 5px;cursor:pointer;transition:all .12s;font-family:'DM Mono',monospace;`;
-        muteBtn.textContent = 'M';
-        muteBtn.onclick = () => { t.muted = !t.muted; _expAudioRenderTracks(); _expAudioUpdatePanelList(); };
-
-        const delBtn = document.createElement('button');
-        delBtn.style.cssText = 'background:none;border:none;color:#3a3a3a;font-size:.6rem;cursor:pointer;padding:2px 4px;transition:color .12s;line-height:1;';
-        delBtn.textContent = '✕';
-        delBtn.onmouseover = () => delBtn.style.color = '#cc6655';
-        delBtn.onmouseout = () => delBtn.style.color = '#3a3a3a';
-        delBtn.onclick = () => _expAudioRemoveTrack(t.id);
-
-        row.append(lbl, wrap, volSlider, muteBtn, delBtn);
-        container.appendChild(row);
+        canvasRow.appendChild(wrap);
+        container.appendChild(canvasRow);
 
         requestAnimationFrame(() => {
-            cv.width = wrap.clientWidth || 400;
+            const _scrollW = document.getElementById("exp-tl-scroll-wrap");
+            cv.width = wrap.clientWidth || (_scrollW ? _scrollW.clientWidth : 0) || 400;
             _expAudioDrawTrack(cv, t);
-            _expAudioBindTrackEvents(wrap, cv, t);
+            if (isExpanded) _expAudioBindTrackEvents(wrap, cv, t);
         });
     });
 }
@@ -2789,173 +3151,210 @@ function _expAudioDrawTrack(canvas, t) {
     c.clearRect(0, 0, W, H);
     c.fillStyle = '#0a0a0a'; c.fillRect(0, 0, W, H);
 
-    // Para tracks de música (no TTS): el bloque de audio ocupa solo una fracción del canvas
-    // según su duración relativa al video total y su offset de inicio.
-    // offset=0.3 significa que el audio empieza en el 30% del video.
+    // Todos los canvas usan espacio de VIDEO: 0=inicio, W=fin del video.
+    // TTS: bloque de 0 a W (100%). Música: de offset*W a (offset+audioDur/totalDur)*W.
     const totalDur = _expGetTotalDuration() || 1;
-    // Usar duración precargada si el audioEl aún no existe (antes del primer play)
     const audioDur = (t.audioEl && t.audioEl.duration && isFinite(t.audioEl.duration))
         ? t.audioEl.duration
         : (t.audioDuration && isFinite(t.audioDuration) ? t.audioDuration : totalDur);
     const trackOffset = t._isTtsTrack ? 0 : (t.offset || 0);
-    // fracción del canvas que ocupa el audio
-    const audioFrac = t._isTtsTrack ? 1 : Math.min(1 - trackOffset, audioDur / totalDur);
-    // x donde empieza y termina el bloque de audio en el canvas
+    const audioFrac = t._isTtsTrack ? 1 : audioDur / totalDur;
     const blockX1 = trackOffset * W;
     const blockX2 = Math.min(W, blockX1 + audioFrac * W);
 
-    // Zona fuera del audio (antes y después del bloque): marcar con patrón oscuro
+    // Calcular todos los bloques: principal + repeticiones (extraOffsets)
+    const _allOffsets = t._isTtsTrack ? [0] : [trackOffset, ...(t.extraOffsets || [])];
+    const _allBlocks = _allOffsets.map(off => ({
+        x1: off * W,
+        x2: Math.min(W, off * W + audioFrac * W)
+    })).filter(b => b.x1 < W && b.x2 > b.x1);
+
+    // Zonas fuera de todos los bloques → oscuro
     if (!t._isTtsTrack) {
-        c.fillStyle = '#0f0f0f';
-        if (blockX1 > 0) c.fillRect(0, 0, blockX1, H);
-        if (blockX2 < W) c.fillRect(blockX2, 0, W - blockX2, H);
-        // Borde de inicio del bloque
-        c.fillStyle = t.color + '55';
-        c.fillRect(blockX1, 0, 2, H);
+        c.fillStyle = '#101010';
+        // Pintar fondo completo oscuro y luego "borrar" donde hay bloques
+        c.fillRect(0, 0, W, H);
+        _allBlocks.forEach(b => {
+            c.clearRect(b.x1, 0, b.x2 - b.x1, H);
+            c.fillStyle = '#0a0a0a'; c.fillRect(b.x1, 0, b.x2 - b.x1, H);
+        });
+        // Bordes de inicio de cada bloque
+        c.fillStyle = t.color + '66';
+        _allBlocks.forEach(b => c.fillRect(b.x1, 0, 2, H));
+        // Separadores entre repeticiones (línea punteada)
+        if (_allBlocks.length > 1) {
+            c.strokeStyle = t.color + '44'; c.lineWidth = 1;
+            c.setLineDash([2, 3]);
+            _allBlocks.slice(1).forEach(b => {
+                c.beginPath(); c.moveTo(b.x1, 0); c.lineTo(b.x1, H); c.stroke();
+            });
+            c.setLineDash([]);
+        }
     }
 
-    t.segments.forEach((seg, idx) => {
-        if (seg.deleted) return;
-        // Mapear from/to del segmento (0-1 dentro del audio) al canvas global
-        const x1 = blockX1 + seg.from * (blockX2 - blockX1);
-        const x2 = blockX1 + seg.to * (blockX2 - blockX1);
-        const sw = x2 - x1;
-        if (sw < 1) return;
-        const isSel = _expAudioSelectedSeg?.trackId === t.id && _expAudioSelectedSeg?.segIdx === idx;
+    // Dibujar segmentos para cada bloque
+    _allBlocks.forEach((blk, blkIdx) => {
+        const blockX1 = blk.x1, blockX2 = blk.x2;
+        t.segments.forEach((seg, idx) => {
+            if (seg.deleted) return;
+            // seg.from/to son fracción 0-1 DENTRO del audio → mapear al espacio del canvas
+            const x1 = blockX1 + seg.from * (blockX2 - blockX1);
+            const x2 = blockX1 + seg.to * (blockX2 - blockX1);
+            const sw = x2 - x1;
+            if (sw < 1) return;
+            const isSel = _expAudioSelectedSeg?.trackId === t.id && _expAudioSelectedSeg?.segIdx === idx;
 
-        // ── Calcular envelope de volumen para cada pixel del segmento ──────
-        // gainAt(relPos 0-1) devuelve multiplicador 0-1
-        function gainAt(n) {
-            let g = 1;
-            if (seg.fadeIn > 0 && n < seg.fadeIn) g = Math.min(g, n / seg.fadeIn);
-            if (seg.fadeOut > 0 && n > (1 - seg.fadeOut)) g = Math.min(g, (1 - n) / seg.fadeOut);
-            return Math.max(0, Math.min(1, g));
-        }
+            // ── Calcular envelope de volumen para cada pixel del segmento ──────
+            // gainAt(relPos 0-1) devuelve multiplicador 0-1
+            function gainAt(n) {
+                let g = 1;
+                if (seg.fadeIn > 0 && n < seg.fadeIn) g = Math.min(g, n / seg.fadeIn);
+                if (seg.fadeOut > 0 && n > (1 - seg.fadeOut)) g = Math.min(g, (1 - n) / seg.fadeOut);
+                return Math.max(0, Math.min(1, g));
+            }
 
-        // ── Relleno del segmento usando el envelope como altura ────────────
-        c.beginPath();
-        // Trazar la curva superior del envelope (de izquierda a derecha)
-        for (let px = x1; px <= x2; px++) {
-            const n = sw > 0 ? (px - x1) / sw : 0;
-            const g = gainAt(n);
-            const envY = H - g * H; // g=1 → tope, g=0 → fondo
-            if (px === x1) c.moveTo(px, envY); else c.lineTo(px, envY);
-        }
-        // Cerrar por abajo
-        c.lineTo(x2, H); c.lineTo(x1, H); c.closePath();
-        c.fillStyle = t.muted ? '#1a1a1a' : (isSel ? t.color + '40' : t.color + '18');
-        c.fill();
-
-        if (!t.muted) {
-            // ── Waveform simulada, recortada al envelope ────────────────────
-            c.save();
-            // Clip al área del envelope
+            // ── Relleno del segmento usando el envelope como altura ────────────
             c.beginPath();
+            // Trazar la curva superior del envelope (de izquierda a derecha)
             for (let px = x1; px <= x2; px++) {
                 const n = sw > 0 ? (px - x1) / sw : 0;
                 const g = gainAt(n);
-                const envY = H - g * H;
+                const envY = H - g * H; // g=1 → tope, g=0 → fondo
                 if (px === x1) c.moveTo(px, envY); else c.lineTo(px, envY);
             }
+            // Cerrar por abajo
             c.lineTo(x2, H); c.lineTo(x1, H); c.closePath();
-            c.clip();
+            c.fillStyle = t.muted ? '#1a1a1a' : (isSel ? t.color + '40' : t.color + '18');
+            c.fill();
 
-            // Dibujar waveform dentro del clip
-            c.strokeStyle = t.color + (isSel ? 'cc' : '66');
-            c.lineWidth = 1; c.beginPath();
-            const seed = t.id * 137;
-            for (let px = x1; px < x2; px++) {
-                const n = (px - x1) / sw;
-                const amp = Math.sin(n * 80 + seed) * Math.sin(n * 13 + seed * .3) * Math.cos(n * 5);
-                const g = gainAt(n);
-                const mid = H - g * H / 2;          // centro vertical del envelope en este punto
-                const range = g * (H / 2 - 2);       // amplitud proporcional al gain
-                const y = mid + amp * range;
-                px === x1 ? c.moveTo(px, y) : c.lineTo(px, y);
-            }
-            c.stroke();
-            c.restore();
-
-            // ── Línea de envelope (la línea visible de volumen) ─────────────
-            c.beginPath();
-            c.strokeStyle = t.color + 'cc';
-            c.lineWidth = 1.5;
-            for (let px = x1; px <= x2; px++) {
-                const n = sw > 0 ? (px - x1) / sw : 0;
-                const g = gainAt(n);
-                const envY = H - g * H;
-                if (px === x1) c.moveTo(px, envY); else c.lineTo(px, envY);
-            }
-            c.stroke();
-
-            // ── Handles de fade (triángulos arrastrables) ──────────────────
-            if (seg.fadeIn > 0) {
-                const fiX = x1 + sw * seg.fadeIn;
-                const fiY = 0; // tope del fade in
-                c.fillStyle = t.color + 'ee';
+            if (!t.muted) {
+                // ── Waveform simulada, recortada al envelope ────────────────────
+                c.save();
+                // Clip al área del envelope
                 c.beginPath();
-                c.moveTo(fiX - 6, 1); c.lineTo(fiX + 6, 1); c.lineTo(fiX, 10);
-                c.closePath(); c.fill();
-                if (sw * seg.fadeIn > 28) {
-                    c.fillStyle = t.color + '99';
-                    c.font = '8px "DM Mono",monospace'; c.textAlign = 'left'; c.textBaseline = 'top';
-                    c.fillText('fade in', x1 + 3, 12);
+                for (let px = x1; px <= x2; px++) {
+                    const n = sw > 0 ? (px - x1) / sw : 0;
+                    const g = gainAt(n);
+                    const envY = H - g * H;
+                    if (px === x1) c.moveTo(px, envY); else c.lineTo(px, envY);
                 }
-            }
-            if (seg.fadeOut > 0) {
-                const foX = x2 - sw * seg.fadeOut;
-                c.fillStyle = t.color + 'ee';
+                c.lineTo(x2, H); c.lineTo(x1, H); c.closePath();
+                c.clip();
+
+                // Dibujar waveform dentro del clip
+                c.strokeStyle = t.color + (isSel ? 'cc' : '66');
+                c.lineWidth = 1; c.beginPath();
+                const seed = t.id * 137;
+                for (let px = x1; px < x2; px++) {
+                    const n = (px - x1) / sw;
+                    const amp = Math.sin(n * 80 + seed) * Math.sin(n * 13 + seed * .3) * Math.cos(n * 5);
+                    const g = gainAt(n);
+                    const mid = H - g * H / 2;          // centro vertical del envelope en este punto
+                    const range = g * (H / 2 - 2);       // amplitud proporcional al gain
+                    const y = mid + amp * range;
+                    px === x1 ? c.moveTo(px, y) : c.lineTo(px, y);
+                }
+                c.stroke();
+                c.restore();
+
+                // ── Línea de envelope (la línea visible de volumen) ─────────────
                 c.beginPath();
-                c.moveTo(foX - 6, 1); c.lineTo(foX + 6, 1); c.lineTo(foX, 10);
-                c.closePath(); c.fill();
-                if (sw * seg.fadeOut > 28) {
-                    c.fillStyle = t.color + '99';
-                    c.font = '8px "DM Mono",monospace'; c.textAlign = 'right'; c.textBaseline = 'top';
-                    c.fillText('fade out', x2 - 3, 12);
+                c.strokeStyle = t.color + 'cc';
+                c.lineWidth = 1.5;
+                for (let px = x1; px <= x2; px++) {
+                    const n = sw > 0 ? (px - x1) / sw : 0;
+                    const g = gainAt(n);
+                    const envY = H - g * H;
+                    if (px === x1) c.moveTo(px, envY); else c.lineTo(px, envY);
                 }
+                c.stroke();
+
+                // ── Handles de fade (triángulos arrastrables) ──────────────────
+                if (seg.fadeIn > 0) {
+                    const fiX = x1 + sw * seg.fadeIn;
+                    const fiY = 0; // tope del fade in
+                    c.fillStyle = t.color + 'ee';
+                    c.beginPath();
+                    c.moveTo(fiX - 6, 1); c.lineTo(fiX + 6, 1); c.lineTo(fiX, 10);
+                    c.closePath(); c.fill();
+                    if (sw * seg.fadeIn > 28) {
+                        c.fillStyle = t.color + '99';
+                        c.font = '8px "DM Mono",monospace'; c.textAlign = 'left'; c.textBaseline = 'top';
+                        c.fillText('fade in', x1 + 3, 12);
+                    }
+                }
+                if (seg.fadeOut > 0) {
+                    const foX = x2 - sw * seg.fadeOut;
+                    c.fillStyle = t.color + 'ee';
+                    c.beginPath();
+                    c.moveTo(foX - 6, 1); c.lineTo(foX + 6, 1); c.lineTo(foX, 10);
+                    c.closePath(); c.fill();
+                    if (sw * seg.fadeOut > 28) {
+                        c.fillStyle = t.color + '99';
+                        c.font = '8px "DM Mono",monospace'; c.textAlign = 'right'; c.textBaseline = 'top';
+                        c.fillText('fade out', x2 - 3, 12);
+                    }
+                }
+
+                // Borde izquierdo del segmento
+                c.fillStyle = t.color + 'cc'; c.fillRect(x1, 0, 2, H);
             }
 
-            // Borde izquierdo del segmento
-            c.fillStyle = t.color + 'cc'; c.fillRect(x1, 0, 2, H);
-        }
+            if (isSel) {
+                c.strokeStyle = t.color + 'aa'; c.lineWidth = 1.5;
+                c.strokeRect(x1 + 1, 1, sw - 2, H - 2);
+            }
+        }); // end t.segments.forEach
+    }); // end _allBlocks.forEach
 
-        if (isSel) {
-            c.strokeStyle = t.color + 'aa'; c.lineWidth = 1.5;
-            c.strokeRect(x1 + 1, 1, sw - 2, H - 2);
-        }
-    });
+    // ── Cursor de posición — TODOS los tracks usan fracción del video ────
+    // cursorFrac = videoTimeSecs / totalDuration → siempre alineado entre tracks
+    const _totalDurCursor = _expGetTotalDuration() || 1;
+    const _videoTimeCursor = _expTtsGetCurrentTime(_expPreviewFrase);
+    const cursorFrac = _videoTimeCursor / _totalDurCursor;
+    const px = Math.round(Math.max(0, Math.min(1, cursorFrac)) * W);
+    c.fillStyle = 'rgba(255,255,255,.7)'; c.fillRect(px - 1, 0, 2, H);
+}
 
-    // ── Cursor de posición ──────────────────────────────────────────────
-    // Para tracks de música: el cursor refleja la posición del video mapeada al canvas del track
-    // considerando el offset del track. Así el cursor siempre coincide con la posición real.
-    let cursorFrac;
-    if (t._isTtsTrack) {
-        // TTS: cursor basado en currentTime del audio
-        const _activeTts = _expAudioTracks.find(tr => tr.id === t.id && tr.audioEl && !tr.audioEl.paused);
-        if (_activeTts && _activeTts.audioEl.duration) {
-            cursorFrac = _activeTts.audioEl.currentTime / _activeTts.audioEl.duration;
-        } else {
-            cursorFrac = _expPreviewFrase / Math.max(1, sentences.length);
-        }
-    } else {
-        // Música: cursor basado en posición del video relativa al offset del track
-        const totalDur = _expGetTotalDuration() || 1;
-        const videoTimeSecs = _expTtsGetCurrentTime(_expPreviewFrase);
-        const trackOffsetSecs = (t.offset || 0) * totalDur;
-        const dur = (t.audioEl && t.audioEl.duration) || 0;
-        if (dur > 0) {
-            const audioPos = videoTimeSecs - trackOffsetSecs;
-            cursorFrac = Math.max(0, Math.min(1, audioPos / dur));
-            // Si está fuera del rango del track, no mostrar cursor
-            if (audioPos < 0 || audioPos > dur) cursorFrac = -1;
-        } else {
-            cursorFrac = (videoTimeSecs - trackOffsetSecs) / totalDur;
-        }
+// ─── Zoom del timeline ────────────────────────────────────────────────
+function _expZoomIn() {
+    _expTimelineZoom = Math.min(8, parseFloat((_expTimelineZoom * 1.5).toFixed(2)));
+    _expApplyZoom();
+}
+
+function _expZoomOut() {
+    _expTimelineZoom = Math.max(1, parseFloat((_expTimelineZoom / 1.5).toFixed(2)));
+    _expApplyZoom();
+}
+
+function _expApplyZoom() {
+    const zoom = _expTimelineZoom;
+    const lbl = document.getElementById('exp-zoom-label');
+    if (lbl) lbl.textContent = zoom === 1 ? '1×' : zoom.toFixed(1) + '×';
+
+    const trackInner = document.getElementById('exp-tl-scroll-inner');
+    const imgInner = document.getElementById('exp-img-tl-scroll-inner');
+    const scrollWrap = document.getElementById('exp-tl-scroll-wrap');
+    const imgScroll = document.getElementById('exp-img-tl-scroll-wrap');
+
+    if (trackInner) trackInner.style.width = (zoom * 100) + '%';
+    if (imgInner) imgInner.style.width = (zoom * 100) + '%';
+
+    // Habilitar scroll horizontal solo cuando hay zoom
+    if (imgScroll) imgScroll.style.overflowX = zoom > 1 ? 'auto' : 'hidden';
+
+    // Sincronizar scroll entre los dos wrappers (una sola vez)
+    if (scrollWrap && imgScroll && !scrollWrap._scrollBound) {
+        scrollWrap._scrollBound = true;
+        scrollWrap.addEventListener('scroll', () => { imgScroll.scrollLeft = scrollWrap.scrollLeft; });
+        imgScroll.addEventListener('scroll', () => { scrollWrap.scrollLeft = imgScroll.scrollLeft; });
     }
-    if (cursorFrac >= 0) {
-        const px = Math.round(cursorFrac * W);
-        c.fillStyle = 'rgba(255,255,255,.6)'; c.fillRect(px - 1, 0, 2, H);
-    }
+
+    // Re-renderizar todo
+    _expAudioRenderTracks();
+    _expTimelineInit();
+    _expTimelineRender();
+    _expTimelineRulerRender();
 }
 
 // ─── Eventos de track ───────────────────────────────────────────────
@@ -2992,9 +3391,21 @@ function _expAudioBindTrackEvents(wrap, canvas, t) {
         }
         const frac = cx / canvas.width;
         if (_expAudioMode === 'split') { _expAudioSplitAt(t, frac); return; }
-        // Para tracks de música (no TTS): permitir arrastrar el offset del bloque
+        // Para tracks de música (no TTS): detectar en qué bloque se hizo click y arrastrarlo
         if (!t._isTtsTrack) {
-            _expAudioOffsetDrag = { trackId: t.id, canvasEl: canvas, startX: e.clientX, origOffset: t.offset || 0 };
+            const totalDur = _expGetTotalDuration() || 1;
+            const audioDur = t.audioDuration || totalDur;
+            const audioFrac = audioDur / totalDur;
+            const allOffsets = [t.offset || 0, ...(t.extraOffsets || [])];
+            // Determinar qué bloque contiene el click
+            let dragBlockIdx = 0; // 0 = offset principal, 1+ = extraOffsets
+            for (let bi = 0; bi < allOffsets.length; bi++) {
+                const bx1 = allOffsets[bi] * canvas.width;
+                const bx2 = Math.min(canvas.width, bx1 + audioFrac * canvas.width);
+                if (cx >= bx1 - 4 && cx <= bx2 + 4) { dragBlockIdx = bi; break; }
+            }
+            const origOff = dragBlockIdx === 0 ? (t.offset || 0) : t.extraOffsets[dragBlockIdx - 1];
+            _expAudioOffsetDrag = { trackId: t.id, canvasEl: canvas, startX: e.clientX, origOffset: origOff, blockIdx: dragBlockIdx };
             wrap.style.cursor = 'grabbing';
             document.addEventListener('mousemove', _expAudioOnOffsetDrag);
             document.addEventListener('mouseup', _expAudioOnOffsetDragEnd, { once: true });
@@ -3046,12 +3457,18 @@ function _expAudioOnOffsetDrag(e) {
     const W = canvas.getBoundingClientRect().width || canvas.width;
     const dx = e.clientX - _expAudioOffsetDrag.startX;
     const deltaFrac = dx / W;
-    t.offset = Math.max(0, Math.min(1, _expAudioOffsetDrag.origOffset + deltaFrac));
+    const newOff = Math.max(0, Math.min(0.999, _expAudioOffsetDrag.origOffset + deltaFrac));
+    const bi = _expAudioOffsetDrag.blockIdx || 0;
+    if (bi === 0) {
+        t.offset = newOff;
+    } else {
+        if (!t.extraOffsets) t.extraOffsets = [];
+        t.extraOffsets[bi - 1] = newOff;
+    }
     _expAudioDrawTrack(canvas, t);
-    // Mostrar tooltip con posición
     const tooltip = document.getElementById('exp-fade-tooltip');
     if (tooltip) {
-        const pct = Math.round(t.offset * 100);
+        const pct = Math.round(newOff * 100);
         tooltip.style.display = 'block';
         tooltip.style.left = (e.clientX + 12) + 'px';
         tooltip.style.top = (e.clientY - 24) + 'px';
@@ -3126,7 +3543,7 @@ function _expAudioSoloToggle() {
 
 function _expAudioUpdatePanelList() {
     const el = document.getElementById('exp-panel-tracks-list'); if (!el) return;
-    el.innerHTML = _expAudioTracks.map(t => `
+    el.innerHTML = _expAudioTracks.filter(t => !t._isTtsTrack).map(t => `
         <div style="background:#0d0d0d;border:1px solid #1e1e1e;border-radius:5px;
                     padding:6px 9px;display:flex;align-items:center;gap:7px;margin-bottom:5px;">
             <div style="width:7px;height:7px;border-radius:2px;flex-shrink:0;background:${t.color}44;border:1px solid ${t.color}88;"></div>
@@ -3141,9 +3558,18 @@ function _expAudioUpdatePanelList() {
                     style="background:none;border:none;color:#3a3a3a;font-size:.6rem;cursor:pointer;padding:2px 4px;line-height:1;"
                     onmouseover="this.style.color='#cc6655'" onmouseout="this.style.color='#3a3a3a'">✕</button>
         </div>`).join('') || '<div style="font-size:.45rem;color:#2e2e2e;text-align:center;padding:5px 0;">Sin tracks</div>';
-    // Mostrar botón solo si hay tracks
+    // Mostrar botón solo si hay tracks de música (no TTS)
     const ctrl = document.getElementById('exp-audio-preview-controls');
-    if (ctrl) ctrl.style.display = _expAudioTracks.length ? 'block' : 'none';
+    const hasMusicTracks = _expAudioTracks.some(t => !t._isTtsTrack);
+    if (ctrl) ctrl.style.display = hasMusicTracks ? 'block' : 'none';
+    // Sincronizar slider de volumen TTS con el valor actual del track
+    const ttsT = _expAudioTracks.find(t => t._isTtsTrack);
+    const ttsSlider = document.getElementById('exp-tts-vol-slider');
+    const ttsPct = document.getElementById('exp-tts-vol-pct');
+    if (ttsT && ttsSlider) {
+        ttsSlider.value = ttsT.volume;
+        if (ttsPct) ttsPct.textContent = ttsT.volume + '%';
+    }
 }
 
 
@@ -3151,8 +3577,23 @@ function _expAudioUpdatePanelList() {
 // MEZCLA DE AUDIO (OfflineAudioContext → WAV blob)
 // ───────────────────────────────────────────────────────────────────
 async function _expMezclarAudio(buffers, duraciones) {
-    const sampleRate = 22050;
-    const totalSamples = Math.ceil(duraciones.reduce((a, b) => a + b, 0) * sampleRate);
+    // Detectar el sampleRate real del primer buffer disponible
+    // (XTTS suele ser 24000, Edge TTS 24000 o 48000 — no asumir 22050)
+    let sampleRate = 24000;
+    const tmpCtx = new AudioContext();
+    for (let i = 0; i < buffers.length; i++) {
+        if (buffers[i]) {
+            try {
+                const probe = await tmpCtx.decodeAudioData(buffers[i].slice(0));
+                sampleRate = probe.sampleRate;
+                break;
+            } catch (e) { }
+        }
+    }
+    tmpCtx.close();
+
+    const totalSecs = duraciones.reduce((a, b) => a + b, 0);
+    const totalSamples = Math.ceil(totalSecs * sampleRate);
     const offCtx = new OfflineAudioContext(1, totalSamples, sampleRate);
     let offset = 0;
     for (let i = 0; i < buffers.length; i++) {
@@ -3317,6 +3758,7 @@ function _expTtsActualizarUI() {
     const btn = document.getElementById('exp-tts-gen-btn');
     const clrBtn = document.getElementById('exp-tts-clear-btn');
     const progWrap = document.getElementById('exp-tts-progress-wrap');
+    const exportRow = document.getElementById('exp-tts-export-row');
     if (!dot) return;
     if (_expTtsBuffers && _expTtsBuffers.length > 0) {
         const conAudio = _expTtsBuffers.filter(b => b != null).length;
@@ -3326,6 +3768,7 @@ function _expTtsActualizarUI() {
         if (btn) { btn.textContent = 'Regenerar audio TTS'; }
         if (clrBtn) clrBtn.style.display = '';
         if (progWrap) progWrap.style.display = 'none';
+        if (exportRow) exportRow.style.display = 'flex';
         _expTtsMode = 'xtts';
     } else {
         dot.style.background = '#333';
@@ -3334,6 +3777,7 @@ function _expTtsActualizarUI() {
         if (btn) { btn.textContent = 'Pre-generar audio TTS'; btn.disabled = false; btn.style.opacity = '1'; btn.style.color = '#7eb89a'; btn.style.borderColor = '#3a3a3a'; }
         if (clrBtn) clrBtn.style.display = 'none';
         if (progWrap) progWrap.style.display = 'none';
+        if (exportRow) exportRow.style.display = 'none';
     }
 }
 
@@ -3344,6 +3788,72 @@ function _expTtsClear() {
     if (ttsTrack) _expAudioRemoveTrack(ttsTrack.id);
     _expTtsActualizarUI();
     mostrarNotificacion('Audio TTS descartado');
+}
+
+// ── Exportar audio TTS pre-generado como WAV o MP3 ──────────────────
+async function _expTtsExportarAudio(formato = 'wav') {
+    if (!_expTtsBuffers || _expTtsBuffers.length === 0) {
+        mostrarNotificacion('⚠ No hay audio TTS pre-generado'); return;
+    }
+    const chapSel = document.getElementById('chapters');
+    const chapTxt = chapSel?.options[chapSel?.selectedIndex]?.text || 'capitulo';
+
+    // Obtener nombre legible de la voz — quitar código de idioma (ej: "es-MX-GonzaloNeural" → "Gonzalo")
+    const voiceSel = document.getElementById('exp-tts-voice-select');
+    const voiceRaw = voiceSel?.value || (typeof _edgeTtsVoice !== 'undefined' ? _edgeTtsVoice : '');
+    // Edge TTS: "es-MX-GonzaloNeural" → "Gonzalo" / XTTS: puede ser un nombre directo
+    const voiceName = voiceRaw
+        ? voiceRaw.replace(/^[a-z]{2}-[A-Z]{2}-/, '').replace('Neural', '').trim()
+        : 'TTS';
+
+    const fileName = `${chapTxt.trim()} - ${voiceName}`;
+    mostrarNotificacion('⏳ Preparando audio…');
+    try {
+        const total = _expTtsBuffers.length;
+        let duraciones;
+        if (_expTtsDuraciones && _expTtsDuraciones.length === total) {
+            // Al exportar: quitar el +0.15s de padding que existe solo para el preview playback
+            duraciones = _expTtsDuraciones.map(ms => Math.max(0.1, (ms || EXPORT_SEC_FRASE * 1000) / 1000 - 0.15));
+        } else {
+            duraciones = new Array(total).fill(EXPORT_SEC_FRASE);
+            const tmpCtx = new AudioContext();
+            for (let i = 0; i < total; i++) {
+                if (!_expTtsBuffers[i]) continue;
+                // Sin +0.15 — el export no necesita buffer de arranque del <audio> element
+                try { const dec = await tmpCtx.decodeAudioData(_expTtsBuffers[i].slice(0)); duraciones[i] = dec.duration; } catch (e) { }
+            }
+            tmpCtx.close();
+        }
+        const wavBlob = await _expMezclarAudio(_expTtsBuffers, duraciones);
+        if (!wavBlob) throw new Error('Error al mezclar el audio');
+        if (formato === 'mp3') {
+            if (typeof convertirWAVaMP3 !== 'function') { mostrarNotificacion('⚠ convert_mp3.js no cargado — descargando WAV'); _expTtsDescargarWav(wavBlob, fileName); return; }
+            await convertirWAVaMP3(wavBlob, fileName, '192k');
+        } else {
+            _expTtsDescargarWav(wavBlob, fileName);
+        }
+    } catch (err) { console.error('[expTtsExportar]', err); mostrarNotificacion('⚠ Error: ' + err.message); }
+}
+
+function _expTtsDescargarWav(wavBlob, fileName) {
+    const _doFallback = () => {
+        const url = URL.createObjectURL(wavBlob);
+        const a = document.createElement('a');
+        a.href = url; a.download = `${fileName}.wav`;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 8000);
+    };
+    if (typeof window.showSaveFilePicker === 'function') {
+        window.showSaveFilePicker({
+            suggestedName: `${fileName}.wav`,
+            startIn: 'music',
+            types: [{ description: 'Audio WAV', accept: { 'audio/wav': ['.wav'] } }]
+        }).then(async fh => {
+            const w = await fh.createWritable();
+            await w.write(wavBlob); await w.close();
+        }).catch(e => { if (e.name !== 'AbortError') _doFallback(); });
+    } else { _doFallback(); }
+    mostrarNotificacion(`✓ WAV descargado (${(wavBlob.size / 1024 / 1024).toFixed(1)} MB)`);
 }
 
 async function _expTtsPregenerar() {
@@ -3443,7 +3953,12 @@ async function _expTtsPregenerar() {
     if (trackUrl) {
         const id = _expAudioAddTrack('Voz TTS', '#7eb89a', null, trackUrl, true);
         const t = _expAudioTracks.find(t => t.id === id);
-        if (t) t._isTtsTrack = true;
+        if (t) {
+            t._isTtsTrack = true;
+            // Sincronizar volumen con el slider del panel AUDIO TTS
+            const volSlider = document.getElementById('exp-tts-vol-slider');
+            if (volSlider) t.volume = parseInt(volSlider.value) || 80;
+        }
         const ctrl = document.getElementById('exp-audio-preview-controls');
         if (ctrl) ctrl.style.display = '';
     }
