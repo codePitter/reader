@@ -2701,6 +2701,12 @@ function _expAudioPlayStart(isResume) {
             if (t._skipPlay) {
                 console.log('[🎵 audio] ⏭ Track fuera de rango:', t.name);
             } else {
+                // Resetear gain antes de reproducir — evita que quede en 0
+                // si el clip anterior terminó con fade out o fue silenciado
+                if (t.gainNode) {
+                    t.gainNode.gain.cancelScheduledValues(0);
+                    t.gainNode.gain.value = t.muted ? 0 : (t.volume / 100);
+                }
                 const p = t.audioEl.play();
                 if (p) p
                     .then(() => {
@@ -2728,10 +2734,13 @@ function _expAudioFadeLoop(t) {
         const totalDurSecs = _expGetTotalDuration();
         const videoTimeSecs = _expTtsGetCurrentTime(_expPreviewFrase);
         if (totalDurSecs > 0) {
-            // Si el audio llegó al final, silenciar
+            // Si el audio llegó al final, silenciar y limpiar automaciones
             const audioDur = (duration && isFinite(duration)) ? duration : (t.audioDuration || 0);
             if (audioDur > 0 && current >= audioDur - 0.05) {
-                if (t.gainNode) t.gainNode.gain.value = 0;
+                if (t.gainNode) {
+                    t.gainNode.gain.cancelScheduledValues(0);
+                    t.gainNode.gain.value = 0;
+                }
                 return;
             }
             videoFrac = videoTimeSecs / totalDurSecs;
@@ -3937,60 +3946,49 @@ function _expAudioUpdatePanelList() {
 
 // ───────────────────────────────────────────────────────────────────
 // MEZCLA DE AUDIO (OfflineAudioContext → WAV blob)
-// Mezcla TTS + todos los tracks de música con fade in/out aplicado sample a sample.
+// Mezcla TTS + tracks de música usando Web Audio API nativa:
+// - Trim via AudioBufferSourceNode.start(when, offset, duration)
+// - Fade in/out via GainNode.gain.linearRampToValueAtTime en OfflineAudioContext
 // ───────────────────────────────────────────────────────────────────
 async function _expMezclarAudio(buffers, duraciones) {
-    // Detectar el sampleRate real del primer buffer disponible
+    // Detectar sampleRate del primer buffer TTS disponible
     let sampleRate = 24000;
-    const tmpCtx = new AudioContext();
+    const probeCtx = new AudioContext();
     for (let i = 0; i < buffers.length; i++) {
         if (buffers[i]) {
-            try {
-                const probe = await tmpCtx.decodeAudioData(buffers[i].slice(0));
-                sampleRate = probe.sampleRate;
-                break;
-            } catch (e) { }
+            try { const p = await probeCtx.decodeAudioData(buffers[i].slice(0)); sampleRate = p.sampleRate; break; }
+            catch (e) { }
         }
     }
-    tmpCtx.close();
+    probeCtx.close();
 
     const totalSecs = duraciones.reduce((a, b) => a + b, 0);
     const totalSamples = Math.ceil(totalSecs * sampleRate);
 
-    // ── Paso 1: render TTS en OfflineAudioContext ──
+    // ── OfflineAudioContext único para toda la mezcla ──
     const offCtx = new OfflineAudioContext(1, totalSamples, sampleRate);
-    let offset = 0;
-    for (let i = 0; i < buffers.length; i++) {
-        if (buffers[i]) {
-            try {
-                const dec = await offCtx.decodeAudioData(buffers[i].slice(0));
-                const src = offCtx.createBufferSource();
-                src.buffer = dec;
-                src.connect(offCtx.destination);
-                src.start(offset);
-            } catch (e) { }
+
+    // ── Paso 1: TTS — schedule cada frase en su offset de tiempo ──
+    if (buffers && buffers.length) {
+        let ttsOffset = 0;
+        for (let i = 0; i < buffers.length; i++) {
+            if (buffers[i]) {
+                try {
+                    const dec = await offCtx.decodeAudioData(buffers[i].slice(0));
+                    const src = offCtx.createBufferSource();
+                    src.buffer = dec;
+                    src.connect(offCtx.destination);
+                    src.start(ttsOffset);
+                } catch (e) { }
+            }
+            ttsOffset += duraciones[i];
         }
-        offset += duraciones[i];
     }
-    const ttsRendered = await offCtx.startRendering();
-    const ttsData = ttsRendered.getChannelData(0); // Float32Array
 
-    // ── Paso 2: mezclar tracks de música con fades sample a sample ──
+    // ── Paso 2: tracks de música — trim + fade via AudioParam automation ──
     const musicTracks = (_expAudioTracks || []).filter(t => !t._isTtsTrack && !t.muted && t.audioUrl);
-
-    if (musicTracks.length === 0) {
-        // Sin música — devolver solo TTS
-        return _audioBufferToWavBlob(ttsRendered);
-    }
-
-    // Buffer de salida final (stereo si hay música, mono si no)
-    const outSamples = totalSamples;
-    const outData = new Float32Array(outSamples);
-    // Copiar TTS al buffer de salida
-    for (let s = 0; s < outSamples; s++) outData[s] = ttsData[s] || 0;
-
-    // Decodificar y mezclar cada track de música
     const decodeCtx = new AudioContext();
+
     for (const track of musicTracks) {
         let musicBuffer = null;
         try {
@@ -4002,61 +4000,73 @@ async function _expMezclarAudio(buffers, duraciones) {
             continue;
         }
 
-        const musicSr = musicBuffer.sampleRate;
-        const musicData = musicBuffer.getChannelData(0);
-        const musicDur = musicBuffer.duration;
+        const audioDur = musicBuffer.duration;
         const volFactor = (track.volume || 100) / 100;
 
-        // Procesar cada clip del track NLE
         for (const clip of (track.clips || [])) {
-            // clip.timeStart/timeEnd → fracción del video total (0-1)
-            // clip.sourceStart/sourceEnd → fracción del archivo de audio fuente (0-1)
+            // Posiciones absolutas en segundos en el timeline del video
             const clipStartSec = clip.timeStart * totalSecs;
             const clipEndSec = clip.timeEnd * totalSecs;
             const clipDurSec = clipEndSec - clipStartSec;
             if (clipDurSec <= 0) continue;
 
-            const srcStartSec = clip.sourceStart * musicDur;
-            const srcEndSec = clip.sourceEnd * musicDur;
-            const srcDurSec = srcEndSec - srcStartSec;
+            // Offset y duración dentro del archivo fuente
+            const srcStartSec = clip.sourceStart * audioDur;
+            const srcEndSec = clip.sourceEnd * audioDur;
+            const srcDurSec = Math.min(srcEndSec - srcStartSec, clipDurSec);
             if (srcDurSec <= 0) continue;
 
-            const clipStartSample = Math.round(clipStartSec * sampleRate);
-            const clipEndSample = Math.min(outSamples, Math.round(clipEndSec * sampleRate));
-
-            for (let s = clipStartSample; s < clipEndSample; s++) {
-                // Posición normalizada dentro del clip (0-1)
-                const posInClip = (s - clipStartSample) / (clipEndSample - clipStartSample);
-
-                // Calcular envelope fade in/out (igual que mp3cut: lineal sample a sample)
-                let fade = 1.0;
-                if (clip.fadeIn > 0 && posInClip < clip.fadeIn)
-                    fade = Math.min(fade, posInClip / clip.fadeIn);
-                if (clip.fadeOut > 0 && posInClip > (1 - clip.fadeOut))
-                    fade = Math.min(fade, (1 - posInClip) / clip.fadeOut);
-                fade = Math.max(0, Math.min(1, fade));
-
-                // Mapear a muestra del source
-                const srcPos = srcStartSec + posInClip * srcDurSec;
-                const srcSample = Math.floor(srcPos * musicSr);
-                if (srcSample < 0 || srcSample >= musicData.length) continue;
-
-                outData[s] += musicData[srcSample] * volFactor * fade;
+            // Resamplear si hace falta (musicBuffer puede tener sampleRate distinto)
+            let buf = musicBuffer;
+            if (musicBuffer.sampleRate !== sampleRate) {
+                const rsCtx = new OfflineAudioContext(1, Math.ceil(audioDur * sampleRate), sampleRate);
+                const rsSrc = rsCtx.createBufferSource();
+                rsSrc.buffer = musicBuffer;
+                rsSrc.connect(rsCtx.destination);
+                rsSrc.start(0);
+                buf = await rsCtx.startRendering();
             }
+
+            // GainNode para fade + volumen
+            const gainNode = offCtx.createGain();
+            gainNode.connect(offCtx.destination);
+
+            // Aplicar volumen base
+            gainNode.gain.setValueAtTime(volFactor, clipStartSec);
+
+            // Fade in — linearRamp desde 0 hasta volFactor
+            if (clip.fadeIn > 0) {
+                const fadeInDur = clip.fadeIn * clipDurSec;
+                gainNode.gain.setValueAtTime(0, clipStartSec);
+                gainNode.gain.linearRampToValueAtTime(volFactor, clipStartSec + fadeInDur);
+            }
+
+            // Fade out — linearRamp desde volFactor hasta 0
+            if (clip.fadeOut > 0) {
+                const fadeOutStart = clipEndSec - clip.fadeOut * clipDurSec;
+                gainNode.gain.setValueAtTime(volFactor, fadeOutStart);
+                gainNode.gain.linearRampToValueAtTime(0, clipEndSec);
+            }
+
+            // AudioBufferSourceNode con trim nativo: start(when, offset, duration)
+            const src = offCtx.createBufferSource();
+            src.buffer = buf;
+            src.connect(gainNode);
+            src.start(clipStartSec, srcStartSec, srcDurSec);
         }
     }
+
     decodeCtx.close();
 
-    // Normalizar si hay clipping (> 1.0 o < -1.0)
-    let peak = 0;
-    for (let s = 0; s < outSamples; s++) { const a = Math.abs(outData[s]); if (a > peak) peak = a; }
-    if (peak > 1.0) { const inv = 1 / peak; for (let s = 0; s < outSamples; s++) outData[s] *= inv; }
+    const rendered = await offCtx.startRendering();
 
-    // Construir AudioBuffer final y convertir a WAV
-    const outCtx = new OfflineAudioContext(1, outSamples, sampleRate);
-    const outBuf = outCtx.createBuffer(1, outSamples, sampleRate);
-    outBuf.copyToChannel(outData, 0);
-    return _audioBufferToWavBlob(outBuf);
+    // Normalizar picos si hay clipping
+    const data = rendered.getChannelData(0);
+    let peak = 0;
+    for (let i = 0; i < data.length; i++) { const a = Math.abs(data[i]); if (a > peak) peak = a; }
+    if (peak > 1.0) { const inv = 1 / peak; for (let i = 0; i < data.length; i++) data[i] *= inv; }
+
+    return _audioBufferToWavBlob(rendered);
 }
 
 function _audioBufferToWavBlob(ab) {
