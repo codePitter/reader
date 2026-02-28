@@ -3363,8 +3363,25 @@ function _expAudioDrawTrack(canvas, t) {
                 }
             }
 
-            // Borde izquierdo del clip
+            // Borde izquierdo del clip — trim handle visual
             c.fillStyle = t.color + 'cc'; c.fillRect(x1, 0, 2, H);
+            // Handle izquierdo: pequeña pestaña con triángulo
+            if (!t._isTtsTrack) {
+                c.fillStyle = t.color + 'ff';
+                c.fillRect(x1, H * 0.2, 5, H * 0.6);
+                c.beginPath();
+                c.moveTo(x1 + 5, H * 0.2);
+                c.lineTo(x1 + 9, H * 0.5);
+                c.lineTo(x1 + 5, H * 0.8);
+                c.fill();
+                // Handle derecho
+                c.fillRect(x2 - 5, H * 0.2, 5, H * 0.6);
+                c.beginPath();
+                c.moveTo(x2 - 5, H * 0.2);
+                c.lineTo(x2 - 9, H * 0.5);
+                c.lineTo(x2 - 5, H * 0.8);
+                c.fill();
+            }
         }
 
         if (isSel) {
@@ -3432,7 +3449,27 @@ function _expApplyZoom() {
 
 // ─── Eventos de track ───────────────────────────────────────────────
 const _EXP_FADE_HIT = 10;
+const _EXP_TRIM_HIT = 8; // px de zona de hit para trim handles
 let _expAudioOffsetDrag = null; // { trackId, canvasEl, startX, clipIdx, origStart }
+let _expAudioTrimDrag = null;   // { trackId, canvasEl, startX, clipIdx, side, origSource, origTimeStart, origTimeEnd }
+
+// Detecta si el cursor está sobre un trim handle (borde izquierdo o derecho del clip)
+function _expAudioGetTrimHandle(canvas, t, cxVisual, rectWidth) {
+    const W = rectWidth || canvas.getBoundingClientRect().width || canvas.width;
+    for (let idx = 0; idx < (t.clips || []).length; idx++) {
+        const clip = t.clips[idx];
+        const audioFracPerClip = t.audioDuration ? Math.min(1, t.audioDuration / (_expGetTotalDuration() || 1)) : null;
+        const x1 = clip.timeStart * W;
+        const x2 = audioFracPerClip !== null
+            ? Math.min(W, (clip.timeStart + audioFracPerClip * (clip.sourceEnd - clip.sourceStart)) * W)
+            : clip.timeEnd * W;
+        // Borde izquierdo = trim inicio de source
+        if (Math.abs(cxVisual - x1) <= _EXP_TRIM_HIT) return { idx, side: 'left' };
+        // Borde derecho = trim fin de source
+        if (Math.abs(cxVisual - x2) <= _EXP_TRIM_HIT) return { idx, side: 'right' };
+    }
+    return null;
+}
 
 function _expAudioGetFadeHandle(canvas, t, cxVisual, rectWidth) {
     const W = rectWidth || canvas.getBoundingClientRect().width || canvas.width;
@@ -3464,6 +3501,22 @@ function _expAudioBindTrackEvents(wrap, canvas, t) {
             document.addEventListener('mouseup', _expAudioOnFadeDragEnd, { once: true });
             return;
         }
+        // Trim handles — borde izquierdo (sourceStart) o derecho (sourceEnd/timeEnd)
+        if (!t._isTtsTrack) {
+            const th = _expAudioGetTrimHandle(canvas, t, cx);
+            if (th) {
+                const clip = t.clips[th.idx];
+                _expAudioTrimDrag = {
+                    trackId: t.id, canvasEl: canvas, startX: e.clientX, clipIdx: th.idx, side: th.side,
+                    origSourceStart: clip.sourceStart, origSourceEnd: clip.sourceEnd,
+                    origTimeStart: clip.timeStart, origTimeEnd: clip.timeEnd
+                };
+                wrap.style.cursor = 'col-resize';
+                document.addEventListener('mousemove', _expAudioOnTrimDrag);
+                document.addEventListener('mouseup', _expAudioOnTrimDragEnd, { once: true });
+                return;
+            }
+        }
         const frac = cx / canvas.width;
         if (_expAudioMode === 'split') { _expAudioSplitAt(t, frac); return; }
         // Para tracks de música (no TTS): detectar en qué clip NLE está el click y arrastrarlo
@@ -3492,6 +3545,9 @@ function _expAudioBindTrackEvents(wrap, canvas, t) {
             const seg = t.clips[fh.idx];
             const pct = Math.round((fh.side === 'in' ? seg.fadeIn : seg.fadeOut) * 100);
             if (tooltip) { tooltip.style.display = 'block'; tooltip.style.left = (e.clientX + 12) + 'px'; tooltip.style.top = (e.clientY - 24) + 'px'; tooltip.textContent = fh.side === 'in' ? `◁ Fade in: ${pct}%` : `▷ Fade out: ${pct}%`; }
+        } else if (!t._isTtsTrack && _expAudioGetTrimHandle(canvas, t, cx)) {
+            wrap.style.cursor = 'col-resize';
+            if (tooltip) tooltip.style.display = 'none';
         } else {
             if (!t._isTtsTrack && _expAudioMode !== 'split') {
                 wrap.style.cursor = 'grab';
@@ -3559,6 +3615,72 @@ function _expAudioOnOffsetDragEnd(e) {
     if (_expIsPlaying) {
         _expSeekToFrase(_expPreviewFrase);
     }
+}
+
+function _expAudioOnTrimDrag(e) {
+    if (!_expAudioTrimDrag) return;
+    const t = _expAudioTracks.find(t => t.id === _expAudioTrimDrag.trackId); if (!t) return;
+    const canvas = _expAudioTrimDrag.canvasEl;
+    const W = canvas.getBoundingClientRect().width || canvas.width;
+    const totalDur = _expGetTotalDuration() || 1;
+    const audioDur = t.audioDuration || 1;
+    const dx = e.clientX - _expAudioTrimDrag.startX;
+    const deltaFrac = dx / W; // fracción del video total
+
+    const clip = t.clips[_expAudioTrimDrag.clipIdx];
+    if (!clip) return;
+
+    const tooltip = document.getElementById('exp-fade-tooltip');
+
+    if (_expAudioTrimDrag.side === 'left') {
+        // Trim izquierdo: mueve timeStart y sourceStart juntos
+        // deltaFrac en espacio del video → convertir a espacio del source
+        const videoToSource = (clip.sourceEnd - _expAudioTrimDrag.origSourceStart) /
+            Math.max(1e-9, _expAudioTrimDrag.origTimeEnd - _expAudioTrimDrag.origTimeStart);
+        const newTimeStart = Math.max(0, Math.min(_expAudioTrimDrag.origTimeEnd - 0.01,
+            _expAudioTrimDrag.origTimeStart + deltaFrac));
+        const newSourceStart = Math.max(0, Math.min(clip.sourceEnd - 0.01,
+            _expAudioTrimDrag.origSourceStart + deltaFrac * videoToSource));
+        clip.timeStart = newTimeStart;
+        clip.sourceStart = newSourceStart;
+        if (tooltip) {
+            const secs = (newSourceStart * audioDur).toFixed(1);
+            tooltip.style.display = 'block';
+            tooltip.style.left = (e.clientX + 12) + 'px';
+            tooltip.style.top = (e.clientY - 24) + 'px';
+            tooltip.textContent = `⊢ Inicio: ${secs}s`;
+        }
+    } else {
+        // Trim derecho: mueve timeEnd y sourceEnd juntos
+        const videoToSource = (_expAudioTrimDrag.origSourceEnd - clip.sourceStart) /
+            Math.max(1e-9, _expAudioTrimDrag.origTimeEnd - _expAudioTrimDrag.origTimeStart);
+        const newTimeEnd = Math.min(1, Math.max(_expAudioTrimDrag.origTimeStart + 0.01,
+            _expAudioTrimDrag.origTimeEnd + deltaFrac));
+        const newSourceEnd = Math.min(1, Math.max(clip.sourceStart + 0.01,
+            _expAudioTrimDrag.origSourceEnd + deltaFrac * videoToSource));
+        clip.timeEnd = newTimeEnd;
+        clip.sourceEnd = newSourceEnd;
+        if (tooltip) {
+            const secs = (newSourceEnd * audioDur).toFixed(1);
+            tooltip.style.display = 'block';
+            tooltip.style.left = (e.clientX + 12) + 'px';
+            tooltip.style.top = (e.clientY - 24) + 'px';
+            tooltip.textContent = `⊣ Fin: ${secs}s`;
+        }
+    }
+    _expAudioDrawTrack(canvas, t);
+}
+
+function _expAudioOnTrimDragEnd() {
+    if (!_expAudioTrimDrag) return;
+    const tooltip = document.getElementById('exp-fade-tooltip');
+    if (tooltip) tooltip.style.display = 'none';
+    const canvas = _expAudioTrimDrag.canvasEl;
+    if (canvas?.parentElement) canvas.parentElement.style.cursor = 'grab';
+    _expAudioTrimDrag = null;
+    document.removeEventListener('mousemove', _expAudioOnTrimDrag);
+    _expAudioRenderTracks();
+    if (_expIsPlaying) _expSeekToFrase(_expPreviewFrase);
 }
 
 function _expAudioOnFadeDrag(e) {
