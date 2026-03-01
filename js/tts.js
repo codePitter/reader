@@ -8,6 +8,77 @@
 // Voz Edge TTS activa — se puede cambiar desde la UI
 let _edgeTtsVoice = localStorage.getItem('edge_tts_voice') || 'es-MX-JorgeNeural';
 
+// ─── TOGGLE: usar servidor local para reproducción en vivo ───
+// Cuando está activo, leerOracionLocal() se usa en lugar de SpeechSynthesis
+// Se persiste en localStorage para recordar la preferencia del usuario
+let _usarServidorLive = localStorage.getItem('tts_servidor_live') === 'true';
+
+function toggleServidorLive() {
+    _usarServidorLive = !_usarServidorLive;
+    localStorage.setItem('tts_servidor_live', _usarServidorLive ? 'true' : 'false');
+    _sincronizarBtnServidorLive();
+
+    if (_usarServidorLive) {
+        // Verificar que el servidor esté disponible al activar
+        verificarServidorTTS().then(ok => {
+            if (!ok) {
+                _usarServidorLive = false;
+                localStorage.setItem('tts_servidor_live', 'false');
+                _sincronizarBtnServidorLive();
+                mostrarNotificacion('⚠ Servidor TTS no disponible en localhost:5000');
+            } else {
+                mostrarNotificacion('✓ TTS Local activado para reproducción en vivo');
+            }
+        });
+    } else {
+        mostrarNotificacion('🔊 TTS del navegador activado');
+        // Si estaba reproduciendo con el servidor, detener y relanzar con browser synth
+        if (isReading && audioActual) {
+            const idx = currentSentenceIndex;
+            detenerTTS();
+            // Pequeño delay para limpiar estado
+            setTimeout(() => {
+                isReading = true;
+                isPaused = false;
+                envolverOracionesEnSpans(document.getElementById('texto-contenido'), sentences);
+                actualizarEstadoTTS('reproduciendo');
+                leerOracion(idx);
+            }, 100);
+        }
+    }
+
+    // Si estaba reproduciendo con browser synth, relanzar con el servidor
+    if (_usarServidorLive && isReading && !audioActual && synth.speaking) {
+        const idx = currentSentenceIndex;
+        synth.cancel();
+        setTimeout(() => {
+            leerOracionLocal(idx);
+        }, 100);
+    }
+}
+
+// Sincroniza el estado visual del botón toggle en la barra TTS
+function _sincronizarBtnServidorLive() {
+    const btn = document.getElementById('btn-tts-servidor-live');
+    const voiceSelect = document.getElementById('voice-select');
+    const edgeSelect = document.getElementById('edge-voice-select');
+    if (!btn) return;
+
+    if (_usarServidorLive) {
+        btn.classList.add('active');
+        btn.title = 'Usando servidor local (Edge TTS) — clic para volver al navegador';
+        // Mostrar selector de voz Edge, ocultar el del navegador
+        if (edgeSelect) edgeSelect.style.display = '';
+        if (voiceSelect) voiceSelect.style.display = 'none';
+    } else {
+        btn.classList.remove('active');
+        btn.title = 'Usar servidor TTS local (Edge TTS) para reproducción en vivo';
+        // Mostrar selector del navegador, ocultar Edge
+        if (edgeSelect) edgeSelect.style.display = 'none';
+        if (voiceSelect) voiceSelect.style.display = '';
+    }
+}
+
 function setEdgeTtsVoice(voice) {
     _edgeTtsVoice = voice;
     localStorage.setItem('edge_tts_voice', voice);
@@ -30,13 +101,9 @@ async function verificarServidorTTS() {
             const data = await response.json();
             servidorTTSDisponible = true;
             console.log('✅ Servidor TTS local disponible:', data);
-            mostrarNotificacion('🎤 TTS Local (' + (data.engine || 'edge-tts') + ') disponible');
-            // Mantener siempre visible el selector del browser — edge-voice-select solo para export
-            const _evs = document.getElementById('edge-voice-select');
-            if (_evs) _evs.style.display = 'none';
-            const _bvs = document.getElementById('voice-select');
-            if (_bvs) _bvs.style.display = '';
-
+            mostrarNotificacion('🎤 TTS Local (' + (data.engine || 'edge-tts') + ') disponible — actívalo con 🖥');
+            // Sincronizar el botón toggle sin forzar activación automática
+            _sincronizarBtnServidorLive();
             return true;
         }
     } catch (error) {
@@ -243,6 +310,11 @@ if (speechSynthesis.onvoiceschanged !== undefined) {
     speechSynthesis.onvoiceschanged = cargarVoces;
 }
 cargarVoces();
+
+// Sincronizar el estado del botón toggle al cargar la página
+document.addEventListener('DOMContentLoaded', () => {
+    _sincronizarBtnServidorLive();
+});
 
 // Controles de TTS
 document.getElementById('rate-control').addEventListener('input', function (e) {
@@ -457,10 +529,20 @@ function iniciarTTS() {
         abrirvideo();
     }
 
-    // Siempre usar TTS del navegador para reproducción en vivo.
-    // XTTS (leerOracionLocal) queda reservado exclusivamente para exportar video.
-    mostrarNotificacion('🔊 Reproduciendo...');
-    leerOracion(0);
+    // Elegir motor según el toggle _usarServidorLive.
+    // Si el servidor local está activado Y disponible → Edge TTS en vivo.
+    // En caso contrario → SpeechSynthesis del navegador (comportamiento original).
+    if (_usarServidorLive && servidorTTSDisponible) {
+        mostrarNotificacion('🖥 Reproduciendo con TTS Local...');
+        leerOracionLocal(0);
+    } else {
+        if (_usarServidorLive && !servidorTTSDisponible) {
+            mostrarNotificacion('⚠ Servidor no disponible, usando navegador');
+        } else {
+            mostrarNotificacion('🔊 Reproduciendo...');
+        }
+        leerOracion(0);
+    }
 }
 
 // Envuelve cada oración en un <span> para resaltarla durante el TTS

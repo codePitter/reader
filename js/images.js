@@ -1686,27 +1686,24 @@ async function _generarQueriesConClaude(universo) {
         } catch (e) { /* ignorar cache corrupto */ }
     }
 
-    // Usar la misma variable global que translation.js
-    const apiKey = (typeof claudeApiKey !== 'undefined' ? claudeApiKey : '')
-        || localStorage.getItem('claude_api_key') || '';
+    // Usar OpenRouter (gratis con modelos :free)
+    const apiKey = localStorage.getItem('openrouter_api_key') || '';
     if (!apiKey) {
-        console.warn(`[img] ⚠ Claude API key no disponible — no se pueden generar queries para "${universo}"`);
+        console.warn(`[img] ⚠ OpenRouter API key no disponible — no se pueden generar queries para "${universo}"`);
         return null;
     }
 
-    console.log(`[img] 🤖 Generando queries visuales con Claude para universo: "${universo}"…`);
+    console.log(`[img] 🤖 Generando queries visuales con OpenRouter para universo: "${universo}"…`);
 
     try {
-        const res = await fetch('https://api.anthropic.com/v1/messages', {
+        const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'x-api-key': apiKey,
-                'anthropic-version': '2023-06-01',
-                'anthropic-dangerous-direct-browser-access': 'true'
+                'Authorization': `Bearer ${apiKey}`
             },
             body: JSON.stringify({
-                model: 'claude-haiku-4-5-20251001',
+                model: 'meta-llama/llama-3.3-70b-instruct:free',
                 max_tokens: 300,
                 messages: [{
                     role: 'user',
@@ -1731,7 +1728,7 @@ Rules for freesoundQueries (Freesound — 3-5 words each):
 
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
-        const text = data.content?.[0]?.text || '';
+        const text = data.choices?.[0]?.message?.content || '';
         const match = text.match(/\{[\s\S]*?\}/);
         if (!match) throw new Error('No JSON object in response');
         const parsed = JSON.parse(match[0]);
@@ -1739,8 +1736,8 @@ Rules for freesoundQueries (Freesound — 3-5 words each):
         const freesoundQueries = parsed.freesoundQueries;
         if (!Array.isArray(imageQueries) || imageQueries.length === 0) throw new Error('Empty imageQueries');
 
-        console.log(`[img] 🤖 Claude image queries para "${universo}":`, imageQueries);
-        console.log(`[img] 🤖 Claude freesound queries para "${universo}":`, freesoundQueries);
+        console.log(`[img] 🤖 OpenRouter image queries para "${universo}":`, imageQueries);
+        console.log(`[img] 🤖 OpenRouter freesound queries para "${universo}":`, freesoundQueries);
         localStorage.setItem(cacheKey, JSON.stringify({ imageQueries, freesoundQueries }));
 
         // Inyectar image queries en los diccionarios
@@ -1758,7 +1755,7 @@ Rules for freesoundQueries (Freesound — 3-5 words each):
 
         return imageQueries;
     } catch (e) {
-        console.warn(`[img] ⚠ Claude query generation falló:`, e.message);
+        console.warn(`[img] ⚠ OpenRouter query generation falló:`, e.message);
         return null;
     }
 }

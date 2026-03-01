@@ -101,6 +101,34 @@ body {
         font-weight: 500;
     }
 
+/* Botón copiar texto en stats-bar */
+.btn-copy-reading {
+    margin-left: 12px;
+    flex-shrink: 0;
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-dim);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.58rem;
+    font-weight: 600;
+    padding: 3px 8px;
+    cursor: pointer;
+    letter-spacing: 0.04em;
+    transition: border-color 0.15s, color 0.15s, background 0.15s;
+    white-space: nowrap;
+}
+
+    .btn-copy-reading:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+        background: rgba(200, 169, 110, 0.07);
+    }
+
+    .btn-copy-reading:active {
+        background: rgba(200, 169, 110, 0.14);
+    }
+
 /* Reading area */
 .reading-area {
     flex: 1;
@@ -547,14 +575,14 @@ select#voice-select {
 /* Ambos selects de voz dentro de la barra TTS — estilo unificado */
 .tts-control-bar select#voice-select,
 .tts-control-bar select#edge-voice-select {
-    width: 160px !important;
+    width: 120px !important;
     min-width: 0 !important;
-    max-width: 160px !important;
-    padding: 4px 6px !important;
-    font-size: 0.6rem !important;
+    max-width: 120px !important;
+    padding: 4px 5px !important;
+    font-size: 0.58rem !important;
     font-family: 'DM Mono', monospace !important;
     margin-bottom: 0 !important;
-    margin-left: 6px !important;
+    margin-left: 4px !important;
     flex-shrink: 0;
     background: var(--bg) !important;
     color: var(--text) !important;
@@ -562,6 +590,8 @@ select#voice-select {
     border-radius: 4px !important;
     outline: none !important;
     cursor: pointer;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
     .tts-control-bar select#voice-select:focus,
@@ -1633,10 +1663,13 @@ input[type="text"] {
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 7px 20px;
+    padding: 6px 16px;
     background: var(--surface2);
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
+    flex-wrap: nowrap;
+    overflow: hidden;
+    min-height: 40px;
 }
 
     .tts-control-bar .btn-tts {
@@ -1649,21 +1682,22 @@ input[type="text"] {
 .tts-control-bar-sliders {
     display: flex;
     align-items: center;
-    gap: 14px;
-    margin-left: 10px;
+    gap: 8px;
+    margin-left: 6px;
     flex: 1;
+    min-width: 0;
 }
 
 .tts-bar-slider {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
     min-width: 0;
     flex: 1;
 }
 
     .tts-bar-slider label {
-        font-size: 0.58rem;
+        font-size: 0.52rem;
         color: var(--text-dim);
         white-space: nowrap;
         flex-shrink: 0;
@@ -1671,21 +1705,25 @@ input[type="text"] {
 
     .tts-bar-slider input[type="range"] {
         flex: 1;
-        min-width: 50px;
+        min-width: 40px;
+        max-width: 90px;
     }
 
 .tts-bar-voice {
     flex-shrink: 0;
-    max-width: 160px;
+    width: 120px;
+    min-width: 0;
     background: var(--bg);
     border: 1px solid var(--border);
     border-radius: 4px;
     color: var(--text);
     font-family: 'DM Mono', monospace;
-    font-size: 0.6rem;
-    padding: 4px 6px;
+    font-size: 0.58rem;
+    padding: 4px 5px;
     outline: none;
-    margin-left: 6px;
+    margin-left: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
     .tts-bar-voice:focus {
@@ -1704,50 +1742,65 @@ input[type="text"] {
         outline: none;
     }
 
-@media (max-width: 700px) {
+/* Botón toggle: activar servidor TTS local para reproducción en vivo */
+.btn-tts-server-toggle {
+    flex-shrink: 0;
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-dim);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.55rem;
+    font-weight: 600;
+    padding: 4px 7px;
+    cursor: pointer;
+    letter-spacing: 0.03em;
+    transition: border-color 0.18s, color 0.18s, background 0.18s;
+    white-space: nowrap;
+    margin-left: 2px;
+}
 
-    /* Barra TTS: título orientativo */
-    .tts-bar-title {
-        font-size: 0.6rem;
-        color: var(--text-dim);
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        font-family: 'DM Mono', monospace;
-        white-space: nowrap;
-        margin-right: 4px;
-        flex-shrink: 0;
-        opacity: 0.7;
+    .btn-tts-server-toggle:hover {
+        border-color: var(--accent);
+        color: var(--accent);
     }
 
-    /* Botón unificado ▶/⏸ y stop */
-    .btn-tts-unified,
-    #btn-stop {
-        min-width: 30px !important;
-        width: 30px !important;
-        height: 30px !important;
-        padding: 0 !important;
-        font-size: 0.82rem !important;
-        line-height: 1 !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        flex-shrink: 0;
+    .btn-tts-server-toggle.active {
+        border-color: var(--accent2);
+        color: var(--accent2);
+        background: rgba(126, 184, 154, 0.08);
     }
 
+        .btn-tts-server-toggle.active:hover {
+            background: rgba(126, 184, 154, 0.15);
+        }
+
+@media (max-width: 900px) {
     .tts-control-bar {
         flex-wrap: wrap;
         gap: 6px;
+        min-height: unset;
     }
 
     .tts-control-bar-sliders {
         flex-basis: 100%;
         margin-left: 0;
+        order: 10;
+    }
+
+    .tts-bar-slider input[type="range"] {
+        max-width: unset;
     }
 
     .tts-bar-voice {
-        flex-basis: 100%;
-        max-width: 100%;
+        width: auto;
+        max-width: 140px;
         margin-left: 0;
+    }
+
+    .btn-tts-server-toggle {
+        font-size: 0.55rem;
+        padding: 4px 6px;
     }
 }
 
