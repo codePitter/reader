@@ -1,50 +1,41 @@
 ﻿// ═══════════════════════════════════════
-// AUTH — Autenticación con Supabase + Google OAuth
+// AUTH — Autenticación con Supabase + Google OAuth + Email/Password
 // Opcional: la app funciona sin cuenta
 // Depende de: main.js (mostrarNotificacion)
 // Debe cargarse ANTES de auth-ui.js
 // ═══════════════════════════════════════
 
 // ─── CONFIGURACIÓN ───
-// Reemplazá estos valores con los de tu proyecto en Supabase
-// (Settings → API → Project URL y anon key)
-const SUPABASE_URL = 'https://hpofcnhjhopnuiolkzzx.supabase.co';         // ej: https://xyzxyz.supabase.co
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhwb2ZjbmhqaG9wbnVpb2xrenp4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIzNjkzOTcsImV4cCI6MjA4Nzk0NTM5N30.EgIFEVJ_Mc373yYhIz-tFH8Ee83RgKPN0ByUtLVbgxw'; // clave pública (anon/public)
+const SUPABASE_URL = 'https://hpofcnhjhopnuiolkzzx.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhwb2ZjbmhqaG9wbnVpb2xrenp4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIzNjkzOTcsImV4cCI6MjA4Nzk0NTM5N30.EgIFEVJ_Mc373yYhIz-tFH8Ee83RgKPN0ByUtLVbgxw';
 
 // ─── ESTADO GLOBAL DE AUTH ───
-let _supabase = null;       // cliente Supabase inicializado
-let _authUser = null;       // usuario actual (null = no autenticado / modo anónimo)
-let _authReady = false;     // true después de que se resolvió la sesión inicial
+let _supabase = null;
+let _authUser = null;
+let _authReady = false;
 
 // ─── INICIALIZACIÓN ───
 (function initSupabase() {
-    // Verificar que el SDK de Supabase esté cargado
     if (typeof supabase === 'undefined' || typeof supabase.createClient !== 'function') {
-        console.warn('[auth.js] SDK de Supabase no encontrado. Revisa que el script esté incluido en index.html.');
-        _authReady = true; // la app continúa en modo sin cuenta
-        return;
-    }
-
-    if (SUPABASE_URL === 'TU_SUPABASE_URL') {
-        console.warn('[auth.js] Supabase no configurado. Agrega SUPABASE_URL y SUPABASE_ANON_KEY en auth.js.');
+        console.warn('[auth.js] SDK de Supabase no encontrado.');
         _authReady = true;
         return;
     }
 
     _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // Escuchar cambios de sesión (login, logout, token refresh)
     _supabase.auth.onAuthStateChange((event, session) => {
         const prevUser = _authUser;
         _authUser = session?.user ?? null;
 
         if (!_authReady) {
-            // Primera resolución: la app puede terminar de inicializarse
             _authReady = true;
             document.dispatchEvent(new CustomEvent('auth:ready', { detail: { user: _authUser } }));
         }
 
-        if (event === 'SIGNED_IN' && !prevUser) {
+        // SIGNED_IN dispara también al re-enfocar la pestaña (bug conocido de Supabase).
+        // Solo actuar si el user.id cambió de verdad.
+        if (event === 'SIGNED_IN' && _authUser?.id !== prevUser?.id) {
             document.dispatchEvent(new CustomEvent('auth:signin', { detail: { user: _authUser } }));
             _onSignIn(_authUser);
         }
@@ -54,11 +45,9 @@ let _authReady = false;     // true después de que se resolvió la sesión inic
             _onSignOut();
         }
 
-        // Actualizar UI en cualquier cambio
         if (typeof actualizarAuthUI === 'function') actualizarAuthUI(_authUser);
     });
 
-    // Recuperar sesión existente al cargar la página
     _supabase.auth.getSession().then(({ data: { session } }) => {
         if (!_authReady) {
             _authUser = session?.user ?? null;
@@ -71,59 +60,92 @@ let _authReady = false;     // true después de que se resolvió la sesión inic
 
 // ─── LOGIN CON GOOGLE ───
 async function loginConGoogle() {
-    if (!_supabase) {
-        mostrarNotificacion('⚠ Supabase no configurado');
-        return;
-    }
+    if (!_supabase) { mostrarNotificacion('⚠ Supabase no configurado'); return; }
 
     const { error } = await _supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-            redirectTo: window.location.href,  // vuelve a la misma página
-            queryParams: {
-                access_type: 'offline',
-                prompt: 'consent',
+            redirectTo: window.location.href,
+            queryParams: { access_type: 'offline', prompt: 'consent' }
+        }
+    });
+
+    if (error) {
+        console.error('[auth.js] Error Google OAuth:', error);
+        mostrarNotificacion('✕ Error al conectar con Google');
+    }
+}
+
+// ─── LOGIN CON EMAIL/PASSWORD ───
+async function loginConEmail(email, password) {
+    if (!_supabase) { mostrarNotificacion('⚠ Supabase no configurado'); return { error: true }; }
+
+    const { data, error } = await _supabase.auth.signInWithPassword({ email, password });
+
+    if (error) {
+        console.error('[auth.js] Error login email:', error);
+        return { error: _traducirErrorAuth(error.message) };
+    }
+
+    return { data };
+}
+
+// ─── REGISTRO CON EMAIL/PASSWORD ───
+async function registrarConEmail(email, password, nombre) {
+    if (!_supabase) { mostrarNotificacion('⚠ Supabase no configurado'); return { error: true }; }
+
+    const { data, error } = await _supabase.auth.signUp({
+        email,
+        password,
+        options: {
+            data: {
+                full_name: nombre || '',
+                name: nombre || '',
             }
         }
     });
 
     if (error) {
-        console.error('[auth.js] Error al iniciar login con Google:', error);
-        mostrarNotificacion('✕ Error al conectar con Google');
+        console.error('[auth.js] Error registro:', error);
+        return { error: _traducirErrorAuth(error.message) };
     }
-    // Si no hay error, el navegador redirige a Google automáticamente
+
+    // needsConfirm = true cuando Supabase requiere verificar el email antes de dar sesión
+    const needsConfirm = data?.user && !data.session;
+    return { data, needsConfirm };
+}
+
+// ─── RECUPERAR CONTRASEÑA ───
+async function recuperarContrasena(email) {
+    if (!_supabase) { mostrarNotificacion('⚠ Supabase no configurado'); return { error: true }; }
+
+    const { error } = await _supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin + window.location.pathname + '?reset=true',
+    });
+
+    if (error) {
+        console.error('[auth.js] Error reset password:', error);
+        return { error: _traducirErrorAuth(error.message) };
+    }
+
+    return { ok: true };
 }
 
 // ─── LOGOUT ───
 async function cerrarSesion() {
     if (!_supabase) return;
-
     const { error } = await _supabase.auth.signOut();
     if (error) {
-        console.error('[auth.js] Error al cerrar sesión:', error);
+        console.error('[auth.js] Error logout:', error);
         mostrarNotificacion('✕ Error al cerrar sesión');
     }
-    // onAuthStateChange dispara 'SIGNED_OUT' y actualiza la UI
 }
 
 // ─── GETTERS PÚBLICOS ───
+function getAuthUser() { return _authUser; }
+function estaAutenticado() { return _authUser !== null; }
+function getUserId() { return _authUser?.id ?? 'anonymous'; }
 
-/** Devuelve el usuario actual o null si no está autenticado */
-function getAuthUser() {
-    return _authUser;
-}
-
-/** Devuelve true si hay una sesión activa */
-function estaAutenticado() {
-    return _authUser !== null;
-}
-
-/** Devuelve el ID único del usuario (para prefixar localStorage) */
-function getUserId() {
-    return _authUser?.id ?? 'anonymous';
-}
-
-/** Devuelve el nombre para mostrar del usuario */
 function getUserDisplayName() {
     if (!_authUser) return null;
     return _authUser.user_metadata?.full_name
@@ -132,7 +154,6 @@ function getUserDisplayName() {
         || 'Usuario';
 }
 
-/** Devuelve la URL del avatar del usuario */
 function getUserAvatarUrl() {
     if (!_authUser) return null;
     return _authUser.user_metadata?.avatar_url
@@ -140,62 +161,64 @@ function getUserAvatarUrl() {
         || null;
 }
 
-// ─── CONFIGURACIONES POR USUARIO ───
-// localStorage con prefijo por userID para aislar configuraciones entre usuarios
-
-/**
- * Guarda un valor en localStorage prefijado por el usuario actual.
- * Si no está autenticado, usa el prefijo 'anonymous'.
- */
+// ─── CONFIGURACIONES POR USUARIO (localStorage prefijado) ───
 function userSetItem(key, value) {
-    const uid = getUserId();
-    localStorage.setItem(`user_${uid}_${key}`, value);
+    localStorage.setItem(`user_${getUserId()}_${key}`, value);
 }
 
-/**
- * Lee un valor de localStorage prefijado por el usuario actual.
- * Fallback: intenta leer la clave sin prefijo (datos previos sin cuenta).
- */
 function userGetItem(key, fallback = null) {
-    const uid = getUserId();
-    const value = localStorage.getItem(`user_${uid}_${key}`);
+    const value = localStorage.getItem(`user_${getUserId()}_${key}`);
     if (value !== null) return value;
-    // Compatibilidad: leer claves antiguas sin prefijo
     return localStorage.getItem(key) ?? fallback;
 }
 
-/**
- * Elimina un valor de localStorage del usuario actual.
- */
 function userRemoveItem(key) {
-    const uid = getUserId();
-    localStorage.removeItem(`user_${uid}_${key}`);
+    localStorage.removeItem(`user_${getUserId()}_${key}`);
 }
 
 // ─── CALLBACKS INTERNOS ───
-
 function _onSignIn(user) {
-    const name = getUserDisplayName();
-    mostrarNotificacion(`✓ Bienvenido, ${name}`);
-
-    // Cerrar el modal de auth si estaba abierto
     if (typeof cerrarModalAuth === 'function') cerrarModalAuth();
+    mostrarNotificacion(`✓ Bienvenido, ${getUserDisplayName()}`);
 }
 
 function _onSignOut() {
+    if (typeof cerrarModalAuth === 'function') cerrarModalAuth();
     mostrarNotificacion('✓ Sesión cerrada');
 }
 
-// ─── EXPORT (compatibilidad con módulos y acceso global) ───
-// Todas las funciones ya están en el scope global por ser un script clásico.
-// Se exponen explícitamente para mayor claridad.
-window.loginConGoogle   = loginConGoogle;
-window.cerrarSesion     = cerrarSesion;
-window.getAuthUser      = getAuthUser;
-window.estaAutenticado  = estaAutenticado;
-window.getUserId        = getUserId;
+// ─── TRADUCCIÓN DE ERRORES ───
+function _traducirErrorAuth(msg) {
+    if (!msg) return 'Error desconocido';
+    const m = msg.toLowerCase();
+    if (m.includes('invalid login credentials') || m.includes('invalid credentials'))
+        return 'Email o contraseña incorrectos';
+    if (m.includes('email not confirmed'))
+        return 'Confirmá tu email antes de iniciar sesión';
+    if (m.includes('user already registered') || m.includes('already been registered'))
+        return 'Ya existe una cuenta con ese email';
+    if (m.includes('password should be at least'))
+        return 'La contraseña debe tener al menos 6 caracteres';
+    if (m.includes('unable to validate email'))
+        return 'Email inválido';
+    if (m.includes('rate limit'))
+        return 'Demasiados intentos, esperá unos minutos';
+    if (m.includes('network') || m.includes('fetch'))
+        return 'Error de conexión, revisá tu internet';
+    return msg;
+}
+
+// ─── EXPORTS GLOBALES ───
+window.loginConGoogle = loginConGoogle;
+window.loginConEmail = loginConEmail;
+window.registrarConEmail = registrarConEmail;
+window.recuperarContrasena = recuperarContrasena;
+window.cerrarSesion = cerrarSesion;
+window.getAuthUser = getAuthUser;
+window.estaAutenticado = estaAutenticado;
+window.getUserId = getUserId;
 window.getUserDisplayName = getUserDisplayName;
 window.getUserAvatarUrl = getUserAvatarUrl;
-window.userSetItem      = userSetItem;
-window.userGetItem      = userGetItem;
-window.userRemoveItem   = userRemoveItem;
+window.userSetItem = userSetItem;
+window.userGetItem = userGetItem;
+window.userRemoveItem = userRemoveItem;
