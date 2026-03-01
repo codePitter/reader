@@ -24,6 +24,10 @@ let _authReady = false;
 
     _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+    // ── Procesar token OAuth del hash de la URL si existe ──
+    // Supabase v2 a veces no detecta el hash automáticamente en localhost
+    _procesarHashOAuth();
+
     _supabase.auth.onAuthStateChange((event, session) => {
         const prevUser = _authUser;
         _authUser = session?.user ?? null;
@@ -58,14 +62,47 @@ let _authReady = false;
     });
 })();
 
+// ─── PROCESAR HASH OAUTH ───
+function _procesarHashOAuth() {
+    const hash = window.location.hash;
+    if (!hash || !hash.includes('access_token')) return;
+
+    // Limpiar doble hash si existe (bug conocido de Supabase + localhost)
+    const cleanHash = hash.replace(/^#+/, '#');
+    const params = new URLSearchParams(cleanHash.substring(1));
+    const accessToken = params.get('access_token');
+    const refreshToken = params.get('refresh_token');
+
+    if (!accessToken) return;
+
+    console.log('[auth.js] Token OAuth detectado en URL, procesando...');
+
+    // Limpiar la URL sin recargar la página
+    history.replaceState(null, '', window.location.pathname);
+
+    // Setear la sesión manualmente
+    _supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken || ''
+    }).then(({ data, error }) => {
+        if (error) {
+            console.error('[auth.js] Error al setear sesión desde hash:', error);
+        } else {
+            console.log('[auth.js] Sesión restaurada desde hash OAuth');
+        }
+    });
+}
+
 // ─── LOGIN CON GOOGLE ───
 async function loginConGoogle() {
     if (!_supabase) { mostrarNotificacion('⚠ Supabase no configurado'); return; }
 
+    // Limpiar hash de la URL para evitar el bug de doble ## en el redirect
+    const cleanUrl = window.location.origin + window.location.pathname;
     const { error } = await _supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-            redirectTo: window.location.href,
+            redirectTo: cleanUrl,
             queryParams: { access_type: 'offline', prompt: 'consent' }
         }
     });
