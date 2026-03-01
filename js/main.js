@@ -27,8 +27,12 @@ let audioActual = null;
 let _ttsSessionToken = 0;
 
 // ─── REEMPLAZOS ───
-// Cargado desde localStorage al inicio; ui.js lo persiste al modificar
-const reemplazosAutomaticos = JSON.parse(localStorage.getItem('reemplazos_custom') || '{}');
+// Vacío al inicio — se carga por archivo cuando el usuario abre un EPUB.
+// cargarReemplazosParaArchivo() en ui.js lo puebla con la clave específica del libro.
+const reemplazosAutomaticos = {};
+
+// Nombre del archivo EPUB cargado — clave de scope para los reemplazos
+let _epubFilename = '';
 
 // ─── TRADUCCIÓN ───
 let traduccionAutomatica = false;

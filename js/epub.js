@@ -54,6 +54,10 @@ document.getElementById('epub-file').addEventListener('change', async function (
         return;
     }
 
+    // Registrar nombre y cargar los reemplazos guardados para este libro
+    _epubFilename = file.name;
+    if (typeof cargarReemplazosParaArchivo === 'function') cargarReemplazosParaArchivo(file.name);
+
     try {
         document.getElementById('file-name').textContent = 'Cargando...';
         const arrayBuffer = await file.arrayBuffer();
@@ -278,8 +282,14 @@ async function cargarCapitulo(ruta, _cancelToken) {
         const entrada = _capCache[ruta];
         if (entrada && entrada.traducida === traduccionAutomatica && entrada.humanizada === estadoHumanizador) {
             console.log(`⚡ Cargando desde cache: ${ruta.split('/').pop()}`);
+            textoCompleto = entrada.texto;
+            // Onomatopeyas automáticas sobre el texto cacheado
+            if (typeof autoReemplazarOnomatopeyas !== 'undefined' && autoReemplazarOnomatopeyas &&
+                typeof aplicarOnomatopeyasAutomatico === 'function') {
+                textoCompleto = aplicarOnomatopeyasAutomatico(textoCompleto);
+            }
             // Re-aplicar reemplazos al cargar desde cache: pueden haber cambiado desde que se cacheó
-            textoCompleto = aplicarReemplazosAutomaticos(entrada.texto);
+            textoCompleto = aplicarReemplazosAutomaticos(textoCompleto);
             delete _capCache[ruta];
         } else {
             // Cache inválido o no existe — procesar ahora
@@ -314,16 +324,18 @@ async function cargarCapitulo(ruta, _cancelToken) {
             });
             textoCompleto = textoCompleto.replace(/\n\n\n+/g, '\n\n').trim();
 
-            // ─── Barra de progreso unificada: 3 fases ───
-            // Fase 1 (0-60%): Traducción párrafo a párrafo
-            // Fase 2 (60-75%): Revisión
-            // Fase 3 (75-100%): Optimización IA
+            // ─── Barra de progreso unificada: 4 fases ───
+            // Fase 1 (0-55%):  Traducción párrafo a párrafo
+            // Fase 2 (55-70%): Revisión
+            // Fase 3 (70-85%): Optimización IA
+            // Fase 4 (85-100%): Gramática + onomatopeyas
             const _mostrarBarraFase = (fase, pctFase, label) => {
                 if (_traduccionEnBackground) return;
                 let pctGlobal;
-                if (fase === 1) pctGlobal = Math.round(pctFase * 0.60);          // 0-60%
-                else if (fase === 2) pctGlobal = Math.round(60 + pctFase * 0.15); // 60-75%
-                else pctGlobal = Math.round(75 + pctFase * 0.25);                 // 75-100%
+                if (fase === 1) pctGlobal = Math.round(pctFase * 0.55);           // 0-55%
+                else if (fase === 2) pctGlobal = Math.round(55 + pctFase * 0.15); // 55-70%
+                else if (fase === 3) pctGlobal = Math.round(70 + pctFase * 0.15); // 70-85%
+                else pctGlobal = Math.round(85 + pctFase * 0.15);                 // 85-100%
 
                 const labelTexto = label.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
 
@@ -348,7 +360,9 @@ async function cargarCapitulo(ruta, _cancelToken) {
                 if (mpbLabel) mpbLabel.textContent = labelTexto;
                 if (mpbF1) mpbF1.style.color = fase >= 2 ? 'var(--text-muted)' : 'var(--accent2)';
                 if (mpbF2) mpbF2.style.color = fase === 2 ? 'var(--accent2)' : (fase > 2 ? 'var(--text-muted)' : 'var(--text-dim)');
-                if (mpbF3) mpbF3.style.color = fase === 3 ? 'var(--accent2)' : 'var(--text-dim)';
+                if (mpbF3) mpbF3.style.color = fase === 3 ? 'var(--accent2)' : (fase > 3 ? 'var(--text-muted)' : 'var(--text-dim)');
+                const mpbF4 = document.getElementById('mpb-f4');
+                if (mpbF4) mpbF4.style.color = fase === 4 ? 'var(--accent2)' : 'var(--text-dim)';
 
                 // ── Barra antigua (progress-fill + tts-status-label) ──
                 const fill = document.getElementById('progress-fill');
@@ -372,7 +386,9 @@ async function cargarCapitulo(ruta, _cancelToken) {
                 if (kLabel) kLabel.textContent = labelTexto;
                 if (kF1) kF1.style.color = fase >= 2 ? 'var(--text-muted)' : 'var(--accent2)';
                 if (kF2) kF2.style.color = fase === 2 ? 'var(--accent2)' : (fase > 2 ? 'var(--text-muted)' : 'var(--text-dim)');
-                if (kF3) kF3.style.color = fase === 3 ? 'var(--accent2)' : 'var(--text-dim)';
+                if (kF3) kF3.style.color = fase === 3 ? 'var(--accent2)' : (fase > 3 ? 'var(--text-muted)' : 'var(--text-dim)');
+                const kF4 = document.getElementById('ktl-f4');
+                if (kF4) kF4.style.color = fase === 4 ? 'var(--accent2)' : 'var(--text-dim)';
             };
 
             if (traduccionAutomatica) {
@@ -416,29 +432,73 @@ async function cargarCapitulo(ruta, _cancelToken) {
                 document.getElementById('tts-status').textContent = 'Detenido';
             }
 
-            // Completar barra y ocultarla
-            _mostrarBarraFase(3, 100, '✓ Listo');
+            // Completar barra fases 1-3 y mostrar transición
+            _mostrarBarraFase(3, 100, '✓ Optimización lista');
+            await new Promise(r => setTimeout(r, 150));
+        }
+
+        // ── Fase 4: Onomatopeyas + Gramática (SIEMPRE, fuera del bloque traducción) ──
+        const _grammarActivo = typeof grammarReviewActivo !== 'undefined' && grammarReviewActivo &&
+            typeof revisarGramaticaYOnomatopeyas === 'function';
+        const _autoOnomaActivo = typeof autoReemplazarOnomatopeyas !== 'undefined' && autoReemplazarOnomatopeyas &&
+            typeof aplicarOnomatopeyasAutomatico === 'function';
+
+        if (_autoOnomaActivo) {
+            // Siempre correr reemplazo silencioso primero (incluso si grammar también está activo)
+            textoCompleto = aplicarOnomatopeyasAutomatico(textoCompleto);
+        }
+
+        if (_grammarActivo) {
+            // Revisión interactiva completa con LanguageTool (ya incluye onomatopeyas en diálogo,
+            // pero el reemplazo silencioso de arriba ya limpió las más obvias)
+            const mpbWrap2 = document.getElementById('main-processing-bar');
+            if (mpbWrap2) mpbWrap2.style.display = 'flex';
+            const mpbFill2 = document.getElementById('mpb-fill');
+            const mpbPct2 = document.getElementById('mpb-pct');
+            const mpbLabel2 = document.getElementById('mpb-label');
+            if (mpbFill2) mpbFill2.style.width = '85%';
+            if (mpbPct2) mpbPct2.textContent = '85%';
+            if (mpbLabel2) mpbLabel2.textContent = '📝 Revisión gramatical...';
+            const mpbF4b = document.getElementById('mpb-f4');
+            if (mpbF4b) mpbF4b.style.color = 'var(--accent2)';
+            document.getElementById('tts-status').textContent = '📝 Gramática...';
+            textoCompleto = await revisarGramaticaYOnomatopeyas(textoCompleto);
+            if (_isCancelled()) {
+                ['main-processing-bar', 'video-translation-progress'].forEach(id => {
+                    const el = document.getElementById(id); if (el) el.style.display = 'none';
+                });
+                return;
+            }
+            document.getElementById('tts-status').textContent = 'Detenido';
+        }
+
+        // ── Reemplazos manuales del usuario ──
+        textoCompleto = aplicarReemplazosAutomaticos(textoCompleto);
+
+        // ── Ocultar barra de progreso ──
+        {
+            const lastFase = (_grammarActivo || _autoOnomaActivo) ? 4 : 3;
+            const mpbWrapF = document.getElementById('main-processing-bar');
+            const mpbFillF = document.getElementById('mpb-fill');
+            const mpbPctF = document.getElementById('mpb-pct');
+            const mpbLabelF = document.getElementById('mpb-label');
+            if (mpbFillF) mpbFillF.style.width = '100%';
+            if (mpbPctF) mpbPctF.textContent = '100%';
+            if (mpbLabelF) mpbLabelF.textContent = '✓ Listo';
             setTimeout(() => {
-                // Ocultar barra del video
+                if (mpbWrapF) mpbWrapF.style.display = 'none';
                 const kWrap = document.getElementById('video-translation-progress');
                 if (kWrap) kWrap.style.display = 'none';
-                // Ocultar barra del main
-                const mpbWrap = document.getElementById('main-processing-bar');
-                if (mpbWrap) mpbWrap.style.display = 'none';
-                // Restaurar ambient player
                 const ambPlayerEl = document.getElementById('ambient-player');
                 if (ambPlayerEl && typeof ambientPlaying !== 'undefined') {
                     ambPlayerEl.style.opacity = '';
                     ambPlayerEl.style.pointerEvents = '';
                 }
-                // Resetear progress-fill antiguo
                 const fill = document.getElementById('progress-fill');
                 const pctEl = document.getElementById('tts-percent');
                 if (fill) setTimeout(() => { fill.style.width = '0%'; }, 400);
                 if (pctEl) setTimeout(() => { pctEl.style.display = 'none'; }, 400);
             }, 800);
-
-            textoCompleto = aplicarReemplazosAutomaticos(textoCompleto);
         }
 
         renderizarTextoEnContenedor(document.getElementById('texto-contenido'), textoCompleto);

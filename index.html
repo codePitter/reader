@@ -6,6 +6,16 @@
     <title>TotalReader con TTS</title>
     <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
+    <style>
+        .ajustes-tab-btn.active {
+            color: var(--accent) !important;
+            border-bottom-color: var(--accent) !important;
+        }
+
+        .ajustes-tab-btn:hover:not(.active) {
+            color: var(--text) !important;
+        }
+    </style>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📚</text></svg>">
 </head>
 <body>
@@ -43,6 +53,9 @@
                 🎵 Exportar audio
             </button>
             <span class="subtitle" id="current-chapter-title">Ningún capítulo seleccionado</span>
+            <button type="button" class="rec-btn" onclick="abrirAjustes()" style="margin-left:auto;margin-bottom:0;" title="Ajustes">
+                ☰ Ajustes
+            </button>
         </div>
 
         <div class="stats-bar">
@@ -205,24 +218,10 @@
             </div>
             <div class="ambient-body">
 
-                <!-- API Key panel -->
-                <div id="freesound-key-panel" style="margin-bottom:10px;">
-                    <div style="font-size:0.58rem;color:var(--text-dim);margin-bottom:4px;">
-                        🎵 Freesound API Key <span style="color:var(--accent2)" id="key-status"></span>
-                    </div>
-                    <div style="display:flex;gap:6px;">
-                        <input type="password" id="freesound-api-key" placeholder="Pegar API key..."
-                               style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:4px;
-                    color:var(--text);font-family:'DM Mono',monospace;font-size:0.62rem;padding:5px 8px;outline:none;">
-                        <button type="button" onclick="guardarApiKey()"
-                                style="background:var(--accent2);border:none;border-radius:4px;color:var(--bg);
-                    font-family:'DM Mono',monospace;font-size:0.6rem;padding:5px 8px;cursor:pointer;">
-                            OK
-                        </button>
-                    </div>
-                    <div style="font-size:0.55rem;color:var(--text-dim);margin-top:3px;">
-                        Sin key → generador procedural local
-                    </div>
+                <!-- IDs mantenidos para player.js — UI movida a ☰ Ajustes → API Keys -->
+                <div style="display:none;">
+                    <input type="password" id="freesound-api-key">
+                    <span id="key-status"></span>
                 </div>
 
                 <div class="ambient-genres">
@@ -293,6 +292,7 @@
                 <span id="mpb-f1" style="transition:color 0.3s;">① Traducción</span>
                 <span id="mpb-f2" style="transition:color 0.3s;">② Revisión</span>
                 <span id="mpb-f3" style="transition:color 0.3s;">③ Optimización</span>
+                <span id="mpb-f4" style="transition:color 0.3s;color:var(--text-dim);">④ Gramática</span>
             </div>
         </div>
 
@@ -451,11 +451,9 @@
                         <span class="toggle-slider"></span>
                     </label>
                 </div>
-                <div id="claude-key-panel" style="margin-top:6px;display:none;">
-                    <select id="humanizer-provider" onchange="cambiarProveedorHumanizer(this.value)"
-                            style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:4px;
-                                   color:var(--text);font-family:'DM Mono',monospace;font-size:0.62rem;
-                                   padding:5px 8px;outline:none;cursor:pointer;margin-bottom:6px;">
+                <!-- IDs requeridos por translation.js — ocultos; UI en ☰ Ajustes → API Keys -->
+                <div id="claude-key-panel" style="display:none;">
+                    <select id="humanizer-provider" onchange="cambiarProveedorHumanizer(this.value)">
                         <option value="perplexity">Perplexity AI (sonar)</option>
                         <option value="openai">OpenAI (gpt-4o-mini)</option>
                         <option value="anthropic">Anthropic (claude-haiku)</option>
@@ -463,22 +461,17 @@
                         <option value="groq">Groq (llama-3.3-70b)</option>
                         <option value="openrouter">OpenRouter (auto)</option>
                     </select>
-                    <div style="font-size:0.58rem;color:var(--text-dim);margin-bottom:4px;">
-                        🔑 API Key <span style="color:var(--accent2)" id="claude-key-status"></span>
-                    </div>
-                    <div style="display:flex;gap:6px;">
-                        <input type="password" id="claude-api-key" placeholder="Pega tu API key..."
-                               style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:4px;
-                               color:var(--text);font-family:'DM Mono',monospace;font-size:0.62rem;padding:5px 8px;outline:none;">
-                        <button type="button" onclick="guardarClaudeApiKey()"
-                                style="background:var(--accent);border:none;border-radius:4px;color:var(--bg);
-                                font-family:'DM Mono',monospace;font-size:0.6rem;padding:5px 8px;cursor:pointer;">
-                            OK
-                        </button>
-                    </div>
-                    <div style="font-size:0.55rem;color:var(--text-dim);margin-top:3px;" id="humanizer-info">
-                        Procesa ~2500 chars por bloque · puede tardar unos segundos
-                    </div>
+                    <span id="claude-key-status"></span>
+                    <input type="password" id="claude-api-key">
+                    <div id="humanizer-info"></div>
+                </div>
+                <div style="font-size:0.58rem;color:var(--text-dim);margin-top:5px;">
+                    Configura la API key en
+                    <button onclick="abrirAjustes('apikeys')" style="background:none;border:none;
+                        color:var(--accent2);font-family:'DM Mono',monospace;font-size:0.58rem;
+                        padding:0;cursor:pointer;text-decoration:underline;">
+                        ☰ Ajustes → API Keys
+                    </button>
                 </div>
             </div>
 
@@ -503,6 +496,40 @@
                 </label>
             </div>
 
+            <!-- ── Reemplazo automático onomatopeyas ── -->
+            <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">
+                <div class="toggle-row">
+                    <span style="display:flex;flex-direction:column;gap:2px;">
+                        <span>🔊 Onomatopeyas → español</span>
+                        <span style="font-size:0.62rem;color:var(--text-dim);" id="auto-onoma-status">Desactivado</span>
+                    </span>
+                    <label class="toggle">
+                        <input type="checkbox" id="auto-onoma" onchange="if(typeof toggleAutoOnoma==='function')toggleAutoOnoma()">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+                <div style="font-size:0.57rem;color:var(--text-dim);margin-top:3px;line-height:1.45;">
+                    Reemplaza "Tsk", "Hmm", "Oof", etc. por equivalentes en español al cargar el capítulo
+                </div>
+            </div>
+
+            <!-- ── Revisión gramatical (LanguageTool) ── -->
+            <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">
+                <div class="toggle-row">
+                    <span style="display:flex;flex-direction:column;gap:2px;">
+                        <span>📝 Revisión gramatical</span>
+                        <span style="font-size:0.62rem;color:var(--text-dim);" id="grammar-review-status">Desactivado</span>
+                    </span>
+                    <label class="toggle">
+                        <input type="checkbox" id="grammar-review" onchange="if(typeof toggleGrammarReview==='function')toggleGrammarReview()">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+                <div style="font-size:0.57rem;color:var(--text-dim);margin-top:3px;line-height:1.45;">
+                    LanguageTool · diálogo interactivo · incluye onomatopeyas
+                </div>
+            </div>
+
             <!-- ── Botón Aplicar ── -->
             <div id="aplicar-row" style="display:none;margin-top:10px;">
                 <button type="button" id="btn-aplicar" onclick="aplicarConfiguracion()"
@@ -518,26 +545,18 @@
             </div>
         </div>
 
-        <!-- Reemplazar palabras -->
+        <!-- Reemplazar palabras — movido a ☰ Ajustes → Reemplazar -->
         <div class="sidebar-section">
-            <div class="section-label collapsible-label" onclick="toggleReemplazar()" style="cursor:pointer;user-select:none;display:flex;align-items:center;">
-                Reemplazar
-                <span id="reemplazar-arrow" style="margin-left:auto;font-size:0.7rem;color:var(--text-dim);">▶</span>
-                <button type="button" onclick="event.stopPropagation();abrirModalReemplazos()" title="Ver reemplazos activos"
-                        style="margin-left:6px;background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-dim);font-size:0.58rem;padding:1px 5px;cursor:pointer;line-height:1.4;transition:color 0.2s,border-color 0.2s;"
+            <div class="section-label" style="display:flex;align-items:center;justify-content:space-between;">
+                <span>Reemplazar</span>
+                <button type="button" onclick="abrirAjustes('reemplazar')"
+                        style="background:none;border:1px solid var(--border);border-radius:4px;
+                               color:var(--text-dim);font-family:'DM Mono',monospace;font-size:0.6rem;
+                               padding:2px 8px;cursor:pointer;transition:color 0.2s,border-color 0.2s;"
                         onmouseover="this.style.color='var(--accent)';this.style.borderColor='var(--accent)'"
                         onmouseout="this.style.color='var(--text-dim)';this.style.borderColor='var(--border)'">
-                    📋
+                    ☰ Abrir Ajustes
                 </button>
-            </div>
-            <div class="replace-pair" id="reemplazar-body" style="display:none;">
-                <input type="text" id="palabra-buscar" placeholder="Buscar...">
-                <input type="text" id="palabra-reemplazar" placeholder="Reemplazar con...">
-                <div style="display:flex;gap:6px;">
-                    <button type="button" class="btn btn-secondary" id="btn-limpiar-reemplazos" onclick="limpiarReemplazosGuardados()" style="flex:1;font-size:0.62rem;" disabled>🗑 Limpiar</button>
-                    <button type="button" class="btn btn-primary" onclick="reemplazarPalabra()" style="flex:1;">Reemplazar</button>
-                </div>
-                <div id="reemplazos-guardados-lista" style="display:none;margin-top:6px;max-height:90px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--border) transparent;"></div>
             </div>
         </div>
 
@@ -828,6 +847,202 @@
         </div>
     </div>
 
+    <!-- IDs ocultos requeridos por grammar.js -->
+    <div style="display:none;">
+        <input id="lt-username" type="text">
+        <input id="lt-apikey" type="password">
+        <span id="lt-cred-status"></span>
+    </div>
+
+    <!-- ─── MODAL AJUSTES (☰) ─── -->
+    <div id="modal-ajustes" style="display:none;position:fixed;inset:0;z-index:3000;
+         background:rgba(8,7,6,0.82);align-items:flex-start;justify-content:center;
+         padding:32px 16px;overflow-y:auto;">
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;
+                    width:100%;max-width:560px;font-family:'DM Mono',monospace;
+                    box-shadow:0 12px 48px rgba(0,0,0,0.7);overflow:hidden;">
+
+            <!-- Cabecera -->
+            <div style="display:flex;align-items:center;justify-content:space-between;
+                        padding:16px 20px;border-bottom:1px solid var(--border);">
+                <span style="font-size:0.95rem;font-weight:700;color:var(--text);letter-spacing:0.02em;">⚙️ Ajustes</span>
+                <button onclick="cerrarAjustes()"
+                        style="background:none;border:none;color:var(--text-dim);font-size:1.1rem;
+                               cursor:pointer;padding:0;transition:color 0.2s;line-height:1;"
+                        onmouseover="this.style.color='#ff6b6b'"
+                        onmouseout="this.style.color='var(--text-dim)'">
+                    ✕
+                </button>
+            </div>
+
+            <!-- Tabs -->
+            <div style="display:flex;border-bottom:1px solid var(--border);background:var(--bg);">
+                <button class="ajustes-tab-btn active" data-tab="apikeys" onclick="cambiarSolapa('apikeys')"
+                        style="flex:1;background:none;border:none;border-bottom:2px solid transparent;
+                               color:var(--text-dim);font-family:'DM Mono',monospace;font-size:0.68rem;
+                               font-weight:600;padding:11px 6px;cursor:pointer;letter-spacing:0.03em;
+                               transition:color 0.2s,border-color 0.2s;">
+                    🔑 API Keys
+                </button>
+                <button class="ajustes-tab-btn" data-tab="reemplazar" onclick="cambiarSolapa('reemplazar')"
+                        style="flex:1;background:none;border:none;border-bottom:2px solid transparent;
+                               color:var(--text-dim);font-family:'DM Mono',monospace;font-size:0.68rem;
+                               font-weight:600;padding:11px 6px;cursor:pointer;letter-spacing:0.03em;
+                               transition:color 0.2s,border-color 0.2s;">
+                    🔄 Reemplazar
+                </button>
+            </div>
+
+            <!-- ════ PANEL: API KEYS ════ -->
+            <div id="ajustes-panel-apikeys" class="ajustes-panel" style="padding:20px;">
+
+                <!-- Humanizador IA -->
+                <div style="margin-bottom:18px;padding-bottom:18px;border-bottom:1px solid var(--border);">
+                    <div style="font-size:0.62rem;font-weight:700;color:var(--text);letter-spacing:0.06em;text-transform:uppercase;margin-bottom:10px;">✨ Humanizador IA</div>
+                    <div style="font-size:0.58rem;color:var(--text-dim);margin-bottom:4px;">Proveedor</div>
+                    <select id="ajustes-humanizer-provider" onchange="cambiarProveedorHumanizerAjustes(this.value)"
+                            style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:4px;
+                                   color:var(--text);font-family:'DM Mono',monospace;font-size:0.62rem;
+                                   padding:5px 8px;outline:none;cursor:pointer;margin-bottom:8px;">
+                        <option value="perplexity">Perplexity AI (sonar)</option>
+                        <option value="openai">OpenAI (gpt-4o-mini)</option>
+                        <option value="anthropic">Anthropic (claude-haiku)</option>
+                        <option value="gemini">Google Gemini (flash)</option>
+                        <option value="groq">Groq (llama-3.3-70b)</option>
+                        <option value="openrouter">OpenRouter (auto)</option>
+                    </select>
+                    <div style="font-size:0.58rem;color:var(--text-dim);margin-bottom:4px;">
+                        API Key <span id="ajustes-humanizer-key-status" style="color:var(--accent2);margin-left:4px;"></span>
+                    </div>
+                    <div style="display:flex;gap:6px;">
+                        <input type="password" id="ajustes-humanizer-key" placeholder="Pega tu API key..."
+                               style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:4px;
+                                      color:var(--text);font-family:'DM Mono',monospace;font-size:0.62rem;padding:5px 8px;outline:none;">
+                        <button type="button" onclick="guardarHumanizerKeyDesdeAjustes()"
+                                style="background:var(--accent);border:none;border-radius:4px;color:var(--bg);
+                                       font-family:'DM Mono',monospace;font-size:0.6rem;padding:5px 10px;cursor:pointer;">
+                            Guardar
+                        </button>
+                    </div>
+                </div>
+
+                <!-- LanguageTool -->
+                <div style="margin-bottom:18px;padding-bottom:18px;border-bottom:1px solid var(--border);">
+                    <div style="font-size:0.62rem;font-weight:700;color:var(--text);letter-spacing:0.06em;text-transform:uppercase;margin-bottom:10px;">
+                        📝 LanguageTool
+                        <span style="font-weight:400;text-transform:none;color:var(--text-dim);font-size:0.55rem;margin-left:6px;">(revisión gramatical · opcional)</span>
+                    </div>
+                    <div style="font-size:0.58rem;color:var(--text-dim);margin-bottom:6px;">
+                        Cuenta gratis → 20 K chars/req · sin cuenta → ~1 400 chars/req
+                        <span id="ajustes-lt-status" style="color:var(--accent2);margin-left:4px;"></span>
+                    </div>
+                    <input type="text" id="ajustes-lt-username" placeholder="Email de tu cuenta LT..."
+                           style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:4px;
+                                  color:var(--text);font-family:'DM Mono',monospace;font-size:0.62rem;
+                                  padding:5px 8px;outline:none;box-sizing:border-box;margin-bottom:6px;">
+                    <div style="display:flex;gap:6px;margin-bottom:4px;">
+                        <input type="password" id="ajustes-lt-apikey" placeholder="API key de LT..."
+                               style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:4px;
+                                      color:var(--text);font-family:'DM Mono',monospace;font-size:0.62rem;padding:5px 8px;outline:none;">
+                        <button type="button" onclick="guardarLtDesdeAjustes()"
+                                style="background:var(--accent2);border:none;border-radius:4px;color:var(--bg);
+                                       font-family:'DM Mono',monospace;font-size:0.6rem;padding:5px 10px;cursor:pointer;">
+                            Guardar
+                        </button>
+                    </div>
+                    <div style="font-size:0.52rem;color:var(--text-dim);">
+                        Registro gratis: <a href="https://languagetool.org/es/cuenta" target="_blank" rel="noopener"
+                                            style="color:var(--accent2);text-decoration:none;">languagetool.org/es/cuenta</a>
+                    </div>
+                </div>
+
+                <!-- Freesound -->
+                <div>
+                    <div style="font-size:0.62rem;font-weight:700;color:var(--text);letter-spacing:0.06em;text-transform:uppercase;margin-bottom:10px;">
+                        🎵 Freesound
+                        <span style="font-weight:400;text-transform:none;color:var(--text-dim);font-size:0.55rem;margin-left:6px;">(música ambiental)</span>
+                    </div>
+                    <div style="font-size:0.58rem;color:var(--text-dim);margin-bottom:4px;">
+                        API Key <span id="ajustes-freesound-status" style="color:var(--accent2);margin-left:4px;"></span>
+                    </div>
+                    <div style="display:flex;gap:6px;margin-bottom:4px;">
+                        <input type="password" id="ajustes-freesound-key" placeholder="Freesound API key..."
+                               style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:4px;
+                                      color:var(--text);font-family:'DM Mono',monospace;font-size:0.62rem;padding:5px 8px;outline:none;">
+                        <button type="button" onclick="guardarFreesoundDesdeAjustes()"
+                                style="background:var(--accent);border:none;border-radius:4px;color:var(--bg);
+                                       font-family:'DM Mono',monospace;font-size:0.6rem;padding:5px 10px;cursor:pointer;">
+                            Guardar
+                        </button>
+                    </div>
+                    <div style="font-size:0.52rem;color:var(--text-dim);">
+                        Sin key: generador procedural local · API gratis en
+                        <a href="https://freesound.org/apiv2/apply" target="_blank" rel="noopener"
+                           style="color:var(--accent2);text-decoration:none;">freesound.org</a>
+                    </div>
+                </div>
+
+            </div><!-- /panel apikeys -->
+            <!-- ════ PANEL: REEMPLAZAR ════ -->
+            <div id="ajustes-panel-reemplazar" class="ajustes-panel" style="display:none;padding:20px;">
+
+                <!-- Archivo activo -->
+                <div style="margin-bottom:12px;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;">
+                    <div style="font-size:0.55rem;color:var(--text-dim);margin-bottom:2px;text-transform:uppercase;letter-spacing:0.05em;">Libro activo</div>
+                    <div id="ajustes-archivo-activo" style="font-size:0.68rem;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Sin archivo cargado</div>
+                </div>
+
+                <div style="font-size:0.6rem;color:var(--text-dim);margin-bottom:14px;line-height:1.55;padding:7px 10px;border-left:2px solid var(--border);">
+                    Los reemplazos se guardan <strong style="color:var(--text);">por libro</strong>.
+                    Cargar un archivo diferente cargará sus propios reemplazos.
+                </div>
+
+                <!-- Formulario -->
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+                    <div>
+                        <div style="font-size:0.55rem;color:var(--text-dim);margin-bottom:3px;">Buscar</div>
+                        <input type="text" id="ajustes-buscar" placeholder="Palabra o frase..."
+                               style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:4px;
+                                      color:var(--text);font-family:'DM Mono',monospace;font-size:0.65rem;
+                                      padding:6px 8px;outline:none;box-sizing:border-box;">
+                    </div>
+                    <div>
+                        <div style="font-size:0.55rem;color:var(--text-dim);margin-bottom:3px;">Reemplazar con</div>
+                        <input type="text" id="ajustes-reemplazar" placeholder="Nuevo texto (vacío = eliminar)..."
+                               style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:4px;
+                                      color:var(--text);font-family:'DM Mono',monospace;font-size:0.65rem;
+                                      padding:6px 8px;outline:none;box-sizing:border-box;">
+                    </div>
+                </div>
+                <button type="button" onclick="reemplazarPalabra()"
+                        style="width:100%;background:var(--accent);border:none;border-radius:6px;color:var(--bg);
+                               font-family:'DM Mono',monospace;font-size:0.7rem;font-weight:700;padding:9px 0;
+                               cursor:pointer;transition:opacity 0.2s;letter-spacing:0.03em;margin-bottom:14px;"
+                        onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">
+                    ↩ Aplicar reemplazo en el texto actual
+                </button>
+
+                <!-- Lista -->
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+                    <div style="font-size:0.6rem;font-weight:700;color:var(--text);letter-spacing:0.05em;text-transform:uppercase;">Reemplazos guardados</div>
+                    <button type="button" id="btn-limpiar-reemplazos" onclick="limpiarReemplazosGuardados()" disabled
+                            style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-dim);
+                                   font-family:'DM Mono',monospace;font-size:0.58rem;padding:3px 8px;cursor:pointer;
+                                   transition:color 0.2s,border-color 0.2s;"
+                            onmouseover="if(!this.disabled){this.style.color='#ff6b6b';this.style.borderColor='#ff6b6b'}"
+                            onmouseout="this.style.color='var(--text-dim)';this.style.borderColor='var(--border)'">
+                        🗑 Limpiar todo
+                    </button>
+                </div>
+                <div id="ajustes-lista-reemplazos"
+                     style="max-height:200px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--border) transparent;">
+                    <div style="font-size:0.62rem;color:var(--text-dim);padding:8px 0;text-align:center;">Sin reemplazos para este libro</div>
+                </div>
+
+            </div><!-- /panel reemplazar -->
+        </div>
+    </div>
+
     <!-- ─── SCRIPTS ─── -->
     <!-- Supabase SDK -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -851,6 +1066,7 @@
     <script src="js/convert_mp3.js"></script>
     <script src="js/export_buttons.js"></script>
     <!-- UI: patches y helpers — debe cargarse último -->
+    <script src="js/grammar.js"></script>
     <script src="js/ui.js"></script>
     <!-- Auth — debe cargarse después de ui.js -->
     <script src="js/auth.js"></script>
@@ -859,6 +1075,21 @@
     <script src="js/init.js"></script>
     <script>
         // ── Loop música ambiente ──────────────────────────────────────────
+        // ── Inicializar estado del toggle auto-onoma ──
+        document.addEventListener('DOMContentLoaded', () => {
+            const chk = document.getElementById('auto-onoma');
+            if (chk && typeof autoReemplazarOnomatopeyas !== 'undefined') {
+                chk.checked = autoReemplazarOnomatopeyas;
+                const st = document.getElementById('auto-onoma-status');
+                if (st) { st.textContent = autoReemplazarOnomatopeyas ? '✓ Activo' : 'Desactivado'; st.style.color = autoReemplazarOnomatopeyas ? 'var(--accent2)' : ''; }
+            }
+            const chkGr = document.getElementById('grammar-review');
+            if (chkGr && typeof grammarReviewActivo !== 'undefined') {
+                chkGr.checked = grammarReviewActivo;
+                const st2 = document.getElementById('grammar-review-status');
+                if (st2 && grammarReviewActivo) { st2.textContent = '✓ Activo'; st2.style.color = 'var(--accent2)'; }
+            }
+        });
         window._ambientLoopOn = false;
         function toggleAmbientLoop() {
             window._ambientLoopOn = !window._ambientLoopOn;
