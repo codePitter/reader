@@ -27,7 +27,7 @@
                     style="margin-bottom:0;display:none">
                 🔴 Grabar video
             </button>
-            <button type="button" class="rec-btn" onclick="toggleEditor()" id="editor-toggle-btn" style="margin-bottom:0;">
+            <button type="button" class="rec-btn" onclick="toggleEditor()" id="editor-toggle-btn" style="margin-bottom:0;display:none;">
                 ✏️ Editor
             </button>
             <button type="button" class="rec-btn export-btn" id="btn-export-video"
@@ -52,6 +52,24 @@
             <div class="stat">📝 Palabras: <strong id="contador-palabras">0</strong></div>
             <div class="stat">🔤 Chars: <strong id="contador-caracteres">0</strong></div>
             <div class="stat">📄 Párrafos: <strong id="contador-parrafos">0</strong></div>
+            <button type="button" onclick="abrirAjustes('reemplazar')"
+                    title="Abrir panel de reemplazos"
+                    style="background:none;border:1px solid var(--border);border-radius:4px;
+                           color:var(--text-dim);font-family:'DM Mono',monospace;font-size:0.6rem;
+                           padding:2px 8px;cursor:pointer;transition:color 0.2s,border-color 0.2s;white-space:nowrap;flex-shrink:0;"
+                    onmouseover="this.style.color='var(--accent)';this.style.borderColor='var(--accent)'"
+                    onmouseout="this.style.color='var(--text-dim)';this.style.borderColor='var(--border)'">
+                &#8629; Reemplazar
+            </button>
+            <button type="button" id="btn-editar-texto" onclick="_toggleEditarTexto()"
+                    title="Editar directamente el texto del capítulo"
+                    style="background:none;border:1px solid var(--border);border-radius:4px;
+                           color:var(--text-dim);font-family:'DM Mono',monospace;font-size:0.6rem;
+                           padding:2px 8px;cursor:pointer;transition:color 0.2s,border-color 0.2s;white-space:nowrap;flex-shrink:0;"
+                    onmouseover="this.style.color='var(--accent)';this.style.borderColor='var(--accent)'"
+                    onmouseout="this.style.color='var(--text-dim)';this.style.borderColor='var(--border)'">
+                &#9999; Editar texto
+            </button>
             <div class="stat" id="tts-stat" style="margin-left:auto;">⏹️ <strong id="tts-status">Detenido</strong></div>
             <button type="button"
                     class="btn-copy-reading"
@@ -321,9 +339,7 @@
             <label for="epub-file" class="file-label">📂 Seleccionar archivo</label>
             <input type="file" id="epub-file" accept=".epub,.txt,.html,.htm,.pdf,.fb2,.fb3,.docx,.rtf,.odt,.mobi,.prc,.azw3,.azw,.cbz,.cbr" data-default-dir="documents">
             <span id="file-name">Ningún archivo seleccionado</span>
-            <div id="formats-hint" style="font-size:0.52rem;color:var(--text-dim);margin-top:4px;line-height:1.5;opacity:0.6;">
-                epub · txt · pdf · docx · html · fb2 · odt · rtf · mobi · cbz…
-            </div>
+
         </div>
 
         <!-- Capítulos -->
@@ -354,206 +370,263 @@
         </div>
 
         <!-- ═══════════════ AJUSTES ═══════════════ -->
-        <div class="sidebar-section">
-            <div class="section-label">Ajustes</div>
+        <div class="sidebar-section" id="ajustes-sidebar-section">
+            <div class="section-label" style="cursor:default;">Ajustes</div>
+            <div id="ajustes-sidebar-content" style="overflow:hidden;max-height:0;opacity:0;transition:max-height 0.35s ease,opacity 0.25s ease;">
 
 
-            <!-- ── Imágenes: selector movido a la barra del visor de video ── -->
-            <!-- IDs necesarios por JS — ocultos, sin UI en sidebar -->
-            <div style="display:none;">
-                <div id="imagen-ia-body">
-                    <div id="ia-options-body">
-                        <div id="ia-prov-body">
-                            <input type="radio" name="img-provider" value="puter" id="prov-puter" onchange="setImageProvider('puter')">
-                            <input type="radio" name="img-provider" value="stability" id="prov-stability" onchange="setImageProvider('stability')">
-                            <input type="radio" name="img-provider" value="pollinations" id="prov-pollinations" onchange="setImageProvider('pollinations')">
-                            <input type="radio" name="img-provider" value="procedural" id="prov-procedural" onchange="setImageProvider('procedural')">
-                            <input type="radio" name="img-provider" value="pixabay" id="prov-pixabay" onchange="setImageProvider('pixabay')">
-                            <input type="radio" name="img-provider" value="picsum" id="prov-picsum" onchange="setImageProvider('picsum')" checked>
-                            <div id="puter-panel">
-                                <select id="puter-model" onchange="puterModel=this.value;localStorage.setItem('puter_model',this.value);">
-                                    <optgroup label="── GPT Image ──"><option value="gpt-image-1.5">GPT Image 1.5 (recomendado)</option><option value="gpt-image-1">GPT Image 1</option><option value="dall-e-3">DALL-E 3</option></optgroup>
-                                    <optgroup label="── FLUX ──"><option value="black-forest-labs/FLUX.1-schnell-Free">FLUX.1 Schnell</option><option value="black-forest-labs/FLUX.1-pro">FLUX.1 Pro</option><option value="black-forest-labs/FLUX.1.1-pro">FLUX.1.1 Pro</option><option value="black-forest-labs/FLUX.1-dev">FLUX.1 Dev</option></optgroup>
-                                    <optgroup label="── Stable Diffusion ──"><option value="stabilityai/stable-diffusion-3-medium">SD3 Medium</option><option value="stabilityai/stable-diffusion-xl-base-1.0">SDXL Base</option></optgroup>
-                                    <optgroup label="── Otros ──"><option value="ideogram/ideogram-3.0">Ideogram 3.0</option><option value="grok-2-image">Grok 2 (xAI)</option><option value="google/imagen-4.0-fast">Imagen 4.0 Fast</option><option value="gemini-2.5-flash-image-preview">Gemini 2.5 Flash</option></optgroup>
-                                </select>
+                <!-- ── Imágenes: selector movido a la barra del visor de video ── -->
+                <!-- IDs necesarios por JS — ocultos, sin UI en sidebar -->
+                <div style="display:none;">
+                    <div id="imagen-ia-body">
+                        <div id="ia-options-body">
+                            <div id="ia-prov-body">
+                                <input type="radio" name="img-provider" value="puter" id="prov-puter" onchange="setImageProvider('puter')">
+                                <input type="radio" name="img-provider" value="stability" id="prov-stability" onchange="setImageProvider('stability')">
+                                <input type="radio" name="img-provider" value="pollinations" id="prov-pollinations" onchange="setImageProvider('pollinations')">
+                                <input type="radio" name="img-provider" value="procedural" id="prov-procedural" onchange="setImageProvider('procedural')">
+                                <input type="radio" name="img-provider" value="pixabay" id="prov-pixabay" onchange="setImageProvider('pixabay')">
+                                <input type="radio" name="img-provider" value="picsum" id="prov-picsum" onchange="setImageProvider('picsum')" checked>
+                                <div id="puter-panel">
+                                    <select id="puter-model" onchange="puterModel=this.value;localStorage.setItem('puter_model',this.value);">
+                                        <optgroup label="── GPT Image ──"><option value="gpt-image-1.5">GPT Image 1.5 (recomendado)</option><option value="gpt-image-1">GPT Image 1</option><option value="dall-e-3">DALL-E 3</option></optgroup>
+                                        <optgroup label="── FLUX ──"><option value="black-forest-labs/FLUX.1-schnell-Free">FLUX.1 Schnell</option><option value="black-forest-labs/FLUX.1-pro">FLUX.1 Pro</option><option value="black-forest-labs/FLUX.1.1-pro">FLUX.1.1 Pro</option><option value="black-forest-labs/FLUX.1-dev">FLUX.1 Dev</option></optgroup>
+                                        <optgroup label="── Stable Diffusion ──"><option value="stabilityai/stable-diffusion-3-medium">SD3 Medium</option><option value="stabilityai/stable-diffusion-xl-base-1.0">SDXL Base</option></optgroup>
+                                        <optgroup label="── Otros ──"><option value="ideogram/ideogram-3.0">Ideogram 3.0</option><option value="grok-2-image">Grok 2 (xAI)</option><option value="google/imagen-4.0-fast">Imagen 4.0 Fast</option><option value="gemini-2.5-flash-image-preview">Gemini 2.5 Flash</option></optgroup>
+                                    </select>
+                                </div>
+                                <div id="stability-panel">
+                                    <input type="password" id="stability-api-key" placeholder="sk-...">
+                                    <button type="button" onclick="guardarStabilityKey()">OK</button>
+                                    <span id="stability-key-status"></span>
+                                    <select id="stability-model" onchange="stabilityModel=this.value;localStorage.setItem('stability_model',this.value);">
+                                        <option value="sd3.5-large">SD3.5 Large</option>
+                                        <option value="sd3.5-large-turbo">SD3.5 Turbo</option>
+                                        <option value="sd3.5-medium" selected>SD3.5 Medium</option>
+                                        <option value="core">Stable Image Core</option>
+                                        <option value="ultra">Stable Image Ultra</option>
+                                    </select>
+                                </div>
+                                <div id="pollinations-panel"></div>
+                                <div id="procedural-panel"></div>
+                                <div id="pixabay-video-panel"></div>
+                                <div id="picsum-panel"></div>
                             </div>
-                            <div id="stability-panel">
-                                <input type="password" id="stability-api-key" placeholder="sk-...">
-                                <button type="button" onclick="guardarStabilityKey()">OK</button>
-                                <span id="stability-key-status"></span>
-                                <select id="stability-model" onchange="stabilityModel=this.value;localStorage.setItem('stability_model',this.value);">
-                                    <option value="sd3.5-large">SD3.5 Large</option>
-                                    <option value="sd3.5-large-turbo">SD3.5 Turbo</option>
-                                    <option value="sd3.5-medium" selected>SD3.5 Medium</option>
-                                    <option value="core">Stable Image Core</option>
-                                    <option value="ultra">Stable Image Ultra</option>
-                                </select>
-                            </div>
-                            <div id="pollinations-panel"></div>
-                            <div id="procedural-panel"></div>
-                            <div id="pixabay-video-panel"></div>
-                            <div id="picsum-panel"></div>
+                        </div>
+                        <div id="img-ia-status-txt"></div>
+                        <div id="ia-web-body">
+                            <div id="img-universe-badge"><span id="img-universe-label"></span></div>
+                            <input type="text" id="img-search-input">
+                            <div id="imagen-ia-galeria"></div>
                         </div>
                     </div>
-                    <div id="img-ia-status-txt"></div>
-                    <div id="ia-web-body">
-                        <div id="img-universe-badge"><span id="img-universe-label"></span></div>
-                        <input type="text" id="img-search-input">
-                        <div id="imagen-ia-galeria"></div>
+                </div>
+                <div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border);">
+                    <div class="toggle-row" style="margin-bottom:4px;">
+                        <span title="Detecta el idioma automáticamente">
+                            Traducción automática
+                            <span style="display:none;" id="traduccion-lang-hint">→ detectando idioma...</span>
+                        </span>
+                        <label class="toggle">
+                            <input type="checkbox" id="auto-translate" onchange="toggleAutoTranslate()">
+                            <span class="toggle-slider"></span>
+                        </label>
                     </div>
-                </div>
-            </div>
-            <div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border);">
-                <div class="toggle-row" style="margin-bottom:4px;">
-                    <span style="display:flex;flex-direction:column;gap:1px;">
-                        <span>Traducción automática</span>
-                        <span style="font-size:0.68rem;color:var(--text-dim);" id="traduccion-lang-hint">→ detectando idioma...</span>
-                    </span>
-                    <label class="toggle">
-                        <input type="checkbox" id="auto-translate" onchange="toggleAutoTranslate()">
-                        <span class="toggle-slider"></span>
-                    </label>
-                </div>
-                <!-- Selector de idioma destino: todas las opciones que soporta el navegador -->
-                <div style="margin:6px 0 4px 0;">
-                    <div style="font-size:0.6rem;color:var(--text-dim);margin-bottom:3px;">Traducir a:</div>
-                    <select id="translation-lang-select"
-                            onchange="cambiarIdiomaTraduccion(this.value)"
-                            style="width:100%;background:var(--bg);border:1px solid var(--border);
+                    <!-- Selector de idioma destino: todas las opciones que soporta el navegador -->
+                    <div style="margin:6px 0 4px 0;">
+                        <div style="font-size:0.6rem;color:var(--text-dim);margin-bottom:3px;">Traducir a:</div>
+                        <select id="translation-lang-select"
+                                onchange="cambiarIdiomaTraduccion(this.value)"
+                                style="width:100%;background:var(--bg);border:1px solid var(--border);
                                    border-radius:4px;color:var(--text);font-family:'DM Mono',monospace;
                                    font-size:0.62rem;padding:5px 8px;outline:none;cursor:pointer;">
-                        <!-- Poblado por JS con los idiomas del navegador -->
-                    </select>
+                            <!-- Poblado por JS con los idiomas del navegador -->
+                        </select>
+                    </div>
+                    <div id="translation-status">Traducción desactivada</div>
                 </div>
-                <div id="translation-status">Traducción desactivada</div>
-            </div>
 
-            <!-- ── Naturalizar para TTS ── -->
-            <div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border);">
-                <div class="toggle-row">
-                    <span style="display:flex;flex-direction:column;gap:2px;">
-                        <span>✨ Naturalizar para TTS</span>
-                        <span style="font-size:0.7rem;color:var(--text-dim);" id="humanizer-status">Desactivado</span>
-                    </span>
-                    <label class="toggle">
-                        <input type="checkbox" id="tts-humanizer" onchange="toggleTTSHumanizer()">
-                        <span class="toggle-slider"></span>
-                    </label>
-                </div>
-                <!-- IDs requeridos por translation.js — ocultos; UI en ☰ Ajustes → API Keys -->
-                <div id="claude-key-panel" style="display:none;">
-                    <select id="humanizer-provider" onchange="cambiarProveedorHumanizer(this.value)">
-                        <option value="perplexity">Perplexity AI (sonar)</option>
-                        <option value="openai">OpenAI (gpt-4o-mini)</option>
-                        <option value="anthropic">Anthropic (claude-haiku)</option>
-                        <option value="gemini">Google Gemini (flash)</option>
-                        <option value="groq">Groq (llama-3.3-70b)</option>
-                        <option value="openrouter">OpenRouter (auto)</option>
-                    </select>
-                    <span id="claude-key-status"></span>
-                    <input type="password" id="claude-api-key">
-                    <div id="humanizer-info"></div>
-                </div>
-                <div style="font-size:0.58rem;color:var(--text-dim);margin-top:5px;">
-                    Configura la API key en
-                    <button onclick="abrirAjustes('apikeys')" style="background:none;border:none;
+                <!-- ── Naturalizar para TTS ── -->
+                <div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border);">
+                    <div class="toggle-row">
+                        <span>
+                            ✨ Naturalizar para TTS
+                            <span style="display:none;" id="humanizer-status">Desactivado</span>
+                        </span>
+                        <label class="toggle">
+                            <input type="checkbox" id="tts-humanizer" onchange="toggleTTSHumanizer()">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <!-- IDs requeridos por translation.js — ocultos; UI en ☰ Ajustes → API Keys -->
+                    <div id="claude-key-panel" style="display:none;">
+                        <select id="humanizer-provider" onchange="cambiarProveedorHumanizer(this.value)">
+                            <option value="perplexity">Perplexity AI (sonar)</option>
+                            <option value="openai">OpenAI (gpt-4o-mini)</option>
+                            <option value="anthropic">Anthropic (claude-haiku)</option>
+                            <option value="gemini">Google Gemini (flash)</option>
+                            <option value="groq">Groq (llama-3.3-70b)</option>
+                            <option value="openrouter">OpenRouter (auto)</option>
+                        </select>
+                        <span id="claude-key-status"></span>
+                        <input type="password" id="claude-api-key">
+                        <div id="humanizer-info"></div>
+                    </div>
+                    <div style="font-size:0.58rem;color:var(--text-dim);margin-top:4px;">
+                        <button onclick="abrirAjustes('apikeys')" style="background:none;border:none;
                         color:var(--accent2);font-family:'DM Mono',monospace;font-size:0.58rem;
                         padding:0;cursor:pointer;text-decoration:underline;">
-                        ☰ Ajustes → API Keys
-                    </button>
+                            ☰ API Keys
+                        </button>
+                    </div>
                 </div>
-            </div>
 
-            <!-- ── Reproducir al terminar ── -->
-            <div class="toggle-row" id="auto-play-row" style="display:none;">
-                <span>▶ Reproducir al terminar</span>
-                <label class="toggle">
-                    <input type="checkbox" id="auto-play-after-translate" onchange="toggleAutoPlay()" checked>
-                    <span class="toggle-slider"></span>
-                </label>
-            </div>
-
-            <!-- ── Auto siguiente capítulo ── -->
-            <div class="toggle-row" style="margin-top:6px;">
-                <span style="display:flex;flex-direction:column;gap:1px;">
-                    <span>⏭ Siguiente capítulo auto</span>
-                    <span style="font-size:0.62rem;color:var(--text-dim);">Al terminar, carga el siguiente</span>
-                </span>
-                <label class="toggle">
-                    <input type="checkbox" id="auto-next-chapter" checked onchange="toggleAutoNext()">
-                    <span class="toggle-slider"></span>
-                </label>
-            </div>
-
-            <!-- ── Reemplazo automático onomatopeyas ── -->
-            <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">
-                <div class="toggle-row">
-                    <span style="display:flex;flex-direction:column;gap:2px;">
-                        <span>Onomatopeyas auto</span>
-                        <span style="font-size:0.62rem;color:var(--text-dim);" id="auto-onoma-status">Desactivado</span>
-                    </span>
+                <!-- ── Reproducir al terminar ── -->
+                <div class="toggle-row" id="auto-play-row" style="display:none;">
+                    <span>▶ Reproducir al terminar</span>
                     <label class="toggle">
-                        <input type="checkbox" id="auto-onoma" onchange="if(typeof toggleAutoOnoma==='function')toggleAutoOnoma()">
+                        <input type="checkbox" id="auto-play-after-translate" onchange="toggleAutoPlay()" checked>
                         <span class="toggle-slider"></span>
                     </label>
                 </div>
-                <div style="font-size:0.57rem;color:var(--text-dim);margin-top:3px;line-height:1.45;">
-                    Reemplaza "Tsk", "Hmm", "Oof"... por equivalentes en español
-                </div>
-            </div>
 
-            <!-- ── Revisión gramatical (LanguageTool) ── -->
-            <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">
-                <div class="toggle-row">
-                    <span style="display:flex;flex-direction:column;gap:2px;">
-                        <span>Revisión gramatical</span>
-                        <span style="font-size:0.62rem;color:var(--text-dim);" id="grammar-review-status">Desactivado</span>
-                    </span>
+                <!-- ── Auto siguiente capítulo ── -->
+                <div class="toggle-row" style="margin-top:6px;">
+                    <span title="Al terminar, carga el capítulo siguiente automáticamente">⏭ Siguiente capítulo auto</span>
                     <label class="toggle">
-                        <input type="checkbox" id="grammar-review" onchange="if(typeof toggleGrammarReview==='function')toggleGrammarReview()">
+                        <input type="checkbox" id="auto-next-chapter" checked onchange="toggleAutoNext()">
                         <span class="toggle-slider"></span>
                     </label>
                 </div>
-                <div style="font-size:0.57rem;color:var(--text-dim);margin-top:3px;line-height:1.45;">
-                    LanguageTool · incluye onomatopeyas
-                </div>
-            </div>
 
-            <!-- ── Botón Aplicar ── -->
-            <div id="aplicar-row" style="display:none;margin-top:10px;">
-                <button type="button" id="btn-aplicar" onclick="aplicarConfiguracion()"
-                        style="width:100%;background:var(--accent);border:none;border-radius:6px;
+                <!-- ── Reemplazo automático onomatopeyas ── -->
+                <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">
+                    <div class="toggle-row">
+                        <span title="Reemplaza &quot;Tsk&quot;, &quot;Hmm&quot;, &quot;Oof&quot;... por equivalentes en español">
+                            Onomatopeyas auto
+                            <span style="display:none;" id="auto-onoma-status">Desactivado</span>
+                        </span>
+                        <label class="toggle">
+                            <input type="checkbox" id="auto-onoma" onchange="if(typeof toggleAutoOnoma==='function')toggleAutoOnoma()">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+
+                </div>
+
+                <!-- ── Revisión gramatical (LanguageTool) ── -->
+                <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">
+                    <div class="toggle-row">
+                        <span title="LanguageTool · incluye corrección de onomatopeyas">
+                            Revisión gramatical
+                            <span style="display:none;" id="grammar-review-status">Desactivado</span>
+                        </span>
+                        <label class="toggle">
+                            <input type="checkbox" id="grammar-review" onchange="if(typeof toggleGrammarReview==='function')toggleGrammarReview()">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+
+                </div>
+
+                <!-- ── Botón Aplicar ── -->
+                <div id="aplicar-row" style="display:none;margin-top:10px;">
+                    <button type="button" id="btn-aplicar" onclick="aplicarConfiguracion()"
+                            style="width:100%;background:var(--accent);border:none;border-radius:6px;
                                color:var(--bg);font-family:'DM Mono',monospace;font-size:0.72rem;
                                font-weight:700;padding:8px 0;cursor:pointer;letter-spacing:0.03em;
                                transition:opacity 0.2s;">
-                    ✓ Aplicar
-                </button>
-                <div style="font-size:0.55rem;color:var(--text-dim);text-align:center;margin-top:3px;" id="aplicar-hint">
-                    Cambios pendientes — recarga el capítulo actual
+                        ✓ Aplicar
+                    </button>
+                    <div id="aplicar-hint" style="display:none;"></div>
                 </div>
-            </div>
+            </div><!-- /ajustes-sidebar-content -->
         </div>
 
-        <!-- Reemplazar palabras — movido a ☰ Ajustes → Reemplazar -->
-        <div class="sidebar-section">
-            <div class="section-label" style="display:flex;align-items:center;justify-content:space-between;">
-                <span>Reemplazar</span>
-                <button type="button" onclick="abrirAjustes('reemplazar')"
-                        style="background:none;border:1px solid var(--border);border-radius:4px;
-                               color:var(--text-dim);font-family:'DM Mono',monospace;font-size:0.6rem;
-                               padding:2px 8px;cursor:pointer;transition:color 0.2s,border-color 0.2s;"
-                        onmouseover="this.style.color='var(--accent)';this.style.borderColor='var(--accent)'"
-                        onmouseout="this.style.color='var(--text-dim)';this.style.borderColor='var(--border)'">
-                    ☰ Abrir Ajustes
-                </button>
-            </div>
-        </div>
+
 
 
 
     </div>
 
+
+    <script>
+        // ── Ajustes sidebar: mostrar contenido solo al hover ──
+        // ── Editar texto inline en el reading area ──
+        var _editandoTexto = false;
+        var _textoOriginalAntesDeedicion = null;
+        window._toggleEditarTexto = function () {
+            var contenido = document.getElementById("texto-contenido");
+            var btn = document.getElementById("btn-editar-texto");
+            if (!contenido) return;
+            _editandoTexto = !_editandoTexto;
+            if (_editandoTexto) {
+                // Limpiar spans TTS para edición limpia — preservar solo el texto plano en párrafos
+                var parrafos = Array.from(contenido.querySelectorAll("p"));
+                if (parrafos.length > 0) {
+                    _textoOriginalAntesDeedicion = contenido.innerHTML;
+                    parrafos.forEach(function (p) {
+                        p.innerHTML = p.textContent;
+                    });
+                } else {
+                    // Sin párrafos — limpiar spans directamente
+                    _textoOriginalAntesDeedicion = contenido.innerHTML;
+                    contenido.querySelectorAll(".tts-sentence").forEach(function (s) {
+                        s.replaceWith(document.createTextNode(s.textContent));
+                    });
+                    contenido.normalize();
+                }
+                contenido.contentEditable = "true";
+                contenido.style.outline = "2px solid var(--accent)";
+                contenido.style.borderRadius = "4px";
+                contenido.style.padding = "8px";
+                contenido.focus();
+                if (btn) {
+                    btn.innerHTML = "&#10003; Guardar";
+                    btn.style.color = "var(--accent)";
+                    btn.style.borderColor = "var(--accent)";
+                    btn.onmouseover = null; btn.onmouseout = null;
+                }
+            } else {
+                // Desactivar edición
+                contenido.contentEditable = "false";
+                contenido.style.outline = "";
+                contenido.style.borderRadius = "";
+                contenido.style.padding = "";
+                if (btn) {
+                    btn.innerHTML = "&#9999; Editar texto";
+                    btn.style.color = "";
+                    btn.style.borderColor = "";
+                    btn.onmouseover = function () { this.style.color = "var(--accent)"; this.style.borderColor = "var(--accent)"; };
+                    btn.onmouseout = function () { this.style.color = ""; this.style.borderColor = ""; };
+                }
+                // Actualizar sentences para TTS con el nuevo texto
+                if (typeof dividirEnOraciones === "function" && typeof sentences !== "undefined") {
+                    sentences = dividirEnOraciones(contenido.textContent.trim());
+                }
+                if (typeof actualizarContadores === "function") actualizarContadores();
+                if (typeof mostrarNotificacion === "function") mostrarNotificacion("✓ Texto actualizado");
+            }
+        };
+        // Esc para salir del modo edición
+        document.addEventListener("keydown", function (e) {
+            if (e.key === "Escape" && _editandoTexto) window._toggleEditarTexto();
+        });
+
+        document.addEventListener("DOMContentLoaded", function () {
+            var section = document.getElementById("ajustes-sidebar-section");
+            var content = document.getElementById("ajustes-sidebar-content");
+            if (!section || !content) return;
+            section.addEventListener("mouseenter", function () {
+                content.style.maxHeight = "1000px";
+                content.style.opacity = "1";
+            });
+            section.addEventListener("mouseleave", function () {
+                content.style.maxHeight = "0";
+                content.style.opacity = "0";
+            });
+        });
+    </script>
 
     <!-- ─── FOOTER ─── -->
     <footer class="app-footer">
@@ -587,8 +660,8 @@
 
         <div class="video-bar">
             <button id="kbtn-playpause" onclick="videoTogglePlay()" style="background:none;border:none;color:var(--accent);font-size:1.3rem;cursor:pointer;padding:0 2px;line-height:1;flex-shrink:0;">&#9654;</button>
-            <button id="btn-cap-anterior" onclick="videoCapituloAnterior()" style="background:none;border:none;color:var(--text-dim);font-size:0.85rem;cursor:not-allowed;padding:0 2px;flex-shrink:0;opacity:0.35;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-dim)'" disabled>&#9198;</button>
-            <button id="btn-cap-siguiente" onclick="videoCapituloSiguiente()" style="background:none;border:none;color:var(--text-dim);font-size:0.85rem;cursor:not-allowed;padding:0 2px;flex-shrink:0;opacity:0.35;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-dim)'" disabled>&#9197;</button>
+            <button onclick="videoCapituloAnterior()" style="background:none;border:none;color:var(--text-dim);font-size:0.85rem;cursor:pointer;padding:0 2px;flex-shrink:0;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-dim)'">&#9198;</button>
+            <button onclick="videoCapituloSiguiente()" style="background:none;border:none;color:var(--text-dim);font-size:0.85rem;cursor:pointer;padding:0 2px;flex-shrink:0;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-dim)'">&#9197;</button>
             <span id="kp-current" style="font-family:'DM Mono',monospace;font-size:0.6rem;color:var(--text-dim);flex-shrink:0;white-space:nowrap;">&#8212;</span>
             <span id="kp-chapter" style="font-family:'Lora',serif;font-size:0.68rem;color:var(--text-dim);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
             <span style="font-size:0.7rem;color:var(--text-dim);flex-shrink:0;" title="Volumen general">&#128266;</span>
