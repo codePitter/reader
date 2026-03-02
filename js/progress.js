@@ -232,6 +232,16 @@
 
     // ── Navegación a la posición guardada ────────────────────────
 
+    // Sincroniza traduccionAutomatica con el checkbox antes de cargar el capitulo.
+    // Las demas variables (ttsHumanizerActivo, grammarReviewActivo, autoReemplazarOnomatopeyas)
+    // ya se actualizan en tiempo real desde sus propios toggles.
+    function _sincronizarConfigAntesDeCarga() {
+        const chk = document.getElementById('auto-translate');
+        if (chk && typeof traduccionAutomatica !== 'undefined') {
+            traduccionAutomatica = chk.checked;
+        }
+    }
+
     function _irAProgresoGuardado(progreso, archivosDisponibles) {
         const sel = document.getElementById('chapters');
         if (!sel) { cargarCapitulo(archivosDisponibles[0]); return; }
@@ -239,17 +249,25 @@
         const opcionExiste = Array.from(sel.options).some(o => o.value === progreso.chapter);
         const rutaDestino = opcionExiste ? progreso.chapter : archivosDisponibles[0];
 
-        // Seleccionar el capítulo en el selector
+        // Sincronizar configuracion pendiente (igual que al hacer click en un marcador)
+        _sincronizarConfigAntesDeCarga();
+
+        // Invalidar cache del destino para que se reprocese con la config actual
+        if (typeof _capCache !== 'undefined') delete _capCache[rutaDestino];
+
+        // Seleccionar el capitulo en el selector
         if (opcionExiste) {
             window._cargandoProgramaticamente = true;
             sel.value = rutaDestino;
             window._cargandoProgramaticamente = false;
+            // Actualizar el chip del sidebar para que muestre el capitulo correcto
+            if (typeof colapsarSelectorCapitulos === 'function') colapsarSelectorCapitulos();
         }
 
-        // Guardar el índice de frase a restaurar; onCapituloCargado lo consumirá
+        // Guardar el indice de frase a restaurar; onCapituloCargado lo consumira
         window._progresoRestaurarFrase = opcionExiste ? (progreso.sentenceIndex || 0) : 0;
 
-        // Marcar como navegación intencional para que epub.js NO arranque el TTS
+        // Marcar como navegacion intencional para que epub.js NO arranque el TTS
         // desde la frase 0 (nosotros lo arrancamos desde la frase guardada en onCapituloCargado)
         window._navegacionIntencionada = true;
 
@@ -261,26 +279,29 @@
     window.onCapituloCargado = function (ruta) {
         _currentChapterRoute = ruta;
 
-        // ¿Hay frase pendiente de restaurar?
+        // Hay frase pendiente de restaurar?
+        // null/undefined = no hacer nada (carga normal sin auto-TTS)
+        // 0              = arrancar TTS desde el inicio del capitulo
+        // N >= MIN_SENTENCE = arrancar TTS desde la frase N
         const fraseTarget = window._progresoRestaurarFrase;
-        if (fraseTarget && fraseTarget >= MIN_SENTENCE) {
+        if (fraseTarget !== null && fraseTarget !== undefined) {
             window._progresoRestaurarFrase = null;
+            const _indice = (fraseTarget >= MIN_SENTENCE) ? fraseTarget : 0;
 
-            // Arrancar TTS desde la frase guardada (~350ms para que el DOM esté listo)
+            // Arrancar TTS (~350ms para que el DOM este listo)
             setTimeout(() => {
                 if (typeof iniciarTTS === 'function') {
-                    iniciarTTS(fraseTarget);
+                    iniciarTTS(_indice);
 
-                    // Scroll a la frase después de que los spans se creen (~200ms más)
-                    setTimeout(() => {
-                        const span = document.getElementById(`tts-s-${fraseTarget}`);
-                        if (span) span.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    }, 250);
+                    // Scroll a la frase si no es el inicio
+                    if (_indice > 0) {
+                        setTimeout(() => {
+                            const span = document.getElementById('tts-s-' + _indice);
+                            if (span) span.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }, 250);
+                    }
                 }
             }, 350);
-
-        } else if (fraseTarget !== null && fraseTarget !== undefined) {
-            window._progresoRestaurarFrase = null;
         }
 
         // Guardar inmediatamente el progreso del capítulo actual
@@ -316,15 +337,32 @@
             return;
         }
 
-        // Hay progreso guardado → mostrar modal
+        // Hay progreso guardado -> mostrar modal
         _mostrarModal(
             progreso,
-            // Continuar
+            // Continuar: procesa el capitulo guardado con la config actual
             () => _irAProgresoGuardado(progreso, archivosOrdenados),
-            // Desde el inicio
+            // Desde el inicio: cargar el capitulo guardado tal cual, sin traducir ni iniciar TTS
             () => {
                 _clearProgress(_bookId);
-                fallbackCargar();
+
+                const sel = document.getElementById('chapters');
+                const opcionExiste = sel && Array.from(sel.options).some(o => o.value === progreso.chapter);
+                const rutaDestino = opcionExiste ? progreso.chapter : archivosOrdenados[0];
+
+                if (sel && opcionExiste) {
+                    window._cargandoProgramaticamente = true;
+                    sel.value = rutaDestino;
+                    window._cargandoProgramaticamente = false;
+                    // Actualizar el chip del sidebar
+                    if (typeof colapsarSelectorCapitulos === 'function') colapsarSelectorCapitulos();
+                }
+
+                // Sin frase a restaurar y sin navegacion intencional:
+                // cargarCapitulo mostrara el texto sin iniciar TTS ni traducir
+                window._progresoRestaurarFrase = null;
+                window._navegacionIntencionada = false;
+                cargarCapitulo(rutaDestino);
             }
         );
     };

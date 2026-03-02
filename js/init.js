@@ -292,6 +292,7 @@ function colapsarSelectorCapitulos() {
     const chip = document.getElementById('chapter-active-chip');
     const chipText = document.getElementById('chapter-active-chip-text');
     const chapters = document.getElementById('chapters');
+    const btnLeer = document.getElementById('btn-leer-capitulo');
     if (!sel || !chip) return;
     _selectorExpandidoManualmente = false;
     const selOpt = chapters && chapters.selectedIndex >= 0 ? chapters.options[chapters.selectedIndex] : null;
@@ -299,14 +300,18 @@ function colapsarSelectorCapitulos() {
     chipText.textContent = label;
     sel.style.display = 'none';
     chip.style.display = 'flex';
+    // Mostrar botón Leer solo cuando hay un capítulo cargado
+    if (btnLeer) btnLeer.style.display = (selOpt && !selOpt.disabled) ? 'block' : 'none';
 }
 
 function expandirSelectorCapitulos() {
     const sel = document.getElementById('chapter-selector');
     const chip = document.getElementById('chapter-active-chip');
+    const btnLeer = document.getElementById('btn-leer-capitulo');
     if (!sel || !chip) return;
     _selectorExpandidoManualmente = true;
     chip.style.display = 'none';
+    if (btnLeer) btnLeer.style.display = 'none';
     sel.style.display = 'block';
     const search = document.getElementById('chapter-search');
     if (search) { search.value = ''; search.focus(); filtrarCapitulos(''); }
