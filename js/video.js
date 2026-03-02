@@ -110,6 +110,16 @@ const video_TEXT = '#e8e0d0';
 const video_HIGHLIGHT = '#c8a96e';
 const video_SECONDARY = 'rgba(200,169,110,0.3)';
 
+// Helper global: habilitar/deshabilitar TODOS los botones de navegación de capítulo
+// Afecta tanto los de la video-bar (index.html) como los del sidebar
+window._aplicarNavBtnState = function (id, habilitado) {
+    document.querySelectorAll('#' + id).forEach(btn => {
+        btn.disabled = !habilitado;
+        btn.style.opacity = habilitado ? '' : '0.35';
+        btn.style.cursor = habilitado ? '' : 'not-allowed';
+    });
+};
+
 function abrirvideo() {
     const overlay = document.getElementById('video-overlay');
     overlay.classList.add('active');
@@ -1904,13 +1914,23 @@ function videoProgressSeek(e) {
 
     document.getElementById('video-seek-tooltip').classList.remove('visible');
 
-    // Llamar la función de seek existente del TTS
+    // Respetar el motor activo (XTTS o browser)
     if (typeof detenerTTSSinEstado === 'function') {
         detenerTTSSinEstado();
-    } else if (typeof window.speechSynthesis !== 'undefined') {
-        window.speechSynthesis.cancel();
+    } else {
+        if (typeof detenerTTS === 'function') detenerTTS();
     }
-    if (typeof leerOracion === 'function') {
+
+    // Restaurar estado de lectura antes de llamar al motor
+    if (typeof isReading !== 'undefined') window.isReading = true;
+    if (typeof isPaused !== 'undefined') window.isPaused = false;
+    if (typeof currentSentenceIndex !== 'undefined') window.currentSentenceIndex = idx;
+
+    if (typeof _usarServidorLive !== 'undefined' && _usarServidorLive &&
+        typeof servidorTTSDisponible !== 'undefined' && servidorTTSDisponible &&
+        typeof leerOracionLocal === 'function') {
+        leerOracionLocal(idx);
+    } else if (typeof leerOracion === 'function') {
         leerOracion(idx);
     }
 }
@@ -1922,8 +1942,21 @@ function seekTTS(e) {
     const rect = track.getBoundingClientRect();
     const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
     const idx = Math.min(Math.floor(pct * sentences.length), sentences.length - 1);
-    if (typeof window.speechSynthesis !== 'undefined') window.speechSynthesis.cancel();
-    if (typeof leerOracion === 'function') leerOracion(idx);
+
+    if (typeof detenerTTS === 'function') detenerTTS();
+
+    // Restaurar estado de lectura antes de llamar al motor
+    if (typeof isReading !== 'undefined') window.isReading = true;
+    if (typeof isPaused !== 'undefined') window.isPaused = false;
+    if (typeof currentSentenceIndex !== 'undefined') window.currentSentenceIndex = idx;
+
+    if (typeof _usarServidorLive !== 'undefined' && _usarServidorLive &&
+        typeof servidorTTSDisponible !== 'undefined' && servidorTTSDisponible &&
+        typeof leerOracionLocal === 'function') {
+        leerOracionLocal(idx);
+    } else if (typeof leerOracion === 'function') {
+        leerOracion(idx);
+    }
 }
 
 // Hook: sobreescribir actualizarProgreso para también actualizar la barra del video
@@ -2230,7 +2263,14 @@ function _toggleSidebarPanel() {
 }
 
 function _inyectarSidebarToolbar() {
-    if (document.getElementById('video-sidebar-toolbar')) return;
+    if (document.getElementById('video-sidebar-toolbar')) {
+        // Sidebar ya existe — solo re-sincronizar estado de botones
+        if (window._navBtnState && typeof window._aplicarNavBtnState === 'function') {
+            window._aplicarNavBtnState('btn-cap-siguiente', window._navBtnState.siguiente);
+            window._aplicarNavBtnState('btn-cap-anterior', window._navBtnState.anterior);
+        }
+        return;
+    }
 
     const colorSwatches = _textColorPresets.map(c =>
         `<div class="vsb-swatch" style="background:${c.hex}" title="${c.label}" onclick="_setTextColor('${c.hex}')"></div>`
@@ -2325,15 +2365,21 @@ function _inyectarSidebarToolbar() {
                 <!-- REPRODUCCIÓN -->
                 <div class="vsb-section-label">Reproducción</div>
                 <div class="vsb-playback-row">
-                    <button class="vsb-btn" onclick="videoCapituloAnterior()" title="Cap. anterior">⏮</button>
+                    <button id="btn-cap-anterior" class="vsb-btn" onclick="videoCapituloAnterior()" title="Cap. anterior" disabled style="opacity:0.35;cursor:not-allowed">⏮</button>
                     <button class="vsb-btn" onclick="videoTogglePlay()" title="Pausa / Continuar">⏯</button>
-                    <button class="vsb-btn" onclick="videoCapituloSiguiente()" title="Cap. siguiente">⏭</button>
+                    <button id="btn-cap-siguiente" class="vsb-btn" onclick="videoCapituloSiguiente()" title="Cap. siguiente" disabled style="opacity:0.35;cursor:not-allowed">⏭</button>
                 </div>
 
             </div>
         </div>
     `;
     document.getElementById('video-overlay').appendChild(wrapper);
+
+    // Aplicar estado de navegación al sidebar recién creado
+    if (window._navBtnState && typeof window._aplicarNavBtnState === 'function') {
+        window._aplicarNavBtnState('btn-cap-siguiente', window._navBtnState.siguiente);
+        window._aplicarNavBtnState('btn-cap-anterior', window._navBtnState.anterior);
+    }
 }
 // ═══════════════════════════════════════
 // EXPORTAR VIDEO — captura canvas + audio → WebM

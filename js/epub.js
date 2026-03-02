@@ -274,8 +274,22 @@ async function cargarCapitulo(ruta, _cancelToken) {
     // Cancelar cualquier BG en curso (el nuevo capítulo necesita su propio BG luego)
     _bgCancelToken++;
 
+    // Ocultar barras de progreso de cualquier proceso anterior (BG o foreground)
+    // Necesario porque finalizarProgresoTraduccion ya no oculta kWrap cuando es BG
+    {
+        const _kWrap = document.getElementById('video-translation-progress');
+        const _mpbWrap = document.getElementById('main-processing-bar');
+        if (_kWrap) _kWrap.style.display = 'none';
+        if (_mpbWrap) _mpbWrap.style.display = 'none';
+    }
+
     try {
         let textoCompleto;
+
+        // ── Flag de procesamiento en foreground ──
+        // Se activa cuando el capítulo necesita ser procesado (no está en cache).
+        // _lanzarTTSSiListo lo usa para saber si debe esperar antes de arrancar el TTS.
+        window._cargandoCapituloAhora = false;
 
         // ── Usar cache si está disponible y el estado coincide ──
         const estadoHumanizador = ttsHumanizerActivo && !!claudeApiKey;
@@ -292,11 +306,13 @@ async function cargarCapitulo(ruta, _cancelToken) {
             textoCompleto = aplicarReemplazosAutomaticos(textoCompleto);
             delete _capCache[ruta];
         } else {
-            // Cache inválido o no existe — procesar ahora
+            // Cache inválido o no existe — procesar ahora en foreground
+            window._cargandoCapituloAhora = true;
             if (entrada) {
                 console.log(`♻ Cache invalidado: ${ruta.split('/').pop()}`);
                 delete _capCache[ruta];
             }
+
 
             // Extraer texto del HTML
             const contenidoHTML = archivosHTML[ruta];
@@ -380,7 +396,7 @@ async function cargarCapitulo(ruta, _cancelToken) {
                 const kF1 = document.getElementById('ktl-f1');
                 const kF2 = document.getElementById('ktl-f2');
                 const kF3 = document.getElementById('ktl-f3');
-                if (kWrap) kWrap.style.display = 'flex';
+                // if (kWrap) kWrap.style.display = 'flex'; // no mostrar overlay de video durante traducción
                 if (kFill) kFill.style.width = pctGlobal + '%';
                 if (kPct) kPct.textContent = pctGlobal + '%';
                 if (kLabel) kLabel.textContent = labelTexto;
@@ -501,6 +517,9 @@ async function cargarCapitulo(ruta, _cancelToken) {
             }, 800);
         }
 
+        // Procesamiento de foreground terminado — limpiar flag
+        window._cargandoCapituloAhora = false;
+
         renderizarTextoEnContenedor(document.getElementById('texto-contenido'), textoCompleto);
         actualizarEstadisticas();
 
@@ -535,6 +554,10 @@ async function cargarCapitulo(ruta, _cancelToken) {
         if (btnExportAudio) btnExportAudio.disabled = false;
 
         // ── Determinar si iniciar TTS automáticamente ──
+        // _cargandoCapituloAhora: true mientras el capítulo se procesa en foreground.
+        // Solo chequear esto — el BG de OTROS capítulos no debe bloquear el TTS actual.
+        const _hayProcesamientoActivo = () => !!window._cargandoCapituloAhora;
+
         const eraNavegacionIntencionada = !!window._navegacionIntencionada;
         window._navegacionIntencionada = false;
 
@@ -542,10 +565,18 @@ async function cargarCapitulo(ruta, _cancelToken) {
         const debeAutoPlay = autoPlayCheckbox && autoPlayCheckbox.checked
             && (traduccionAutomatica || (ttsHumanizerActivo && claudeApiKey));
 
+        const _lanzarTTSSiListo = (intentos = 0) => {
+            if (_hayProcesamientoActivo()) {
+                if (intentos < 60) setTimeout(() => _lanzarTTSSiListo(intentos + 1), 300);
+                return; // reintentar cada 300ms hasta ~18s
+            }
+            iniciarTTS();
+        };
+
         if (eraNavegacionIntencionada && typeof videoActive !== 'undefined' && videoActive) {
-            setTimeout(() => { iniciarTTS(); }, 200);
+            setTimeout(() => { _lanzarTTSSiListo(); }, 200);
         } else if (debeAutoPlay && !eraNavegacionIntencionada) {
-            setTimeout(() => { iniciarTTS(); }, 400);
+            setTimeout(() => { _lanzarTTSSiListo(); }, 400);
         }
 
         // ── Pre-procesar el siguiente y el anterior capítulo en background ──
@@ -556,6 +587,13 @@ async function cargarCapitulo(ruta, _cancelToken) {
         const anterior = _getAnteriorRuta(ruta);
         const tokenAlProgramar = _bgCancelToken;
 
+        // Deshabilitar botones de nav hasta que su precarga termine
+        window._navBtnState = { siguiente: !siguiente, anterior: !anterior };
+        if (typeof window._aplicarNavBtnState === 'function') {
+            window._aplicarNavBtnState('btn-cap-siguiente', !siguiente);
+            window._aplicarNavBtnState('btn-cap-anterior', !anterior);
+        }
+
         if (siguiente) {
             setTimeout(() => {
                 if (_bgCancelToken === tokenAlProgramar) {
@@ -565,12 +603,22 @@ async function cargarCapitulo(ruta, _cancelToken) {
         }
 
         if (anterior) {
-            setTimeout(() => {
-                // Solo arrancar si no se navegó Y si el siguiente ya terminó (token no cambiado)
-                if (_bgCancelToken === tokenAlProgramar) {
+            // El anterior arranca cuando el siguiente termina (o si no había siguiente).
+            // No compara _bgCancelToken porque _preTradducirCapitulo lo incrementa al arrancar,
+            // lo que haría fallar el guard del anterior aunque el usuario no haya navegado.
+            const _esperarYLanzarAnterior = () => {
+                // Si el usuario navegó a otro capítulo, abortar
+                const selectorActual = document.getElementById('chapters')?.value;
+                if (selectorActual && selectorActual !== ruta) return;
+
+                if (_capCacheEnCurso !== null) {
+                    // El siguiente todavía está procesando — reintentar en 3s
+                    setTimeout(_esperarYLanzarAnterior, 3000);
+                } else {
                     _preTradducirCapitulo(anterior, 'anterior');
                 }
-            }, 12000);
+            };
+            setTimeout(_esperarYLanzarAnterior, 8000);
         }
 
     } catch (error) {

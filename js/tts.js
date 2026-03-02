@@ -188,6 +188,10 @@ async function _limpiarTTSCache() {
 
 // Reproducir audio con la API local — con pre-fetch lookahead de 2 oraciones
 async function leerOracionLocal(index, audioUrlPreGenerada) {
+    // ── Guardia de exclusión mutua ──
+    // Silenciar inmediatamente el browser TTS si sigue hablando
+    if (synth.speaking || synth.pending) synth.cancel();
+
     if (index >= sentences.length) {
         detenerTTS();
         mostrarNotificacion('Lectura completada');
@@ -220,7 +224,18 @@ async function leerOracionLocal(index, audioUrlPreGenerada) {
     _ttsAudioCache.delete(index); // liberar entrada una vez que tenemos la URL
 
     if (!audioUrl) {
-        leerOracion(index);
+        // No hacer fallback al browser TTS para todo el capítulo.
+        // Si una oración falla, simplemente saltarla y continuar con XTTS en la siguiente.
+        console.warn(`[XTTS] Sin audio para oración ${index + 1} — saltando`);
+        if (isReading && !isPaused) {
+            const next = index + 1;
+            if (next >= sentences.length) {
+                detenerTTS();
+                _avanzarSiguienteCapituloAuto();
+            } else {
+                leerOracionLocal(next);
+            }
+        }
         return;
     }
 
@@ -259,6 +274,21 @@ async function leerOracionLocal(index, audioUrlPreGenerada) {
         console.error('Error al reproducir audio:', e);
         _ttsCurrentUrl = null;
         URL.revokeObjectURL(audioUrl);
+        // ── No hacer fallback al browser TTS si XTTS sigue activo ──
+        // Saltar la oración fallida y continuar con XTTS en la siguiente.
+        if (_usarServidorLive && servidorTTSDisponible) {
+            console.warn(`[XTTS] Error en oración ${index + 1} — saltando al navegador está desactivado, saltando oración`);
+            if (isReading && !isPaused) {
+                const next = index + 1;
+                if (next >= sentences.length) {
+                    detenerTTS();
+                    _avanzarSiguienteCapituloAuto();
+                } else {
+                    leerOracionLocal(next);
+                }
+            }
+            return;
+        }
         leerOracion(index);
     };
 
@@ -431,6 +461,19 @@ function resaltarOracion(index) {
 
 // ─── TTS ENGINE — leerOracion, iniciarTTS, envolver spans ───
 function leerOracion(index) {
+    // ── Guardia de exclusión mutua ──
+    // Si XTTS está activo y disponible, este motor no debe dispararse.
+    // Silenciamos el browser synth por si quedó algo colgado y abortamos.
+    if (_usarServidorLive && servidorTTSDisponible) {
+        if (synth.speaking || synth.pending) synth.cancel();
+        return;
+    }
+    // Aunque XTTS no esté activo, si hay audio local sonando, silenciarlo
+    if (typeof audioActual !== 'undefined' && audioActual && !audioActual.paused) {
+        audioActual.pause();
+        audioActual.currentTime = 0;
+    }
+
     if (index >= sentences.length) {
         detenerTTS();
         mostrarNotificacion('Lectura completada');
@@ -611,8 +654,9 @@ function reanudarTTS() {
     setTimeout(() => {
         currentSentenceIndex = indiceActual;
         actualizarEstadoTTS('reproduciendo');
-        // Usar el motor correcto según servidor disponible
-        if (typeof servidorTTSDisponible !== 'undefined' && servidorTTSDisponible) {
+        // Usar el motor correcto según configuración activa (igual que iniciarTTS)
+        if (typeof _usarServidorLive !== 'undefined' && _usarServidorLive &&
+            typeof servidorTTSDisponible !== 'undefined' && servidorTTSDisponible) {
             leerOracionLocal(indiceActual);
         } else {
             leerOracion(indiceActual);

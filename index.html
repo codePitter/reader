@@ -587,8 +587,8 @@
 
         <div class="video-bar">
             <button id="kbtn-playpause" onclick="videoTogglePlay()" style="background:none;border:none;color:var(--accent);font-size:1.3rem;cursor:pointer;padding:0 2px;line-height:1;flex-shrink:0;">&#9654;</button>
-            <button onclick="videoCapituloAnterior()" style="background:none;border:none;color:var(--text-dim);font-size:0.85rem;cursor:pointer;padding:0 2px;flex-shrink:0;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-dim)'">&#9198;</button>
-            <button onclick="videoCapituloSiguiente()" style="background:none;border:none;color:var(--text-dim);font-size:0.85rem;cursor:pointer;padding:0 2px;flex-shrink:0;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-dim)'">&#9197;</button>
+            <button id="btn-cap-anterior" onclick="videoCapituloAnterior()" style="background:none;border:none;color:var(--text-dim);font-size:0.85rem;cursor:not-allowed;padding:0 2px;flex-shrink:0;opacity:0.35;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-dim)'" disabled>&#9198;</button>
+            <button id="btn-cap-siguiente" onclick="videoCapituloSiguiente()" style="background:none;border:none;color:var(--text-dim);font-size:0.85rem;cursor:not-allowed;padding:0 2px;flex-shrink:0;opacity:0.35;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-dim)'" disabled>&#9197;</button>
             <span id="kp-current" style="font-family:'DM Mono',monospace;font-size:0.6rem;color:var(--text-dim);flex-shrink:0;white-space:nowrap;">&#8212;</span>
             <span id="kp-chapter" style="font-family:'Lora',serif;font-size:0.68rem;color:var(--text-dim);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
             <span style="font-size:0.7rem;color:var(--text-dim);flex-shrink:0;" title="Volumen general">&#128266;</span>

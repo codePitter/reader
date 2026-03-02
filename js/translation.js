@@ -451,12 +451,13 @@ function actualizarProgresoTraduccion(actual, total) {
     const kWrap = document.getElementById('video-translation-progress');
     const kFill = document.getElementById('ktl-fill');
     const kPct = document.getElementById('ktl-pct');
-    if (kWrap) kWrap.style.display = 'flex';
+    // if (kWrap) kWrap.style.display = 'flex'; // no mostrar overlay de video durante traducción
     if (kFill) kFill.style.width = pct + '%';
     if (kPct) kPct.textContent = pct + '%';
 }
 
 function finalizarProgresoTraduccion() {
+    if (_traduccionEnBackground) return; // BG silencioso — no tocar la UI
     const fill = document.getElementById('progress-fill');
     const label = document.getElementById('tts-status-label');
     const pctEl = document.getElementById('tts-percent');
@@ -471,6 +472,7 @@ function finalizarProgresoTraduccion() {
 }
 
 function mostrarProgresoRevision(msg) {
+    if (_traduccionEnBackground) return; // BG silencioso — no tocar la UI
     const label = document.getElementById('tts-status-label');
     const fill = document.getElementById('progress-fill');
     const pctEl = document.getElementById('tts-percent');
@@ -844,6 +846,12 @@ async function _preTradducirCapitulo(ruta, direccion = 'siguiente') {
         console.warn(`${dir} Pre-procesamiento falló para ${nombre}:`, e);
     } finally {
         if (miToken === _bgCancelToken) _capCacheEnCurso = null;
+        if (miToken === _bgCancelToken && typeof window._aplicarNavBtnState === 'function') {
+            const btnId = direccion === 'anterior' ? 'btn-cap-anterior' : 'btn-cap-siguiente';
+            const stateKey = direccion === 'anterior' ? 'anterior' : 'siguiente';
+            if (window._navBtnState) window._navBtnState[stateKey] = true;
+            window._aplicarNavBtnState(btnId, true);
+        }
     }
 }
 
