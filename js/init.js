@@ -232,4 +232,98 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+
+    // ── Restaurar estado de toggles desde localStorage ──
+    // IMPORTANTE: solo se restaura el estado visual del checkbox.
+    // La variable interna `traduccionAutomatica` NO se toca aquí — solo cambia
+    // cuando el usuario presiona "Aplicar". Esto evita que al cargar un EPUB
+    // se dispare la traducción automáticamente sin acción explícita del usuario.
+
+    // auto-translate
+    const autoTranslate = document.getElementById('auto-translate');
+    if (autoTranslate) {
+        const saved = localStorage.getItem('toggle_auto_translate');
+        if (saved !== null) {
+            autoTranslate.checked = saved === 'true';
+            // Actualizar el texto de status sin marcar cambio pendiente ni tocar
+            // la variable interna (eso queda para cuando el usuario presione Aplicar)
+            const statusEl = document.getElementById('translation-status');
+            if (statusEl && autoTranslate.checked) {
+                statusEl.textContent = '⏳ Traducción activada (presiona Aplicar)';
+            }
+            // Mostrar botón Aplicar si la traducción está activada
+            if (autoTranslate.checked) {
+                const row = document.getElementById('aplicar-row');
+                if (row) row.style.display = 'block';
+            }
+        }
+    }
+
+    // tts-humanizer
+    const ttsHumanizer = document.getElementById('tts-humanizer');
+    if (ttsHumanizer) {
+        const saved = localStorage.getItem('toggle_tts_humanizer');
+        if (saved !== null) {
+            ttsHumanizer.checked = saved === 'true';
+            // Sincronizar estado interno (ttsHumanizerActivo) y visibilidad del panel
+            // sin llamar marcarCambioPendiente (no hay capítulo cargado aún)
+            if (typeof ttsHumanizerActivo !== 'undefined') {
+                ttsHumanizerActivo = ttsHumanizer.checked;
+            }
+            const panel = document.getElementById('claude-key-panel');
+            if (panel) panel.style.display = ttsHumanizer.checked ? 'block' : 'none';
+            const humStatus = document.getElementById('humanizer-status');
+            if (humStatus) humStatus.textContent = ttsHumanizer.checked ? '⏳ activo (pendiente)' : 'Desactivado';
+        }
+    }
+
+    // auto-play-after-translate (default: true — respetar solo si fue guardado explícitamente)
+    const autoPlay = document.getElementById('auto-play-after-translate');
+    if (autoPlay) {
+        const saved = localStorage.getItem('toggle_auto_play');
+        if (saved !== null) autoPlay.checked = saved === 'true';
+    }
+
+    // auto-next-chapter (default: true — igual)
+    const autoNext = document.getElementById('auto-next-chapter');
+    if (autoNext) {
+        const saved = localStorage.getItem('toggle_auto_next');
+        if (saved !== null) autoNext.checked = saved === 'true';
+    }
+
+    // auto-onoma — clave usada por grammar.js: 'auto_onoma'
+    const autoOnoma = document.getElementById('auto-onoma');
+    if (autoOnoma) {
+        const saved = localStorage.getItem('auto_onoma');
+        if (saved !== null) {
+            autoOnoma.checked = saved === 'true';
+            // Sincronizar variable interna directamente (toggleAutoOnoma llamaría
+            // marcarCambioPendiente, que no queremos al inicio)
+            if (typeof autoReemplazarOnomatopeyas !== 'undefined') {
+                autoReemplazarOnomatopeyas = autoOnoma.checked;
+            }
+            const statusEl = document.getElementById('auto-onoma-status');
+            if (statusEl) {
+                statusEl.textContent = autoOnoma.checked ? '✓ Activo' : 'Desactivado';
+                statusEl.style.color = autoOnoma.checked ? 'var(--accent2)' : '';
+            }
+        }
+    }
+
+    // grammar-review — clave usada por grammar.js: 'grammar_review_activo'
+    const gramReview = document.getElementById('grammar-review');
+    if (gramReview) {
+        const saved = localStorage.getItem('grammar_review_activo');
+        if (saved !== null) {
+            gramReview.checked = saved === 'true';
+            if (typeof grammarReviewActivo !== 'undefined') {
+                grammarReviewActivo = gramReview.checked;
+            }
+            const statusEl = document.getElementById('grammar-review-status');
+            if (statusEl && gramReview.checked) {
+                statusEl.textContent = '✓ Activo';
+                statusEl.style.color = 'var(--accent2)';
+            }
+        }
+    }
 });

@@ -166,6 +166,8 @@ async function generarAudioLocal(texto, { silencioso = false } = {}) {
 // Mapa index → Promise<audioUrl|null> para oraciones pre-generadas en background.
 // Se limpia al detener/iniciar TTS para liberar URLs de objeto.
 const _ttsAudioCache = new Map();
+// URL de objeto del audio que está sonando ahora — para poder revocarla en detenerTTS()
+let _ttsCurrentUrl = null;
 
 function _preFetchOracion(index) {
     if (index < 0 || index >= sentences.length) return;
@@ -223,6 +225,7 @@ async function leerOracionLocal(index, audioUrlPreGenerada) {
     }
 
     audioActual = new Audio(audioUrl);
+    _ttsCurrentUrl = audioUrl; // registrar para que detenerTTS() pueda revocarla
 
     if (typeof _rec_connectAudioElement === 'function') {
         _rec_connectAudioElement(audioActual);
@@ -232,6 +235,7 @@ async function leerOracionLocal(index, audioUrlPreGenerada) {
 
     const miSesionTTS = _ttsSessionToken;
     audioActual.onended = async function () {
+        _ttsCurrentUrl = null;
         URL.revokeObjectURL(audioUrl);
         if (miSesionTTS !== _ttsSessionToken) return;
         if (isReading && !isPaused) {
@@ -253,6 +257,7 @@ async function leerOracionLocal(index, audioUrlPreGenerada) {
 
     audioActual.onerror = function (e) {
         console.error('Error al reproducir audio:', e);
+        _ttsCurrentUrl = null;
         URL.revokeObjectURL(audioUrl);
         leerOracion(index);
     };
@@ -626,7 +631,16 @@ function detenerTTS() {
     if (audioActual) {
         audioActual.pause();
         audioActual.currentTime = 0;
+        // Limpiar src ANTES de nullear para que el navegador no siga intentando
+        // cargar el blob URL después de que sea revocado (evita ERR_FILE_NOT_FOUND)
+        audioActual.src = '';
+        audioActual.load();
         audioActual = null;
+    }
+    // Revocar la URL del audio que estaba sonando (si onended no lo hizo ya)
+    if (_ttsCurrentUrl) {
+        URL.revokeObjectURL(_ttsCurrentUrl);
+        _ttsCurrentUrl = null;
     }
 
     // Detener TTS del navegador

@@ -296,12 +296,16 @@ function _sanitizarParaTTS(texto) {
 }
 
 // Llama al proveedor de IA seleccionado para naturalizar un bloque
-async function _naturalizarBloque(bloque) {
+// Con retry exponencial: hasta 3 intentos, espera 2s → 4s → 8s en caso de 429
+async function _naturalizarBloque(bloque, _intento = 0) {
     const bloqueClean = _sanitizarParaTTS(bloque);
     if (!claudeApiKey) return bloqueClean;
 
     const prov = HUMANIZER_PROVIDERS[humanizerProvider];
     if (!prov) return bloqueClean;
+
+    const MAX_REINTENTOS = 3;
+    const DELAY_BASE_MS = 2000; // 2s, 4s, 8s
 
     try {
         const prompt = HUMANIZER_PROMPT_TEMPLATE(bloqueClean);
@@ -313,11 +317,27 @@ async function _naturalizarBloque(bloque) {
             body: JSON.stringify(prov.body(prompt))
         });
 
+        // ── Rate limit (429) → retry con backoff exponencial ──
+        if (res.status === 429) {
+            if (_intento < MAX_REINTENTOS) {
+                const espera = DELAY_BASE_MS * Math.pow(2, _intento);
+                console.warn(`[Humanizador] ${prov.name} 429 Rate Limit — reintento ${_intento + 1}/${MAX_REINTENTOS} en ${espera / 1000}s...`);
+                // Mostrar aviso en la barra de progreso si existe
+                const mpbLabel = document.getElementById('mpb-label');
+                if (mpbLabel) mpbLabel.textContent = `⏳ Rate limit ${prov.name} — esperando ${espera / 1000}s...`;
+                await new Promise(r => setTimeout(r, espera));
+                return _naturalizarBloque(bloque, _intento + 1);
+            }
+            console.warn(`[Humanizador] ${prov.name} 429 tras ${MAX_REINTENTOS} reintentos — saltando bloque`);
+            return bloqueClean;
+        }
+
         if (!res.ok) {
             const err = await res.json().catch(() => ({}));
             console.warn(`${prov.name} error:`, err?.error?.message || res.status);
             return bloqueClean;
         }
+
         const data = await res.json();
         const resultado = prov.extract(data) || bloqueClean;
         return _sanitizarParaTTS(resultado);
@@ -339,7 +359,11 @@ async function naturalizarTextoParaTTS(texto, onProgreso) {
     const prov = HUMANIZER_PROVIDERS[humanizerProvider];
     console.log(`✨ Naturalizando ${total} bloque(s) con ${claudeApiKey ? (prov?.name || humanizerProvider) : 'sanitizador local'}...`);
 
-    const LOTE = 3;
+    // OpenRouter tiene rate limit bajo en el plan free → procesar de a 1 (secuencial)
+    // Otros proveedores toleran hasta 3 en paralelo
+    const LOTE = humanizerProvider === 'openrouter' ? 1 : 3;
+    const DELAY_ENTRE_LOTES = humanizerProvider === 'openrouter' ? 800 : 0; // ms entre lotes
+
     for (let i = 0; i < total; i += LOTE) {
         const lote = bloques.slice(i, i + LOTE);
         const promesas = lote.map((b, j) =>
@@ -350,6 +374,10 @@ async function naturalizarTextoParaTTS(texto, onProgreso) {
             })
         );
         await Promise.all(promesas);
+        // Pequeña pausa entre lotes para OpenRouter
+        if (DELAY_ENTRE_LOTES > 0 && i + LOTE < total) {
+            await new Promise(r => setTimeout(r, DELAY_ENTRE_LOTES));
+        }
     }
 
     return resultados.join('\n\n');
@@ -588,13 +616,39 @@ function dividirEnSubfragmentos(texto, maxChars) {
 async function traducirFragmento(fragmento, intentos = 3) {
     if (!fragmento || !fragmento.trim()) return fragmento;
 
+    // ── Proteger palabras en español dentro del texto inglés ──────────────────
+    // Cuando el original (EN) ya tiene palabras en español (ej: "gruñó", "mugió",
+    // "siseó", "tronó"), Google Translate detecta idioma mixto y puede traducir
+    // frases enteras como si fueran español→español, generando errores como
+    // "was" → "titubeó". La solución: enmascarar esas palabras con placeholders
+    // antes de enviar, y restaurarlas después de recibir la traducción.
+    const _placeholders = [];
+    const _fragmentoProtegido = fragmento.replace(
+        /\b([a-záéíóúüñ]+[óéáíú][a-záéíóúüñ]*|[a-záéíóúüñ]*[áéíóú][a-záéíóúüñ]+)\b/g,
+        (match) => {
+            // Solo proteger palabras con tilde (claramente españolas) que no sean
+            // también palabras inglesas comunes
+            const inglesComun = new Set(['a', 'an', 'to', 'no', 'so', 'do', 'go', 'be',
+                'me', 'he', 'we', 'us', 'or', 'on', 'in', 'is', 'it', 'if', 'as',
+                'at', 'by', 'up', 'of', 'my', 'ok']);
+            if (inglesComun.has(match.toLowerCase())) return match;
+            const idx = _placeholders.length;
+            _placeholders.push(match);
+            return `ZXPLACEHOLDER${idx}ZX`;
+        }
+    );
+
     // Usar el idioma dinámico (respeta override del selector de ui.js)
     const tl = _getLang();
+
+    // Helper: restaurar placeholders en el texto traducido
+    const _restaurar = (t) => _placeholders.length === 0 ? t :
+        t.replace(/ZXPLACEHOLDER(\d+)ZX/g, (_, i) => _placeholders[+i] ?? _);
 
     // Intentar primero con Google Translate (API no oficial, sin key)
     for (let intento = 1; intento <= intentos; intento++) {
         try {
-            const gtUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=${tl}&dt=t&q=${encodeURIComponent(fragmento)}`;
+            const gtUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=${tl}&dt=t&q=${encodeURIComponent(_fragmentoProtegido)}`;
             const response = await fetch(gtUrl);
             if (response.ok) {
                 const data = await response.json();
@@ -603,7 +657,7 @@ async function traducirFragmento(fragmento, intentos = 3) {
                         .filter(item => item && item[0])
                         .map(item => item[0])
                         .join('');
-                    if (traduccion && traduccion.trim()) return traduccion;
+                    if (traduccion && traduccion.trim()) return _restaurar(traduccion);
                 }
             }
             break; // respuesta ok pero vacía
@@ -619,7 +673,7 @@ async function traducirFragmento(fragmento, intentos = 3) {
     // Fallback: MyMemory API
     for (let intento = 1; intento <= intentos; intento++) {
         try {
-            const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(fragmento)}&langpair=en|${tl}`;
+            const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(_fragmentoProtegido)}&langpair=en|${tl}`;
             const response = await fetch(url);
             if (!response.ok) {
                 if (intento < intentos) { await new Promise(r => setTimeout(r, 400 * intento)); continue; }
@@ -634,7 +688,7 @@ async function traducirFragmento(fragmento, intentos = 3) {
                     if (intento < intentos) { await new Promise(r => setTimeout(r, 500)); continue; }
                     return fragmento;
                 }
-                return resultado;
+                return _restaurar(resultado);
             }
             if (data.responseStatus === 429 || data.responseDetails?.includes('DAILY')) {
                 mostrarNotificacion('⚠️ Límite diario de traducción alcanzado');
@@ -689,9 +743,9 @@ async function traducirTextoActual() {
     }
 }
 
-// ─── CACHE DE PRE-TRADUCCIÓN (siguiente capítulo en background) ───
+// ─── CACHE DE PRE-TRADUCCIÓN (siguiente/anterior capítulo en background) ───
 
-async function _preTradducirCapitulo(ruta) {
+async function _preTradducirCapitulo(ruta, direccion = 'siguiente') {
     if (!ruta || !archivosHTML[ruta]) return;
     if (_capCache[ruta]) return; // ya en cache
 
@@ -700,15 +754,26 @@ async function _preTradducirCapitulo(ruta) {
     _capCacheEnCurso = ruta;
 
     const nombre = ruta.split('/').pop();
+    const dir = direccion === 'anterior' ? '⏮ [BG·ANT]' : '⏭ [BG·SIG]';
     const estadoTraduccion = traduccionAutomatica;
     const estadoHumanizador = ttsHumanizerActivo && !!claudeApiKey;
+    const estadoGramatica = typeof grammarReviewActivo !== 'undefined' && grammarReviewActivo;
+    const estadoOnoma = typeof autoReemplazarOnomatopeyas !== 'undefined' && autoReemplazarOnomatopeyas;
 
     if (!estadoTraduccion && !estadoHumanizador) {
         _capCacheEnCurso = null;
         return;
     }
 
-    console.log(`📦 [BG] Iniciando pre-proceso: ${nombre} (trad:${estadoTraduccion} opt:${estadoHumanizador})`);
+    const fasesActivas = [
+        estadoTraduccion ? '📦 trad' : '○ trad',
+        estadoHumanizador ? '✨ opt' : '○ opt',
+        '🧹 sanitiz',
+        estadoOnoma ? '💬 onoma' : '○ onoma',
+        estadoGramatica ? '📝 gram' : '○ gram',
+    ].join(' · ');
+
+    console.log(`${dir} Iniciando pre-proceso: ${nombre}\n       Fases: ${fasesActivas}`);
 
     try {
         const parser = new DOMParser();
@@ -730,34 +795,53 @@ async function _preTradducirCapitulo(ruta) {
         texto = texto.replace(/\n\n\n+/g, '\n\n').trim();
         if (texto.length < 50) return;
 
-        if (miToken !== _bgCancelToken) { console.log(`[BG] Cancelado: ${nombre}`); return; }
+        if (miToken !== _bgCancelToken) { console.log(`${dir} Cancelado: ${nombre}`); return; }
 
         _traduccionEnBackground = true;
         try {
             if (estadoTraduccion) {
-                console.log(`📦 [BG] Traduciendo: ${nombre}`);
+                console.log(`${dir} 📦 Traduciendo: ${nombre}`);
                 texto = await traducirTexto(texto);
                 if (miToken !== _bgCancelToken) return;
             }
             if (estadoHumanizador) {
-                console.log(`✨ [BG] Optimizando: ${nombre}`);
+                console.log(`${dir} ✨ Optimizando: ${nombre}`);
                 texto = await naturalizarTextoParaTTS(texto);
                 if (miToken !== _bgCancelToken) return;
             }
-            // ── Sanitización local SIEMPRE — elimina símbolos problemáticos
-            // independientemente de si el humanizador IA está activo o no ──
-            console.log(`🧹 [BG] Sanitizando símbolos: ${nombre}`);
+            console.log(`${dir} 🧹 Sanitizando: ${nombre}`);
             texto = _sanitizarParaTTS(texto);
+
+            // Gramática ANTES de onomatopeyas — LT no debe corregir los reemplazos
+            if (estadoGramatica) {
+                console.log(`${dir} 📝 Gramática: ${nombre}`);
+                if (typeof revisarGramatica === 'function') {
+                    texto = await revisarGramatica(texto);
+                }
+            } else {
+                console.log(`${dir} ○ Gramática: desactivado`);
+            }
+
+            // Onomatopeyas AL FINAL — sobre el texto ya traducido y revisado,
+            // para no interferir con la detección de idioma ni con LT
+            if (estadoOnoma) {
+                console.log(`${dir} 💬 Onomatopeyas: ${nombre}`);
+                if (typeof aplicarOnomatopeyasAutomatico === 'function') {
+                    texto = aplicarOnomatopeyasAutomatico(texto);
+                }
+            } else {
+                console.log(`${dir} ○ Onomatopeyas: desactivado`);
+            }
         } finally {
             _traduccionEnBackground = false;
         }
 
         texto = aplicarReemplazosAutomaticos(texto);
         _capCache[ruta] = { texto, traducida: estadoTraduccion, humanizada: estadoHumanizador };
-        console.log(`✅ [BG] Cache listo: ${nombre} (trad:${estadoTraduccion} opt:${estadoHumanizador})`);
+        console.log(`${dir} ✅ Cache listo: ${nombre}\n       trad:${estadoTraduccion} · opt:${estadoHumanizador} · onoma:${estadoOnoma} · gram:${estadoGramatica}`);
 
     } catch (e) {
-        console.warn(`[BG] Pre-procesamiento falló para ${nombre}:`, e);
+        console.warn(`${dir} Pre-procesamiento falló para ${nombre}:`, e);
     } finally {
         if (miToken === _bgCancelToken) _capCacheEnCurso = null;
     }
@@ -771,11 +855,19 @@ function _getSiguienteRuta(rutaActual) {
     return idx >= 0 && idx < opts.length - 1 ? opts[idx + 1].value : null;
 }
 
-// Mantener solo las 3 entradas más recientes en cache
+function _getAnteriorRuta(rutaActual) {
+    const sel = document.getElementById('chapters');
+    if (!sel) return null;
+    const opts = Array.from(sel.options).filter(o => !o.disabled && o.value);
+    const idx = opts.findIndex(o => o.value === rutaActual);
+    return idx > 0 ? opts[idx - 1].value : null;
+}
+
+// Mantener solo las 4 entradas más recientes en cache (actual + siguiente + anterior + margen)
 function _limpiarCache(rutaActual) {
     const keys = Object.keys(_capCache);
-    if (keys.length > 3) {
-        keys.filter(k => k !== rutaActual).slice(0, keys.length - 3)
+    if (keys.length > 4) {
+        keys.filter(k => k !== rutaActual).slice(0, keys.length - 4)
             .forEach(k => delete _capCache[k]);
     }
 }

@@ -37,6 +37,11 @@ let _epubFilename = '';
 // ─── TRADUCCIÓN ───
 let traduccionAutomatica = false;
 
+// ─── REVISIÓN GRAMATICAL Y ONOMATOPEYAS (Fase 4) ───
+// Declaradas aquí para que epub.js pueda leerlas antes de que grammar.js cargue
+let grammarReviewActivo = false;
+let autoReemplazarOnomatopeyas = false;
+
 // ─── CACHE DE PRE-TRADUCCIÓN ───
 // ruta → { texto, traducida, humanizada }  (siguiente capítulo procesado en background)
 const _capCache = {};
@@ -258,5 +263,19 @@ async function aplicarConfiguracion() {
 
 // Alias — el checkbox #auto-translate llama a esta función vía onchange
 function toggleAutoTranslate() {
+    const checked = document.getElementById('auto-translate')?.checked ?? false;
+    localStorage.setItem('toggle_auto_translate', checked);
+    marcarCambioPendiente();
+}
+
+// Persistencia de toggles simples (sin lógica adicional)
+function toggleAutoNext() {
+    const checked = document.getElementById('auto-next-chapter')?.checked ?? true;
+    localStorage.setItem('toggle_auto_next', checked);
+}
+
+function toggleAutoPlay() {
+    const checked = document.getElementById('auto-play-after-translate')?.checked ?? true;
+    localStorage.setItem('toggle_auto_play', checked);
     marcarCambioPendiente();
 }

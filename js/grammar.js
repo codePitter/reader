@@ -12,7 +12,10 @@
 // ═══════════════════════════════════════
 
 // ─── ESTADO Y CREDENCIALES ──────────────────────────────────────────────
-let grammarReviewActivo = false;
+// Ambas variables se declaran en main.js para que epub.js pueda leerlas antes de que
+// este archivo cargue. Aquí solo las inicializamos si aún no fueron declaradas.
+// grammarReviewActivo y autoReemplazarOnomatopeyas se declaran en main.js con let.
+// No re-declarar aquí para evitar SyntaxError por conflicto let/var en el mismo scope global.
 
 // Credenciales opcionales de cuenta LT gratuita
 // Desbloquean 20 K chars/req y 75 K chars/min (vs ~1 500 chars anónimo)
@@ -110,7 +113,7 @@ const ONOMATOPEYAS_ES = {
     'uhh': 'vaciló',
     'uhm': 'titubeó',
     'err': 'balbuceó',
-    'er': 'titubeó',
+    'er': 'titubeó',       // seguro: solo matchea dentro de delimitadores de diálogo
     'umm': 'dudó',
     'um': 'dudó',
     'erm': 'vaciló',
@@ -205,7 +208,7 @@ const ONOMATOPEYAS_ES = {
     'groan': 'gimió',
     'moan': 'gimió',
     'whimper': 'gimoteó',
-    'sob': 'sollozó',
+    'sob': 'sollozó',      // seguro: solo matchea dentro de delimitadores de diálogo
     'wail': 'aulló de dolor',
     'bawl': 'lloró a gritos',
     'blubber': 'lloró desconsolado',
@@ -433,24 +436,46 @@ const _PREFILTRO_ES = [
 // DETECCIÓN DE ONOMATOPEYAS EN EL TEXTO
 // ═══════════════════════════════════════
 
+// Delimitadores de apertura y cierre para el regex context-aware
+// Una onomatopeya debe estar PRECEDIDA por un abridor O SEGUIDA por un cierre
+const _ONOMA_OPEN = `["'«""„(\\[—\\-*¿¡]`;
+const _ONOMA_CLOSE = `[,\\.!?…"»)\\]*]`;
+
 function detectarOnomatopeyas(texto) {
     const sugerencias = [];
 
     for (const [onoma, equiv] of Object.entries(ONOMATOPEYAS_ES)) {
         const escapada = onoma.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         // Acepta repetición de la última letra (hmmm, grrrr, ahhh)
-        const regexStr = '(?<![\\wáéíóúÁÉÍÓÚüÜñÑ])' + escapada + '[a-z]*(?![\\wáéíóúÁÉÍÓÚüÜñÑ])';
+        // CONDICIÓN: precedida por delimitador de apertura O seguida por cierre de interjección
+        const regexStr =
+            '(?:' +
+            '(?<=' + _ONOMA_OPEN + ')' +
+            '(?<![\\wáéíóúÁÉÍÓÚüÜñÑ])' +
+            '(' + escapada + '[a-z]*)' +
+            '(?![\\wáéíóúÁÉÍÓÚüÜñÑ])' +
+            '|' +
+            '(?<![\\wáéíóúÁÉÍÓÚüÜñÑ])' +
+            '(' + escapada + '[a-z]*)' +
+            '(?![\\wáéíóúÁÉÍÓÚüÜñÑ])' +
+            '(?=' + _ONOMA_CLOSE + ')' +
+            ')';
         const regex = new RegExp(regexStr, 'gi');
         let m;
         while ((m = regex.exec(texto)) !== null) {
+            const matchedWord = m[1] || m[2];
+            const matchStart = m.index + (m[1] !== undefined ? 0 : 0);
+            // Ajustar offset: el grupo capturado puede no empezar en m.index si hay lookbehind
+            // m.index siempre apunta al inicio del match completo, pero con lookbehind el grupo
+            // empieza en m.index
             const ctxStart = Math.max(0, m.index - 80);
-            const ctxEnd = Math.min(texto.length, m.index + m[0].length + 80);
+            const ctxEnd = Math.min(texto.length, m.index + matchedWord.length + 80);
             sugerencias.push({
                 tipo: 'onomatopeya',
-                original: m[0],
+                original: matchedWord,
                 reemplazo: equiv,
                 offset: m.index,
-                length: m[0].length,
+                length: matchedWord.length,
                 contexto: (ctxStart > 0 ? '…' : '') + texto.slice(ctxStart, ctxEnd) + (ctxEnd < texto.length ? '…' : ''),
                 mensaje: `Onomatopeya inglesa — equivalente en español: "${equiv}"`,
             });
@@ -752,10 +777,8 @@ async function revisarGramaticaYOnomatopeyas(texto) {
 // Se activa con el toggle #auto-onoma (independiente de la revisión gramatical completa).
 // ═══════════════════════════════════════
 
-let autoReemplazarOnomatopeyas = (() => {
-    try { return localStorage.getItem('auto_onoma') === 'true'; }
-    catch (e) { return false; }
-})();
+// autoReemplazarOnomatopeyas se declara en main.js (ver arriba del archivo)
+// Su valor se restaura desde localStorage en el DOMContentLoaded al final de este archivo
 
 function toggleAutoOnoma() {
     autoReemplazarOnomatopeyas = document.getElementById('auto-onoma')?.checked ?? false;
@@ -775,12 +798,21 @@ function aplicarOnomatopeyasAutomatico(texto) {
     let resultado = texto;
     for (const [onoma, equiv] of Object.entries(ONOMATOPEYAS_ES)) {
         const escapada = onoma.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const regex = new RegExp(
-            '(?<![\\wáéíóúÁÉÍÓÚüÜñÑ])(' + escapada + '[a-z]*)(?![\\wáéíóúÁÉÍÓÚüÜñÑ])',
-            'gi'
-        );
+        // Context-aware: solo reemplaza precedida por abridor O seguida por cierre de interjección
+        const regexStr =
+            '(?:' +
+            '(?<=' + _ONOMA_OPEN + ')' +
+            '(?<![\\wáéíóúÁÉÍÓÚüÜñÑ])' +
+            '(' + escapada + ')' +
+            '(?![\\wáéíóúÁÉÍÓÚüÜñÑ])' +
+            '|' +
+            '(?<![\\wáéíóúÁÉÍÓÚüÜñÑ])' +
+            '(' + escapada + ')' +
+            '(?![\\wáéíóúÁÉÍÓÚüÜñÑ])' +
+            '(?=' + _ONOMA_CLOSE + ')' +
+            ')';
+        const regex = new RegExp(regexStr, 'gi');
         resultado = resultado.replace(regex, (match) => {
-            // Preservar mayúscula inicial si la onomatopeya empieza con mayúscula
             if (match.charAt(0) === match.charAt(0).toUpperCase() &&
                 match.charAt(0) !== match.charAt(0).toLowerCase()) {
                 return equiv.charAt(0).toUpperCase() + equiv.slice(1);

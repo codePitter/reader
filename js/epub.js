@@ -437,20 +437,15 @@ async function cargarCapitulo(ruta, _cancelToken) {
             await new Promise(r => setTimeout(r, 150));
         }
 
-        // ── Fase 4: Onomatopeyas + Gramática (SIEMPRE, fuera del bloque traducción) ──
+        // ── Fase 4: Gramática → Onomatopeyas (en este orden: LT no debe ver los reemplazos) ──
         const _grammarActivo = typeof grammarReviewActivo !== 'undefined' && grammarReviewActivo &&
             typeof revisarGramaticaYOnomatopeyas === 'function';
         const _autoOnomaActivo = typeof autoReemplazarOnomatopeyas !== 'undefined' && autoReemplazarOnomatopeyas &&
             typeof aplicarOnomatopeyasAutomatico === 'function';
 
-        if (_autoOnomaActivo) {
-            // Siempre correr reemplazo silencioso primero (incluso si grammar también está activo)
-            textoCompleto = aplicarOnomatopeyasAutomatico(textoCompleto);
-        }
-
         if (_grammarActivo) {
-            // Revisión interactiva completa con LanguageTool (ya incluye onomatopeyas en diálogo,
-            // pero el reemplazo silencioso de arriba ya limpió las más obvias)
+            // Revisión gramatical primero — antes de onomatopeyas para que LT
+            // no intente "corregir" los reemplazos (ej: "chistó" como error)
             const mpbWrap2 = document.getElementById('main-processing-bar');
             if (mpbWrap2) mpbWrap2.style.display = 'flex';
             const mpbFill2 = document.getElementById('mpb-fill');
@@ -470,6 +465,11 @@ async function cargarCapitulo(ruta, _cancelToken) {
                 return;
             }
             document.getElementById('tts-status').textContent = 'Detenido';
+        }
+
+        if (_autoOnomaActivo) {
+            // Onomatopeyas AL FINAL — sobre el texto ya traducido y revisado
+            textoCompleto = aplicarOnomatopeyasAutomatico(textoCompleto);
         }
 
         // ── Reemplazos manuales del usuario ──
@@ -548,18 +548,29 @@ async function cargarCapitulo(ruta, _cancelToken) {
             setTimeout(() => { iniciarTTS(); }, 400);
         }
 
-        // ── Pre-procesar el siguiente capítulo en background ──
-        // Capturar el token actual: si el usuario navega antes de los 5s, el callback no hará nada
+        // ── Pre-procesar el siguiente y el anterior capítulo en background ──
+        // El siguiente arranca a los 5s; el anterior a los 12s (para no competir con el siguiente).
+        // Ambos respetan el token: si el usuario navega antes, los callbacks no hacen nada.
         _limpiarCache(ruta);
         const siguiente = _getSiguienteRuta(ruta);
+        const anterior = _getAnteriorRuta(ruta);
+        const tokenAlProgramar = _bgCancelToken;
+
         if (siguiente) {
-            const tokenAlProgramar = _bgCancelToken;
             setTimeout(() => {
-                // Solo arrancar el BG si el usuario no navegó desde que programamos esto
                 if (_bgCancelToken === tokenAlProgramar) {
-                    _preTradducirCapitulo(siguiente);
+                    _preTradducirCapitulo(siguiente, 'siguiente');
                 }
             }, 5000);
+        }
+
+        if (anterior) {
+            setTimeout(() => {
+                // Solo arrancar si no se navegó Y si el siguiente ya terminó (token no cambiado)
+                if (_bgCancelToken === tokenAlProgramar) {
+                    _preTradducirCapitulo(anterior, 'anterior');
+                }
+            }, 12000);
         }
 
     } catch (error) {

@@ -289,7 +289,7 @@ function _inyectarBotonUsuario() {
                 onclick="_toggleAuthMenu()" title="Cuenta de usuario">
             <span id="auth-user-avatar-wrap">
                 <span id="auth-user-initials" class="auth-initials"></span>
-                <img id="auth-user-avatar" class="auth-avatar" src="" alt="" style="display:none" />
+                <img id="auth-user-avatar" class="auth-avatar" src="" alt="" style="display:none" onerror="this.style.display='none';document.getElementById('auth-user-initials').style.display='flex'" />
             </span>
             <span id="auth-user-name" class="auth-user-name"></span>
         </button>
@@ -347,6 +347,8 @@ function actualizarAuthUI(user) {
         if (nameEl) nameEl.textContent = name;
 
         if (avatarUrl && avatarEl) {
+            avatarEl.crossOrigin = 'anonymous';
+            avatarEl.referrerPolicy = 'no-referrer';
             avatarEl.src = avatarUrl;
             avatarEl.style.display = 'block';
             if (initialsEl) initialsEl.style.display = 'none';
@@ -662,14 +664,15 @@ function _inyectarEstilosAuth() {
 
         .auth-initials {
             display: flex; align-items: center; justify-content: center;
-            width: 20px; height: 20px; border-radius: 50%;
-            background: var(--accent); color: var(--bg);
+            width: 20px; height: 20px; min-width: 20px; min-height: 20px;
+            border-radius: 50%; background: var(--accent); color: var(--bg);
             font-size: 0.55rem; font-weight: 700;
             font-family: 'DM Mono', monospace; flex-shrink: 0;
         }
         .auth-avatar {
-            width: 20px; height: 20px; border-radius: 50%;
-            object-fit: cover; flex-shrink: 0;
+            width: 20px; height: 20px; min-width: 20px; min-height: 20px;
+            border-radius: 50%; object-fit: cover; flex-shrink: 0;
+            display: block; overflow: hidden;
         }
         .auth-user-btn--guest .auth-initials {
             background: var(--surface2); color: var(--text-dim);

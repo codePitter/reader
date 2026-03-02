@@ -619,3 +619,19 @@ function importarTodosReemplazos(clave) {
         mostrarNotificacion(`\u2713 ${count} reemplazos importados al libro actual`);
     } catch (e) { mostrarNotificacion('\u26a0 Error al importar'); }
 }
+// ═══════════════════════════════════════
+// AMBIENT LOOP TOGGLE
+// Movido desde el <script> inline de index.html
+// ═══════════════════════════════════════
+window._ambientLoopOn = false;
+
+function toggleAmbientLoop() {
+    window._ambientLoopOn = !window._ambientLoopOn;
+    const el = window.ambientAudio || window._ambientAudio || window._ambientEl
+        || document.getElementById('ambient-audio');
+    if (el) el.loop = window._ambientLoopOn;
+    const btn = document.getElementById('kbtn-ambient-loop');
+    if (btn) btn.style.color = window._ambientLoopOn ? 'var(--accent)' : 'var(--text-dim)';
+    if (typeof mostrarNotificacion === 'function')
+        mostrarNotificacion(window._ambientLoopOn ? '\u{1F501} Loop música: ON' : '\u{1F501} Loop música: OFF');
+}

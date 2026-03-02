@@ -881,14 +881,197 @@ input[type="text"] {
 }
 
 /* Responsive */
+/* ── Tablet grande (≤ 900px): sidebar más angosto, top-bar compacto ── */
+@media (max-width: 900px) {
+    :root {
+        --sidebar-w: 220px;
+    }
+
+    .top-bar {
+        padding: 10px 16px;
+        gap: 8px;
+    }
+
+        .top-bar h1 {
+            font-size: 1rem;
+        }
+
+        .top-bar .subtitle {
+            display: none;
+        }
+
+    .rec-btn {
+        font-size: 0.6rem;
+        padding: 5px 8px;
+    }
+
+    /* Modal Ajustes: más ancho posible */
+    #modal-ajustes > div {
+        max-width: 96vw;
+    }
+
+    /* TTS control bar: wrap en tablet */
+    .tts-control-bar {
+        flex-wrap: wrap;
+        gap: 6px;
+        min-height: unset;
+    }
+
+    .tts-control-bar-sliders {
+        flex-basis: 100%;
+        margin-left: 0;
+        order: 10;
+    }
+
+    .tts-bar-slider input[type="range"] {
+        max-width: unset;
+    }
+
+    .tts-bar-voice {
+        width: auto;
+        max-width: 140px;
+        margin-left: 0;
+    }
+
+    .btn-tts-server-toggle {
+        font-size: 0.55rem;
+        padding: 4px 6px;
+    }
+}
+
+/* ── Tablet chica (≤ 700px): sidebar aún más angosto ── */
 @media (max-width: 700px) {
     :root {
-        --sidebar-w: 240px;
+        --sidebar-w: 200px;
     }
 
     .reading-area {
-        padding: 32px 24px;
+        padding: 32px 20px;
     }
+
+    /* Ocultar botones secundarios para ganar espacio */
+    #btn-rec-audio,
+    #btn-rec-video,
+    #btn-export-video,
+    #btn-export-audio {
+        display: none !important;
+    }
+
+    .rec-btn {
+        font-size: 0.58rem;
+        padding: 4px 7px;
+    }
+
+    .top-bar h1 {
+        font-size: 0.95rem;
+    }
+}
+
+/* ── Móvil (≤ 560px): stack sidebar debajo del main ── */
+@media (max-width: 560px) {
+    :root {
+        --sidebar-w: 100%;
+    }
+
+    body {
+        flex-direction: column;
+        height: auto;
+        min-height: 100vh;
+        overflow-y: auto;
+        overflow-x: hidden;
+    }
+
+    .main-panel {
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+        min-height: 100svh;
+        overflow: visible;
+    }
+
+    .sidebar {
+        width: 100%;
+        max-height: none;
+        overflow-y: visible;
+    }
+
+    .reading-area {
+        padding: 20px 14px;
+    }
+
+    #texto-contenido {
+        font-size: 1rem !important;
+        line-height: 1.75 !important;
+    }
+
+    /* Stats bar: wrap */
+    .stats-bar {
+        flex-wrap: wrap;
+        gap: 4px;
+        padding: 6px 14px;
+    }
+
+    /* TTS bar: simplificar */
+    .tts-control-bar {
+        padding: 8px 12px;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    .tts-control-bar-sliders {
+        flex-basis: 100%;
+        order: 10;
+    }
+
+    /* Modal: full-width, desde abajo */
+    #modal-ajustes {
+        padding: 0 !important;
+        align-items: flex-end !important;
+    }
+
+        #modal-ajustes > div {
+            max-width: 100% !important;
+            width: 100% !important;
+            border-radius: 12px 12px 0 0 !important;
+            max-height: 88svh;
+            overflow-y: auto;
+        }
+
+    /* Ambient player más compacto */
+    #ambient-player {
+        width: 180px;
+        font-size: 0.7rem;
+    }
+}
+
+/* ── Print ── */
+@media print {
+    .sidebar, .top-bar, .tts-control-bar,
+    .stats-bar, #ambient-player,
+    #main-processing-bar {
+        display: none !important;
+    }
+
+    .reading-area {
+        padding: 0;
+    }
+
+    #texto-contenido {
+        font-size: 12pt;
+        line-height: 1.8;
+        color: #000 !important;
+    }
+}
+
+/* ── Ajustes modal tabs (movido desde inline HTML) ── */
+.ajustes-tab-btn.active {
+    color: var(--accent) !important;
+    border-left-color: var(--accent) !important;
+    background: var(--surface2) !important;
+}
+
+.ajustes-tab-btn:hover:not(.active) {
+    color: var(--text) !important;
+    background: rgba(255,255,255,0.03) !important;
 }
 
 /* ─── AMBIENT MUSIC PLAYER ─── */
@@ -1775,34 +1958,7 @@ input[type="text"] {
             background: rgba(126, 184, 154, 0.15);
         }
 
-@media (max-width: 900px) {
-    .tts-control-bar {
-        flex-wrap: wrap;
-        gap: 6px;
-        min-height: unset;
-    }
-
-    .tts-control-bar-sliders {
-        flex-basis: 100%;
-        margin-left: 0;
-        order: 10;
-    }
-
-    .tts-bar-slider input[type="range"] {
-        max-width: unset;
-    }
-
-    .tts-bar-voice {
-        width: auto;
-        max-width: 140px;
-        margin-left: 0;
-    }
-
-    .btn-tts-server-toggle {
-        font-size: 0.55rem;
-        padding: 4px 6px;
-    }
-}
+/* TTS 900px rules merged into the first @media (max-width: 900px) block above */
 
 /* ─── LEGACY COMPAT ─── */
 /* .notification es un alias de #notification (el HTML usa ambos) */
