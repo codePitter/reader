@@ -570,7 +570,9 @@ function togglePlayPause() {
     else pausarTTS();
 }
 
-function iniciarTTS() {
+// fraseInicial: índice de la oración desde la que arrancar (0 = principio).
+// Usado por progress.js (restaurar progreso) y bookmarks.js (ir a marcador).
+function iniciarTTS(fraseInicial = 0) {
     const contenido = document.getElementById('texto-contenido');
     const texto = contenido.textContent.trim();
 
@@ -583,7 +585,13 @@ function iniciarTTS() {
     detenerTTS();
 
     sentences = dividirEnOraciones(texto);
-    currentSentenceIndex = 0;
+
+    // Clampear fraseInicial al rango válido para evitar índices fuera de bounds
+    const _inicio = (Number.isInteger(fraseInicial) && fraseInicial > 0 && fraseInicial < sentences.length)
+        ? fraseInicial
+        : 0;
+
+    currentSentenceIndex = _inicio;
     isReading = true;
     isPaused = false;
     // ── Activar rotación inteligente de imágenes ──
@@ -591,6 +599,14 @@ function iniciarTTS() {
 
     // Envolver cada oración en un <span> para poder resaltarla
     envolverOracionesEnSpans(contenido, sentences);
+
+    // Si arrancamos desde una frase distinta a la 0, hacer scroll hasta ella
+    if (_inicio > 0) {
+        setTimeout(() => {
+            const span = document.getElementById(`tts-s-${_inicio}`);
+            if (span) span.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 200);
+    }
 
     actualizarEstadoTTS('reproduciendo');
 
@@ -622,14 +638,14 @@ function iniciarTTS() {
     // En caso contrario → SpeechSynthesis del navegador (comportamiento original).
     if (_usarServidorLive && servidorTTSDisponible) {
         mostrarNotificacion('🖥 Reproduciendo con TTS Local...');
-        leerOracionLocal(0);
+        leerOracionLocal(_inicio);
     } else {
         if (_usarServidorLive && !servidorTTSDisponible) {
             mostrarNotificacion('⚠ Servidor no disponible, usando navegador');
         } else {
             mostrarNotificacion('🔊 Reproduciendo...');
         }
-        leerOracion(0);
+        leerOracion(_inicio);
     }
 }
 

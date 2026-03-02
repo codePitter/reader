@@ -116,29 +116,67 @@
 
         const opcionExiste = Array.from(sel.options).some(o => o.value === bm.chapter);
         if (!opcionExiste) {
-            mostrarNotificacion('⚠ El capítulo ya no existe en este libro');
+            mostrarNotificacion('\u26a0 El cap\u00edtulo ya no existe en este libro');
             return;
         }
 
+        // Sincronizar configuracion pendiente antes de cargar
+        // (traduccionAutomatica solo se actualiza al presionar "Aplicar" — aqui la sincronizamos
+        //  para que el marcador respete el estado actual del checkbox, igual que hace aplicarConfiguracion)
+        _sincronizarConfigAntesDeCarga();
+
         if (sel.value !== bm.chapter) {
-            // Capítulo diferente: navegar y arrancar TTS desde la frase al cargar
+            // Capitulo diferente: invalidar cache del destino para reprocesar con config actual
+            if (typeof _capCache !== 'undefined') delete _capCache[bm.chapter];
+
             window._progresoRestaurarFrase = bm.sentenceIndex;
-            window._navegacionIntencionada = true;   // evitar que epub.js arranque desde 0
+            window._navegacionIntencionada = true;
             window._cargandoProgramaticamente = true;
             sel.value = bm.chapter;
             window._cargandoProgramaticamente = false;
             cargarCapitulo(bm.chapter);
-            // onCapituloCargado (en progress.js) arrancará el TTS desde bm.sentenceIndex
+            // onCapituloCargado (en progress.js) arrancara el TTS desde bm.sentenceIndex
+
         } else {
-            // Mismo capítulo: mover el TTS a la frase del marcador
-            if (typeof iniciarTTS === 'function') {
-                iniciarTTS(bm.sentenceIndex);
-                setTimeout(() => {
-                    const span = document.getElementById(`tts-s-${bm.sentenceIndex}`);
-                    if (span) span.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }, 250);
+            // Mismo capitulo
+            const hayProcesamiento =
+                (typeof traduccionAutomatica !== 'undefined' && traduccionAutomatica) ||
+                (typeof ttsHumanizerActivo !== 'undefined' && ttsHumanizerActivo &&
+                    typeof claudeApiKey !== 'undefined' && !!claudeApiKey) ||
+                (typeof grammarReviewActivo !== 'undefined' && grammarReviewActivo) ||
+                (typeof autoReemplazarOnomatopeyas !== 'undefined' && autoReemplazarOnomatopeyas);
+
+            const configEraPendiente = typeof _configPendiente !== 'undefined' && _configPendiente;
+
+            if (hayProcesamiento && configEraPendiente) {
+                // Config sin aplicar + procesamiento activo: re-cargar el capitulo actual
+                // para que el texto se procese, luego arrancar TTS en la frase del marcador
+                if (typeof _capCache !== 'undefined') delete _capCache[bm.chapter];
+                window._progresoRestaurarFrase = bm.sentenceIndex;
+                window._navegacionIntencionada = true;
+                cargarCapitulo(bm.chapter);
+            } else {
+                // Texto ya procesado correctamente: solo mover el TTS a la frase del marcador
+                if (typeof iniciarTTS === 'function') {
+                    iniciarTTS(bm.sentenceIndex);
+                    setTimeout(() => {
+                        const span = document.getElementById('tts-s-' + bm.sentenceIndex);
+                        if (span) span.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }, 250);
+                }
+                mostrarNotificacion('\ud83d\udd16 ' + (bm.chapterTitle || 'Marcador') + ' \u2014 frase ' + bm.sentenceIndex);
             }
-            mostrarNotificacion(`🔖 ${bm.chapterTitle || 'Marcador'} — frase ${bm.sentenceIndex}`);
+        }
+    }
+
+    // Sincronizar variables globales de config con el estado actual de los checkboxes.
+    // Solo traduccionAutomatica tiene el patron "pending" (no se actualiza hasta presionar Aplicar).
+    // El resto (ttsHumanizerActivo, grammarReviewActivo, autoReemplazarOnomatopeyas) ya
+    // se actualizan en tiempo real desde sus toggles.
+    function _sincronizarConfigAntesDeCarga() {
+        const chk = document.getElementById('auto-translate');
+        if (chk && typeof traduccionAutomatica !== 'undefined') {
+            traduccionAutomatica = chk.checked;
         }
     }
 
