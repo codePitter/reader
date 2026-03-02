@@ -379,7 +379,7 @@ function dividirEnOraciones(texto) {
     });
 
     // Limpiar: quitar espacios y TODOS los tipos de comillas sueltas al inicio y final
-    return todasLasOraciones
+    const limpias = todasLasOraciones
         .map(o => o.trim()
             // Quitar comillas y símbolos al INICIO (incluyendo " recto U+0022 y todas las tipográficas)
             .replace(/^[\s\u0022\u2018\u2019\u201C\u201D\u00AB\u00BB\'\u2013\u2014\-]+/, '')
@@ -394,6 +394,30 @@ function dividirEnOraciones(texto) {
             const soloTexto = o.replace(/[^\p{L}\p{N}]/gu, '');
             return soloTexto.length >= 2;
         });
+
+    // ── Fusionar fragmentos de palabra partida ──
+    // Si una "oración" empieza en minúscula y tiene ≤3 palabras, es casi seguro
+    // la cola de una palabra partida por un span inline (onomatopeyas, traducción, etc.)
+    // Ejemplo: "retiraran." + "an." → "retiraran." (se descarta "an." fusionándola hacia atrás)
+    const fusionadas = [];
+    for (let i = 0; i < limpias.length; i++) {
+        const o = limpias[i];
+        const primeraLetra = o.match(/\p{L}/u)?.[0] ?? '';
+        const palabras = o.split(/\s+/).filter(Boolean);
+        const esFragmento = primeraLetra && primeraLetra === primeraLetra.toLowerCase()
+            && palabras.length <= 3;
+        if (esFragmento && fusionadas.length > 0) {
+            // Pegar el fragmento al final de la oración anterior sin espacio
+            // (es continuación de una palabra: "retiraran" + "an." → "retiraran" con "an." descartado)
+            // Nota: NO concatenar — simplemente descartar el fragmento, ya que la oración anterior
+            // ya tiene el texto correcto (el fragmento es duplicado del final de la palabra)
+            console.warn(`[TTS] Fragmento descartado: "${o}" (continuación de "${fusionadas[fusionadas.length - 1].slice(-20)}")`);
+        } else {
+            fusionadas.push(o);
+        }
+    }
+
+    return fusionadas;
 }
 
 // ─── TTS ENGINE — estado, progreso, highlight ───
