@@ -377,7 +377,11 @@ function rendervideoFrame() {
         videoCanvas.width = W;
         videoCanvas.height = H;
     }
-    drawvideoScene(videoCtx, W, H, currentSentenceIndex, sentences.length);
+    // Clampear el índice para evitar renders con valores stale o fuera de rango
+    const _safeIdx = (typeof currentSentenceIndex !== 'undefined' && sentences && sentences.length > 0)
+        ? Math.max(0, Math.min(currentSentenceIndex, sentences.length - 1))
+        : 0;
+    drawvideoScene(videoCtx, W, H, _safeIdx, sentences ? sentences.length : 0);
     videoAnimFrame = requestAnimationFrame(rendervideoFrame);
 }
 
@@ -1429,16 +1433,14 @@ function videoTogglePlay() {
                 freesoundAudio.play().catch(() => { });
             }
         }
-        btn.innerHTML = '⏸'; // pausa
-        btn.classList.remove('paused');
+        if (btn) { btn.innerHTML = '⏸'; btn.classList.remove('paused'); }
     } else {
         pausarTTS();
         // Pausar también el audio ambiental
         if (typeof freesoundAudio !== 'undefined' && freesoundAudio && !freesoundAudio.paused) {
             freesoundAudio.pause();
         }
-        btn.innerHTML = '&#9654;'; // play
-        btn.classList.add('paused');
+        if (btn) { btn.innerHTML = '&#9654;'; btn.classList.add('paused'); }
     }
 }
 
@@ -1918,17 +1920,22 @@ function videoProgressSeek(e) {
 
     document.getElementById('video-seek-tooltip').classList.remove('visible');
 
-    // Respetar el motor activo (XTTS o browser)
+    // Detener lo que suena SIN resetear estado ni UI — luego restauramos
     if (typeof detenerTTSSinEstado === 'function') {
         detenerTTSSinEstado();
-    } else {
-        if (typeof detenerTTS === 'function') detenerTTS();
+    } else if (typeof detenerTTS === 'function') {
+        detenerTTS();
     }
 
-    // Restaurar estado de lectura antes de llamar al motor
-    if (typeof isReading !== 'undefined') window.isReading = true;
-    if (typeof isPaused !== 'undefined') window.isPaused = false;
-    if (typeof currentSentenceIndex !== 'undefined') window.currentSentenceIndex = idx;
+    // Restaurar estado de lectura ANTES de llamar al motor
+    window.isReading = true;
+    window.isPaused = false;
+    window.currentSentenceIndex = idx;
+
+    // ── Clave: mostrar ⏸ INMEDIATAMENTE para que el usuario sepa que va a reproducir ──
+    // Sin esto, el botón queda en ▶ durante toda la generación de audio (hasta 2s),
+    // el usuario hace clic creyendo que nada reproduce → activa pausarTTS() → bug dual TTS.
+    if (typeof actualizarEstadoTTS === 'function') actualizarEstadoTTS('reproduciendo');
 
     if (typeof _usarServidorLive !== 'undefined' && _usarServidorLive &&
         typeof servidorTTSDisponible !== 'undefined' && servidorTTSDisponible &&
@@ -1947,12 +1954,17 @@ function seekTTS(e) {
     const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
     const idx = Math.min(Math.floor(pct * sentences.length), sentences.length - 1);
 
-    if (typeof detenerTTS === 'function') detenerTTS();
+    if (typeof detenerTTSSinEstado === 'function') {
+        detenerTTSSinEstado();
+    } else if (typeof detenerTTS === 'function') {
+        detenerTTS();
+    }
 
-    // Restaurar estado de lectura antes de llamar al motor
-    if (typeof isReading !== 'undefined') window.isReading = true;
-    if (typeof isPaused !== 'undefined') window.isPaused = false;
-    if (typeof currentSentenceIndex !== 'undefined') window.currentSentenceIndex = idx;
+    window.isReading = true;
+    window.isPaused = false;
+    window.currentSentenceIndex = idx;
+
+    if (typeof actualizarEstadoTTS === 'function') actualizarEstadoTTS('reproduciendo');
 
     if (typeof _usarServidorLive !== 'undefined' && _usarServidorLive &&
         typeof servidorTTSDisponible !== 'undefined' && servidorTTSDisponible &&

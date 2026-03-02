@@ -1,37 +1,40 @@
 ﻿"""
-tts_api_server.py — Servidor TTS local usando edge-tts (Microsoft Azure Neural TTS)
+tts_api_server.py — Servidor TTS local usando edge-tts (Microsoft Neural TTS)
 Compatible con Python 3.9, 3.10, 3.11, 3.12, 3.13
-Instalación: pip install edge-tts flask flask-cors
-Uso:         python tts_api_server.py
-Endpoint:    http://localhost:5000/tts   POST { "text": "...", "voice": "es-AR-TomasNeural" }
-             http://localhost:5000/health GET
-             http://localhost:5000/voices GET  (lista de voces disponibles)
+
+Instalación:
+    pip install edge-tts flask flask-cors
+
+Uso:
+    python tts_api_server.py              # puerto por defecto: 5000
+    python tts_api_server.py --port 8020  # puerto custom
+    PORT=8020 python tts_api_server.py    # vía variable de entorno
+
+Endpoints:
+    GET  /health          → estado del servidor
+    GET  /voices          → lista de voces en español
+    POST /tts             → sintetizar texto → MP3
 """
 
+import argparse
 import asyncio
 import io
+import os
 import sys
 import edge_tts
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 
 app = Flask(__name__)
-CORS(app)
+CORS(app)   # Necesario para que la web pueda llamar al servidor local
 
-# ── Voces por defecto (español) ──────────────────────────────────────────────
-# Voces recomendadas en español:
-#   es-AR-TomasNeural       → Argentino masculino  ★ recomendado para novelas
-#   es-AR-ElenaNeural       → Argentino femenino
-#   es-ES-AlvaroNeural      → Español (España) masculino
-#   es-ES-ElviraNeural      → Español (España) femenino
-#   es-MX-JorgeNeural       → Mexicano masculino
-#   es-MX-DaliaNeural       → Mexicano femenino
-#   es-US-AlonsoNeural      → Español (US) masculino
-
+# ── Voces por defecto ────────────────────────────────────────────────────────
 DEFAULT_VOICE = "es-AR-TomasNeural"
-DEFAULT_RATE  = "+0%"     # velocidad: -50% a +100%
-DEFAULT_PITCH = "+0Hz"    # tono: -50Hz a +50Hz
+DEFAULT_RATE  = "+0%"     # rango: -50% a +100%
+DEFAULT_PITCH = "+0Hz"    # rango: -50Hz a +50Hz
 
+
+# ── Endpoints ────────────────────────────────────────────────────────────────
 
 @app.route('/health', methods=['GET'])
 def health():
@@ -39,7 +42,8 @@ def health():
         "status": "ok",
         "engine": "edge-tts",
         "default_voice": DEFAULT_VOICE,
-        "version": "2.0"
+        "version": "2.1",
+        "port": _get_port(),
     })
 
 
@@ -71,6 +75,10 @@ def tts():
     if not text:
         return jsonify({"error": "text is required"}), 400
 
+    # Limitar largo de texto por petición (protección básica)
+    if len(text) > 10_000:
+        return jsonify({"error": "text too long (max 10000 chars)"}), 400
+
     async def _synthesize():
         communicate = edge_tts.Communicate(text, voice, rate=rate, pitch=pitch)
         buf = io.BytesIO()
@@ -97,16 +105,36 @@ def tts():
     )
 
 
+# ── Puerto ───────────────────────────────────────────────────────────────────
+
+def _get_port():
+    """Prioridad: --port arg → variable $PORT → 5000 por defecto."""
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument('--port', type=int, default=None)
+    args, _ = parser.parse_known_args()
+    return args.port or int(os.environ.get('PORT', 5000))
+
+
+# ── Entry point ──────────────────────────────────────────────────────────────
+
 if __name__ == '__main__':
+    port = _get_port()
+
     print("=" * 55)
     print("  TTS API Server — edge-tts (Microsoft Neural TTS)")
     print("=" * 55)
-    print(f"  Voz por defecto : {DEFAULT_VOICE}")
-    print(f"  Endpoint TTS    : http://localhost:5000/tts")
-    print(f"  Health check    : http://localhost:5000/health")
-    print(f"  Voces disponibles: http://localhost:5000/voices")
-    print(f"  Python          : {sys.version}")
+    print(f"  Voz por defecto  : {DEFAULT_VOICE}")
+    print(f"  Puerto           : {port}")
+    print(f"  Endpoint TTS     : http://localhost:{port}/tts")
+    print(f"  Health check     : http://localhost:{port}/health")
+    print(f"  Voces disponibles: http://localhost:{port}/voices")
+    print(f"  Python           : {sys.version}")
     print("=" * 55)
-    print("  Instalación: pip install edge-tts flask flask-cors")
+    print("  Cambiar puerto:")
+    print(f"    python tts_api_server.py --port 8020")
+    print(f"    PORT=8020 python tts_api_server.py")
     print("=" * 55)
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    print("  Presioná Ctrl+C para detener el servidor")
+    print()
+
+    app.run(host='0.0.0.0', port=port, debug=False)

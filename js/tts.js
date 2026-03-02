@@ -4,7 +4,15 @@
 //             player.js (ambientGainNode, getAudioCtx)
 // ═══════════════════════════════════════
 
-// ─── MOTOR TTS — API LOCAL (XTTS v2) ───
+// ─── MOTOR TTS — API LOCAL (edge-tts) ───
+// URL del servidor — se lee desde xtts-status.js en tiempo real.
+// Usar siempre _getTTSApiURL() (nunca hardcodear localhost:PUERTO).
+function _getTTSApiURL() {
+    return typeof xttsGetURL === 'function'
+        ? xttsGetURL()
+        : `http://localhost:${typeof uGet === 'function' ? (parseInt(uGet('tts_server_port')) || 5000) : 5000}`;
+}
+
 // Voz Edge TTS activa — se puede cambiar desde la UI
 let _edgeTtsVoice = uGet('edge_tts_voice') || 'es-MX-JorgeNeural';
 
@@ -25,7 +33,7 @@ function toggleServidorLive() {
                 _usarServidorLive = false;
                 uSet('tts_servidor_live', 'false');
                 _sincronizarBtnServidorLive();
-                mostrarNotificacion('⚠ Servidor TTS no disponible en localhost:5000');
+                mostrarNotificacion(`⚠ Servidor TTS no disponible en ${_getTTSApiURL()}`);
             } else {
                 mostrarNotificacion('✓ TTS Local activado para reproducción en vivo');
             }
@@ -92,7 +100,7 @@ function setEdgeTtsVoice(voice) {
 
 async function verificarServidorTTS() {
     try {
-        const response = await fetch(`${TTS_API_URL}/health`, {
+        const response = await fetch(`${_getTTSApiURL()}/health`, {
             method: 'GET',
             timeout: 2000
         });
@@ -144,7 +152,7 @@ function _normalizarTextoTTS(texto) {
 async function generarAudioLocal(texto, { silencioso = false } = {}) {
     try {
         const textoNorm = _normalizarTextoTTS(texto);
-        const response = await fetch(`${TTS_API_URL}/tts`, {
+        const response = await fetch(`${_getTTSApiURL()}/tts`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ text: textoNorm, voice: _edgeTtsVoice })
@@ -188,8 +196,12 @@ async function _limpiarTTSCache() {
 
 // Reproducir audio con la API local — con pre-fetch lookahead de 2 oraciones
 async function leerOracionLocal(index, audioUrlPreGenerada) {
+    // ── Token de sesión: capturado PRIMERO, antes de cualquier await ──
+    // Cada seek/stop incrementa _ttsSessionToken. Después de cada await verificamos
+    // si la sesión sigue vigente — si no, esta instancia es zombie y debe abortarse.
+    const miSesionTTS = _ttsSessionToken;
+
     // ── Guardia de exclusión mutua ──
-    // Silenciar inmediatamente el browser TTS si sigue hablando
     if (synth.speaking || synth.pending) synth.cancel();
 
     if (index >= sentences.length) {
@@ -204,6 +216,9 @@ async function leerOracionLocal(index, audioUrlPreGenerada) {
     if (typeof actualizarSlideAI === 'function') actualizarSlideAI(index);
     if (typeof smartRotCheck === 'function') smartRotCheck(index);
 
+    // Actualizar botón a ⏸ ANTES del primer await para feedback visual inmediato
+    if (isReading && !isPaused) actualizarEstadoTTS('reproduciendo');
+
     // Arrancar pre-fetch de las 2 siguientes oraciones inmediatamente
     _preFetchOracion(index + 1);
     _preFetchOracion(index + 2);
@@ -212,20 +227,24 @@ async function leerOracionLocal(index, audioUrlPreGenerada) {
     let audioUrl = audioUrlPreGenerada ?? null;
     if (!audioUrl) {
         if (_ttsAudioCache.has(index)) {
-            // Ya estaba en vuelo desde un pre-fetch anterior — esperar
             audioUrl = await _ttsAudioCache.get(index);
         } else {
-            // Primera oración o cache miss: generar ahora
             mostrarNotificacion(`Generando audio ${index + 1}/${sentences.length}...`);
             _preFetchOracion(index);
             audioUrl = await _ttsAudioCache.get(index);
         }
     }
-    _ttsAudioCache.delete(index); // liberar entrada una vez que tenemos la URL
+    _ttsAudioCache.delete(index);
+
+    // ── CHECK 1: ¿Sigue siendo nuestra sesión? ──
+    // Si el usuario hizo seek/stop durante el await de generación, esta instancia
+    // es zombie — el audio generado es basura, lo revocamos y abortamos silenciosamente.
+    if (miSesionTTS !== _ttsSessionToken) {
+        if (audioUrl) URL.revokeObjectURL(audioUrl);
+        return;
+    }
 
     if (!audioUrl) {
-        // No hacer fallback al browser TTS para todo el capítulo.
-        // Si una oración falla, simplemente saltarla y continuar con XTTS en la siguiente.
         console.warn(`[XTTS] Sin audio para oración ${index + 1} — saltando`);
         if (isReading && !isPaused) {
             const next = index + 1;
@@ -240,7 +259,7 @@ async function leerOracionLocal(index, audioUrlPreGenerada) {
     }
 
     audioActual = new Audio(audioUrl);
-    _ttsCurrentUrl = audioUrl; // registrar para que detenerTTS() pueda revocarla
+    _ttsCurrentUrl = audioUrl;
 
     if (typeof _rec_connectAudioElement === 'function') {
         _rec_connectAudioElement(audioActual);
@@ -248,10 +267,10 @@ async function leerOracionLocal(index, audioUrlPreGenerada) {
 
     audioActual.volume = parseFloat(document.getElementById('volume-control').value) / 100;
 
-    const miSesionTTS = _ttsSessionToken;
     audioActual.onended = async function () {
         _ttsCurrentUrl = null;
         URL.revokeObjectURL(audioUrl);
+        // Sesión inválida → esta instancia fue reemplazada por seek, ignorar
         if (miSesionTTS !== _ttsSessionToken) return;
         if (isReading && !isPaused) {
             const next = index + 1;
@@ -259,7 +278,13 @@ async function leerOracionLocal(index, audioUrlPreGenerada) {
                 detenerTTS();
                 _avanzarSiguienteCapituloAuto();
             } else {
-                // Pasar el audio ya pre-generado directamente para eliminar la pausa
+                // Avanzar índice visual ANTES del await (canvas a 60fps)
+                currentSentenceIndex = next;
+                actualizarProgreso();
+                resaltarOracion(next);
+                if (typeof actualizarSlideAI === 'function') actualizarSlideAI(next);
+                if (typeof smartRotCheck === 'function') smartRotCheck(next);
+
                 let nextUrl = null;
                 if (_ttsAudioCache.has(next)) {
                     nextUrl = await _ttsAudioCache.get(next);
@@ -271,13 +296,16 @@ async function leerOracionLocal(index, audioUrlPreGenerada) {
     };
 
     audioActual.onerror = function (e) {
-        console.error('Error al reproducir audio:', e);
         _ttsCurrentUrl = null;
         URL.revokeObjectURL(audioUrl);
-        // ── No hacer fallback al browser TTS si XTTS sigue activo ──
-        // Saltar la oración fallida y continuar con XTTS en la siguiente.
+        // ── Sesión inválida: blob ya fue revocado por un seek → ignorar silenciosamente ──
+        // Este es el caso de los ERR_FILE_NOT_FOUND tras un seek: el blob fue revocado
+        // por detenerTTSSinEstado() y el <audio> intenta cargarlo → falla → onerror.
+        // Sin este guard, onerror spawnaría leerOracionLocal() sobre la nueva sesión → 2 TTS.
+        if (miSesionTTS !== _ttsSessionToken) return;
+        console.error('[XTTS] Error al reproducir audio:', e);
         if (_usarServidorLive && servidorTTSDisponible) {
-            console.warn(`[XTTS] Error en oración ${index + 1} — saltando al navegador está desactivado, saltando oración`);
+            console.warn(`[XTTS] Error en oración ${index + 1} — saltando oración`);
             if (isReading && !isPaused) {
                 const next = index + 1;
                 if (next >= sentences.length) {
@@ -291,6 +319,12 @@ async function leerOracionLocal(index, audioUrlPreGenerada) {
         }
         leerOracion(index);
     };
+
+    // ── Guard final: si el usuario pausó durante la generación, no reproducir ──
+    if (isPaused || miSesionTTS !== _ttsSessionToken) {
+        if (isPaused) actualizarEstadoTTS('pausado');
+        return;
+    }
 
     audioActual.play();
     actualizarEstadoTTS('reproduciendo');
@@ -718,6 +752,25 @@ function reanudarTTS() {
             leerOracion(indiceActual);
         }
     }, 150);
+}
+
+// Detiene el audio activo sin tocar isReading/isPaused/currentSentenceIndex ni la UI.
+// Usado por seek — el llamador restaura el estado y llama actualizarEstadoTTS él mismo.
+function detenerTTSSinEstado() {
+    _ttsSessionToken++;
+    _limpiarTTSCache();
+    if (audioActual) {
+        audioActual.pause();
+        audioActual.src = '';
+        audioActual.load();
+        audioActual = null;
+    }
+    if (_ttsCurrentUrl) {
+        URL.revokeObjectURL(_ttsCurrentUrl);
+        _ttsCurrentUrl = null;
+    }
+    synth.cancel();
+    if (typeof detenerSmartRot === 'function') detenerSmartRot();
 }
 
 function detenerTTS() {
