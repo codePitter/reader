@@ -40,7 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // ─── TTS HUMANIZADOR IA ───
 let ttsHumanizerActivo = false;
-let claudeApiKey = localStorage.getItem('claude_api_key') || '';  // clave del proveedor activo
+let claudeApiKey = uGet('claude_api_key') || '';  // clave del proveedor activo
 
 // Configuración de proveedores de IA
 const HUMANIZER_PROVIDERS = {
@@ -147,12 +147,12 @@ const HUMANIZER_PROVIDERS = {
     }
 };
 
-let humanizerProvider = localStorage.getItem('humanizer_provider') || 'perplexity';
+let humanizerProvider = uGet('humanizer_provider') || 'perplexity';
 
 function cambiarProveedorHumanizer(provId) {
     humanizerProvider = provId;
-    localStorage.setItem('humanizer_provider', provId);
-    const savedKey = localStorage.getItem(`humanizer_key_${provId}`) || '';
+    uSet('humanizer_provider', provId);
+    const savedKey = uGet(`humanizer_key_${provId}`) || '';
     claudeApiKey = savedKey;
     const statusEl = document.getElementById('claude-key-status');
     const infoEl = document.getElementById('humanizer-info');
@@ -167,8 +167,8 @@ function guardarClaudeApiKey() {
     const key = document.getElementById('claude-api-key').value.trim();
     if (!key) { document.getElementById('claude-key-status').textContent = '⚠ vacía'; return; }
     claudeApiKey = key;
-    localStorage.setItem('claude_api_key', key);  // compatibilidad legacy
-    localStorage.setItem(`humanizer_key_${humanizerProvider}`, key);
+    uSet('claude_api_key', key);  // compatibilidad legacy
+    uSet(`humanizer_key_${humanizerProvider}`, key);
     document.getElementById('claude-api-key').value = '';
     document.getElementById('claude-key-status').textContent = '✓ guardada';
     const prov = HUMANIZER_PROVIDERS[humanizerProvider];
@@ -186,7 +186,7 @@ function toggleTTSHumanizer() {
     panel.style.display = ttsHumanizerActivo ? 'block' : 'none';
     const prov = HUMANIZER_PROVIDERS[humanizerProvider];
     if (ttsHumanizerActivo) {
-        claudeApiKey = localStorage.getItem(`humanizer_key_${humanizerProvider}`) || claudeApiKey;
+        claudeApiKey = uGet(`humanizer_key_${humanizerProvider}`) || claudeApiKey;
         status.textContent = claudeApiKey ? `⏳ activo · ${prov.name} (pendiente)` : `⚠ necesita API key`;
         if (claudeApiKey) document.getElementById('claude-key-status').textContent = '✓ guardada';
         const sel = document.getElementById('humanizer-provider');
@@ -199,9 +199,9 @@ function toggleTTSHumanizer() {
 
 // Inicializar al cargar
 (function initHumanizer() {
-    humanizerProvider = localStorage.getItem('humanizer_provider') || 'perplexity';
-    claudeApiKey = localStorage.getItem(`humanizer_key_${humanizerProvider}`)
-        || localStorage.getItem('claude_api_key') || '';
+    humanizerProvider = uGet('humanizer_provider') || 'perplexity';
+    claudeApiKey = uGet(`humanizer_key_${humanizerProvider}`)
+        || uGet('claude_api_key') || '';
     setTimeout(() => {
         const sel = document.getElementById('humanizer-provider');
         if (sel) sel.value = humanizerProvider;

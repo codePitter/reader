@@ -40,11 +40,13 @@ let _authReady = false;
         // SIGNED_IN dispara también al re-enfocar la pestaña (bug conocido de Supabase).
         // Solo actuar si el user.id cambió de verdad.
         if (event === 'SIGNED_IN' && _authUser?.id !== prevUser?.id) {
+            if (typeof uSetUser === 'function') uSetUser(_authUser.id);
             document.dispatchEvent(new CustomEvent('auth:signin', { detail: { user: _authUser } }));
             _onSignIn(_authUser);
         }
 
         if (event === 'SIGNED_OUT') {
+            if (typeof uClearUser === 'function') uClearUser();
             document.dispatchEvent(new CustomEvent('auth:signout'));
             _onSignOut();
         }
@@ -56,6 +58,7 @@ let _authReady = false;
         if (!_authReady) {
             _authUser = session?.user ?? null;
             _authReady = true;
+            if (_authUser && typeof uSetUser === 'function') uSetUser(_authUser.id);
             document.dispatchEvent(new CustomEvent('auth:ready', { detail: { user: _authUser } }));
             if (typeof actualizarAuthUI === 'function') actualizarAuthUI(_authUser);
         }
@@ -198,20 +201,6 @@ function getUserAvatarUrl() {
         || null;
 }
 
-// ─── CONFIGURACIONES POR USUARIO (localStorage prefijado) ───
-function userSetItem(key, value) {
-    localStorage.setItem(`user_${getUserId()}_${key}`, value);
-}
-
-function userGetItem(key, fallback = null) {
-    const value = localStorage.getItem(`user_${getUserId()}_${key}`);
-    if (value !== null) return value;
-    return localStorage.getItem(key) ?? fallback;
-}
-
-function userRemoveItem(key) {
-    localStorage.removeItem(`user_${getUserId()}_${key}`);
-}
 
 // ─── CALLBACKS INTERNOS ───
 function _onSignIn(user) {
@@ -256,6 +245,3 @@ window.estaAutenticado = estaAutenticado;
 window.getUserId = getUserId;
 window.getUserDisplayName = getUserDisplayName;
 window.getUserAvatarUrl = getUserAvatarUrl;
-window.userSetItem = userSetItem;
-window.userGetItem = userGetItem;
-window.userRemoveItem = userRemoveItem;

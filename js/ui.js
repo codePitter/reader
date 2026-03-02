@@ -25,14 +25,14 @@ function toggleSubPanel(bodyId, arrowId) {
 function _getReemplazosKey() {
     if (!_epubFilename) return 'reemplazos__sin_archivo';
     const safe = _epubFilename.replace(/[^a-zA-Z0-9._-]/g, '_');
-    return uKey(`reemplazos__${safe}`);
+    return `reemplazos__${safe}`;
 }
 
 // Llamado desde epub.js al cargar un nuevo archivo
 function cargarReemplazosParaArchivo(filename) {
     Object.keys(reemplazosAutomaticos).forEach(k => delete reemplazosAutomaticos[k]);
-    const key = uKey(`reemplazos__${filename.replace(/[^a-zA-Z0-9._-]/g, '_')}`);
-    const guardados = JSON.parse(localStorage.getItem(key) || '{}');
+    const rawKey = `reemplazos__${filename.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+    const guardados = JSON.parse(uGet(rawKey) || '{}');
     Object.assign(reemplazosAutomaticos, guardados);
     if (typeof _capCache !== 'undefined') Object.keys(_capCache).forEach(k => delete _capCache[k]);
     actualizarBotonLimpiarReemplazos();
@@ -41,7 +41,7 @@ function cargarReemplazosParaArchivo(filename) {
 }
 
 function _persistirReemplazos() {
-    localStorage.setItem(_getReemplazosKey(), JSON.stringify(reemplazosAutomaticos));
+    uSet(_getReemplazosKey(), JSON.stringify(reemplazosAutomaticos));
 }
 
 function _actualizarContextoReemplazos() {
@@ -158,7 +158,7 @@ function limpiarReemplazosGuardados() {
     const libro = _epubFilename || 'este libro';
     if (!confirm(`⚠ ¿Eliminar los ${count} reemplazo(s) guardados para:\n"${libro}"?\n\nEsta acción no se puede deshacer.`)) return;
     Object.keys(reemplazosAutomaticos).forEach(k => delete reemplazosAutomaticos[k]);
-    localStorage.removeItem(_getReemplazosKey());  // _getReemplazosKey() ya usa uKey internamente
+    uRemove(_getReemplazosKey());
     if (typeof _capCache !== 'undefined') Object.keys(_capCache).forEach(k => delete _capCache[k]);
     actualizarBotonLimpiarReemplazos();
     renderListaReemplazos();
@@ -818,16 +818,19 @@ function togglePanelOtrosLibros() {
 function renderPanelOtrosLibros() {
     const panel = document.getElementById('panel-otros-libros');
     if (!panel) return;
-    const claveActual = _getReemplazosKey();
+    const claveActual = uKey(_getReemplazosKey());
+    const prefijo = uGetPrefix() + '_reemplazos__';
     const libros = [];
     for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
-        if (!k || !k.startsWith(uKey('reemplazos__').split('reemplazos__')[0] + 'reemplazos__')) continue;
+        if (!k || !k.startsWith(prefijo)) continue;
         if (k === claveActual) continue;
         try {
             const pares = JSON.parse(localStorage.getItem(k) || '{}');
             const count = Object.keys(pares).length;
-            if (count > 0) libros.push({ clave: k, nombre: k.replace('reemplazos__', '').replace(/_/g, ' '), pares, count });
+            // Nombre legible: quitar el prefijo de usuario y 'reemplazos__'
+            const nombre = k.replace(prefijo, '').replace(/_/g, ' ');
+            if (count > 0) libros.push({ clave: k, nombre, pares, count });
         } catch (e) { /* ignorar corruptos */ }
     }
     if (libros.length === 0) {
@@ -875,6 +878,7 @@ function importarReemplazo(buscar, reemplazar) {
 
 function importarTodosReemplazos(clave) {
     try {
+        // clave ya viene prefijada desde renderPanelOtrosLibros
         const pares = JSON.parse(localStorage.getItem(clave) || '{}');
         const count = Object.keys(pares).length;
         if (count === 0) { mostrarNotificacion('\u26a0 Sin reemplazos para importar'); return; }
