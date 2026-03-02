@@ -6,16 +6,16 @@
 
 // ─── MOTOR TTS — API LOCAL (XTTS v2) ───
 // Voz Edge TTS activa — se puede cambiar desde la UI
-let _edgeTtsVoice = localStorage.getItem('edge_tts_voice') || 'es-MX-JorgeNeural';
+let _edgeTtsVoice = uGet('edge_tts_voice') || 'es-MX-JorgeNeural';
 
 // ─── TOGGLE: usar servidor local para reproducción en vivo ───
 // Cuando está activo, leerOracionLocal() se usa en lugar de SpeechSynthesis
 // Se persiste en localStorage para recordar la preferencia del usuario
-let _usarServidorLive = localStorage.getItem('tts_servidor_live') === 'true';
+let _usarServidorLive = uGet('tts_servidor_live') === 'true';
 
 function toggleServidorLive() {
     _usarServidorLive = !_usarServidorLive;
-    localStorage.setItem('tts_servidor_live', _usarServidorLive ? 'true' : 'false');
+    uSet('tts_servidor_live', _usarServidorLive ? 'true' : 'false');
     _sincronizarBtnServidorLive();
 
     if (_usarServidorLive) {
@@ -23,7 +23,7 @@ function toggleServidorLive() {
         verificarServidorTTS().then(ok => {
             if (!ok) {
                 _usarServidorLive = false;
-                localStorage.setItem('tts_servidor_live', 'false');
+                uSet('tts_servidor_live', 'false');
                 _sincronizarBtnServidorLive();
                 mostrarNotificacion('⚠ Servidor TTS no disponible en localhost:5000');
             } else {
@@ -81,7 +81,7 @@ function _sincronizarBtnServidorLive() {
 
 function setEdgeTtsVoice(voice) {
     _edgeTtsVoice = voice;
-    localStorage.setItem('edge_tts_voice', voice);
+    uSet('edge_tts_voice', voice);
     const sel = document.getElementById('edge-voice-select');
     if (sel && sel.value !== voice) sel.value = voice;
     // Sincronizar también el select del modal de exportación si está abierto

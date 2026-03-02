@@ -7,189 +7,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📚</text></svg>">
-    <style>
-        /* ── Modal API Keys — scrollbar temático ── */
-        #ajustes-scroll-content::-webkit-scrollbar {
-            width: 4px;
-        }
 
-        #ajustes-scroll-content::-webkit-scrollbar-track {
-            background: transparent;
-        }
-
-        #ajustes-scroll-content::-webkit-scrollbar-thumb {
-            background: var(--border);
-            border-radius: 4px;
-        }
-
-            #ajustes-scroll-content::-webkit-scrollbar-thumb:hover {
-                background: var(--accent);
-            }
-
-        #ajustes-scroll-content {
-            scrollbar-width: thin;
-            scrollbar-color: var(--border) transparent;
-        }
-
-        /* ── Sección de ajuste ── */
-        .ajuste-seccion {
-            padding: 16px 20px;
-            border-bottom: 1px solid var(--border);
-        }
-
-            .ajuste-seccion:last-child {
-                border-bottom: none;
-            }
-
-        .ajuste-titulo {
-            font-size: 0.6rem;
-            font-weight: 700;
-            color: var(--text);
-            letter-spacing: 0.07em;
-            text-transform: uppercase;
-            margin-bottom: 4px;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .ajuste-badge {
-            font-weight: 400;
-            text-transform: none;
-            letter-spacing: 0;
-            font-size: 0.52rem;
-            color: var(--text-dim);
-        }
-
-        .ajuste-modo {
-            margin-left: auto;
-            font-size: 0.5rem;
-            font-weight: 600;
-            letter-spacing: 0.04em;
-            text-transform: uppercase;
-            color: var(--accent2);
-            background: rgba(var(--accent2-rgb,100,200,150),0.12);
-            border: 1px solid rgba(var(--accent2-rgb,100,200,150),0.25);
-            border-radius: 3px;
-            padding: 1px 5px;
-        }
-
-        .ajuste-label {
-            font-size: 0.57rem;
-            color: var(--text-dim);
-            margin-bottom: 4px;
-            margin-top: 8px;
-        }
-
-        .ajuste-select {
-            width: 100%;
-            background: var(--bg);
-            border: 1px solid var(--border);
-            border-radius: 4px;
-            color: var(--text);
-            font-family: 'DM Mono', monospace;
-            font-size: 0.62rem;
-            padding: 5px 8px;
-            outline: none;
-            cursor: pointer;
-        }
-
-        .ajuste-input {
-            flex: 1;
-            background: var(--bg);
-            border: 1px solid var(--border);
-            border-radius: 4px;
-            color: var(--text);
-            font-family: 'DM Mono', monospace;
-            font-size: 0.62rem;
-            padding: 5px 8px;
-            outline: none;
-        }
-
-        .ajuste-input-full {
-            width: 100%;
-            background: var(--bg);
-            border: 1px solid var(--border);
-            border-radius: 4px;
-            color: var(--text);
-            font-family: 'DM Mono', monospace;
-            font-size: 0.62rem;
-            padding: 5px 8px;
-            outline: none;
-            box-sizing: border-box;
-        }
-
-        .ajuste-btn {
-            background: var(--accent);
-            border: none;
-            border-radius: 4px;
-            color: var(--bg);
-            font-family: 'DM Mono', monospace;
-            font-size: 0.6rem;
-            padding: 5px 10px;
-            cursor: pointer;
-            white-space: nowrap;
-            transition: opacity 0.15s;
-        }
-
-            .ajuste-btn:hover {
-                opacity: 0.85;
-            }
-
-        .ajuste-btn-alt {
-            background: var(--accent2);
-            border: none;
-            border-radius: 4px;
-            color: var(--bg);
-            font-family: 'DM Mono', monospace;
-            font-size: 0.6rem;
-            padding: 5px 10px;
-            cursor: pointer;
-            transition: opacity 0.15s;
-        }
-
-            .ajuste-btn-alt:hover {
-                opacity: 0.85;
-            }
-
-        .ajuste-row {
-            display: flex;
-            gap: 6px;
-            align-items: center;
-        }
-
-        .ajuste-nota {
-            font-size: 0.51rem;
-            color: var(--text-dim);
-            margin-top: 5px;
-            line-height: 1.5;
-        }
-
-            .ajuste-nota a {
-                color: var(--accent2);
-                text-decoration: none;
-            }
-
-                .ajuste-nota a:hover {
-                    text-decoration: underline;
-                }
-
-        .ajuste-key-status {
-            color: var(--accent2);
-            margin-left: 4px;
-            font-size: 0.55rem;
-        }
-
-        .ajuste-key-area {
-            margin-top: 6px;
-        }
-        /* Tab activo */
-        .ajustes-tab-btn.active {
-            border-left-color: var(--accent) !important;
-            color: var(--text) !important;
-            background: rgba(255,255,255,0.03) !important;
-        }
-    </style>
 </head>
 <body>
 
@@ -1105,13 +923,13 @@
          background:rgba(8,7,6,0.85);align-items:flex-start;justify-content:center;
          padding:32px 16px;overflow-y:auto;">
         <div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;
-                    width:100%;max-width:580px;font-family:'DM Mono',monospace;
+                    width:100%;max-width:560px;font-family:'DM Mono',monospace;
                     box-shadow:0 16px 56px rgba(0,0,0,0.75);overflow:hidden;">
 
             <!-- Cabecera -->
             <div style="display:flex;align-items:center;justify-content:space-between;
                         padding:14px 20px;border-bottom:1px solid var(--border);background:var(--bg);">
-                <span style="font-size:0.9rem;font-weight:700;color:var(--text);letter-spacing:0.03em;">⚙ Ajustes</span>
+                <span style="font-size:0.9rem;font-weight:700;color:var(--text);letter-spacing:0.03em;">Ajustes</span>
                 <button onclick="cerrarAjustes()"
                         style="background:none;border:none;color:var(--text-dim);font-size:1.1rem;
                                cursor:pointer;padding:0;transition:color 0.2s;line-height:1;"
@@ -1132,14 +950,14 @@
                                    color:var(--text-dim);font-family:'DM Mono',monospace;font-size:0.62rem;
                                    font-weight:600;padding:10px 12px;cursor:pointer;letter-spacing:0.03em;
                                    text-align:left;transition:color 0.2s,border-color 0.2s,background 0.2s;">
-                        🔑 API Keys
+                        API Keys
                     </button>
                     <button class="ajustes-tab-btn" data-tab="reemplazar" onclick="cambiarSolapa('reemplazar')"
                             style="background:none;border:none;border-left:2px solid transparent;
                                    color:var(--text-dim);font-family:'DM Mono',monospace;font-size:0.62rem;
                                    font-weight:600;padding:10px 12px;cursor:pointer;letter-spacing:0.03em;
                                    text-align:left;transition:color 0.2s,border-color 0.2s,background 0.2s;">
-                        ↩ Reemplazar
+                        Reemplazar
                     </button>
                 </div>
 
@@ -1149,210 +967,238 @@
                     <!-- ════ PANEL: API KEYS ════ -->
                     <div id="ajustes-panel-apikeys" class="ajustes-panel">
 
-                        <!-- ── 1. HUMANIZADOR IA ── -->
-                        <div class="ajuste-seccion">
-                            <div class="ajuste-titulo">
-                                ✨ Humanizador IA
+                        <!-- 1. HUMANIZADOR IA -->
+                        <div class="ajuste-seccion" id="acc-humanizer">
+                            <button type="button" class="ajuste-acc-btn" onclick="toggleAjusteAcc('acc-humanizer')">
+                                <span class="ajuste-acc-titulo">Humanizador IA</span>
                                 <span class="ajuste-badge">(naturalización TTS)</span>
+                                <span class="ajuste-acc-spacer"></span>
                                 <span class="ajuste-modo" id="ajustes-humanizer-modo">—</span>
-                            </div>
-                            <div class="ajuste-label">Proveedor</div>
-                            <select id="ajustes-humanizer-provider" class="ajuste-select"
-                                    onchange="cambiarProveedorHumanizerAjustes(this.value)">
-                                <option value="perplexity">Perplexity AI · sonar</option>
-                                <option value="openai">OpenAI · gpt-4o-mini</option>
-                                <option value="anthropic">Anthropic · claude-haiku</option>
-                                <option value="gemini">Google Gemini · flash</option>
-                                <option value="groq">Groq · llama-3.3-70b (gratis)</option>
-                                <option value="openrouter">OpenRouter · modelo libre</option>
-                            </select>
-                            <div class="ajuste-key-area">
-                                <div class="ajuste-label">
-                                    API Key <span id="ajustes-humanizer-key-status" class="ajuste-key-status"></span>
+                                <span class="ajuste-acc-chevron">›</span>
+                            </button>
+                            <div class="ajuste-acc-body">
+                                <div class="ajuste-label">Proveedor</div>
+                                <select id="ajustes-humanizer-provider" class="ajuste-select"
+                                        onchange="cambiarProveedorHumanizerAjustes(this.value)">
+                                    <option value="perplexity">Perplexity AI · sonar</option>
+                                    <option value="openai">OpenAI · gpt-4o-mini</option>
+                                    <option value="anthropic">Anthropic · claude-haiku</option>
+                                    <option value="gemini">Google Gemini · flash</option>
+                                    <option value="groq">Groq · llama-3.3-70b (gratis)</option>
+                                    <option value="openrouter">OpenRouter · modelo libre</option>
+                                </select>
+                                <div class="ajuste-key-area">
+                                    <div class="ajuste-label">
+                                        API Key <span id="ajustes-humanizer-key-status" class="ajuste-key-status"></span>
+                                    </div>
+                                    <div class="ajuste-row">
+                                        <input type="password" id="ajustes-humanizer-key" placeholder="Pegar API key..." class="ajuste-input">
+                                        <button type="button" onclick="guardarHumanizerKeyDesdeAjustes()" class="ajuste-btn">Guardar</button>
+                                    </div>
                                 </div>
-                                <div class="ajuste-row">
-                                    <input type="password" id="ajustes-humanizer-key" placeholder="Pegar API key..." class="ajuste-input">
-                                    <button type="button" onclick="guardarHumanizerKeyDesdeAjustes()" class="ajuste-btn">Guardar</button>
+                                <div id="ajustes-humanizer-or-note" class="ajuste-nota" style="display:none;">
+                                    Esta key también alimenta las búsquedas visuales del universo (OpenRouter)
                                 </div>
-                            </div>
-                            <div id="ajustes-humanizer-or-note" class="ajuste-nota" style="display:none;">
-                                ↳ Esta key también alimenta las búsquedas visuales del universo (OpenRouter)
                             </div>
                         </div>
 
-                        <!-- ── 2. DETECCIÓN DE UNIVERSO ── -->
-                        <div class="ajuste-seccion">
-                            <div class="ajuste-titulo">
-                                📚 Detección de universo
+                        <!-- 2. DETECCIÓN DE UNIVERSO -->
+                        <div class="ajuste-seccion" id="acc-universo">
+                            <button type="button" class="ajuste-acc-btn" onclick="toggleAjusteAcc('acc-universo')">
+                                <span class="ajuste-acc-titulo">Detección de universo</span>
                                 <span class="ajuste-badge">(música · escenas · imágenes)</span>
+                                <span class="ajuste-acc-spacer"></span>
                                 <span class="ajuste-modo" id="ajustes-universe-modo">—</span>
-                            </div>
-                            <div class="ajuste-label">Método</div>
-                            <select id="ajustes-universe-provider" class="ajuste-select"
-                                    onchange="cambiarProveedorUniversoAjustes(this.value)">
-                                <option value="local">Local · keywords hardcodeadas (rápido)</option>
-                                <option value="openrouter">OpenRouter IA · llama-3.3:free (preciso)</option>
-                            </select>
-                            <div id="ajustes-universe-key-area" class="ajuste-key-area" style="display:none;">
+                                <span class="ajuste-acc-chevron">›</span>
+                            </button>
+                            <div class="ajuste-acc-body">
+                                <div class="ajuste-label">Método</div>
+                                <select id="ajustes-universe-provider" class="ajuste-select"
+                                        onchange="cambiarProveedorUniversoAjustes(this.value)">
+                                    <option value="local">Local · keywords hardcodeadas (rápido)</option>
+                                    <option value="openrouter">OpenRouter IA · llama-3.3:free (preciso)</option>
+                                </select>
+                                <div id="ajustes-universe-key-area" class="ajuste-key-area" style="display:none;">
+                                    <div class="ajuste-nota" style="margin-top:6px;">
+                                        Usa la misma key que el Humanizador cuando el proveedor es OpenRouter
+                                        <span id="ajustes-universe-key-ok" class="ajuste-key-status"></span>
+                                    </div>
+                                </div>
                                 <div class="ajuste-nota" style="margin-top:6px;">
-                                    ↳ Usa la misma key que el Humanizador cuando el proveedor es OpenRouter
-                                    <span id="ajustes-universe-key-ok" class="ajuste-key-status"></span>
+                                    Afecta: género musical automático · queries Freesound · prompts visuales · sceneOverrides
                                 </div>
-                            </div>
-                            <div class="ajuste-nota" style="margin-top:6px;">
-                                Afecta: género musical automático · queries Freesound · prompts visuales · sceneOverrides
                             </div>
                         </div>
 
-                        <!-- ── 3. TRADUCCIÓN ── -->
-                        <div class="ajuste-seccion">
-                            <div class="ajuste-titulo">
-                                🌐 Traducción
+                        <!-- 3. TRADUCCIÓN -->
+                        <div class="ajuste-seccion" id="acc-traduccion">
+                            <button type="button" class="ajuste-acc-btn" onclick="toggleAjusteAcc('acc-traduccion')">
+                                <span class="ajuste-acc-titulo">Traducción</span>
                                 <span class="ajuste-badge">(EN → idioma local)</span>
+                                <span class="ajuste-acc-spacer"></span>
                                 <span class="ajuste-modo" id="ajustes-translate-modo">—</span>
-                            </div>
-                            <div class="ajuste-label">Proveedor principal</div>
-                            <select id="ajustes-translate-provider" class="ajuste-select"
-                                    onchange="cambiarProveedorTraduccionAjustes(this.value)">
-                                <option value="google">Google Translate · no oficial (gratis)</option>
-                                <option value="deepl">DeepL · API Free (500K chars/mes)</option>
-                                <option value="mymemory">MyMemory · público (gratis, lento)</option>
-                            </select>
-                            <div id="ajustes-translate-key-area" class="ajuste-key-area" style="display:none;">
-                                <div class="ajuste-label">
-                                    API Key DeepL <span id="ajustes-translate-key-status" class="ajuste-key-status"></span>
+                                <span class="ajuste-acc-chevron">›</span>
+                            </button>
+                            <div class="ajuste-acc-body">
+                                <div class="ajuste-label">Proveedor principal</div>
+                                <select id="ajustes-translate-provider" class="ajuste-select"
+                                        onchange="cambiarProveedorTraduccionAjustes(this.value)">
+                                    <option value="google">Google Translate · no oficial (gratis)</option>
+                                    <option value="deepl">DeepL · API Free (500K chars/mes)</option>
+                                    <option value="mymemory">MyMemory · público (gratis, lento)</option>
+                                </select>
+                                <div id="ajustes-translate-key-area" class="ajuste-key-area" style="display:none;">
+                                    <div class="ajuste-label">
+                                        API Key DeepL <span id="ajustes-translate-key-status" class="ajuste-key-status"></span>
+                                    </div>
+                                    <div class="ajuste-row">
+                                        <input type="password" id="ajustes-translate-key" placeholder="Pegar DeepL API key..." class="ajuste-input">
+                                        <button type="button" onclick="guardarTranslateKeyDesdeAjustes()" class="ajuste-btn">Guardar</button>
+                                    </div>
+                                    <div class="ajuste-nota">
+                                        Registro gratis: <a href="https://www.deepl.com/es/pro-api" target="_blank" rel="noopener">deepl.com/pro-api</a>
+                                    </div>
                                 </div>
-                                <div class="ajuste-row">
-                                    <input type="password" id="ajustes-translate-key" placeholder="Pegar DeepL API key..." class="ajuste-input">
-                                    <button type="button" onclick="guardarTranslateKeyDesdeAjustes()" class="ajuste-btn">Guardar</button>
+                                <div class="ajuste-nota" style="margin-top:6px;">
+                                    Fallback siempre activo: MyMemory si el proveedor principal falla
                                 </div>
-                                <div class="ajuste-nota">
-                                    Registro gratis: <a href="https://www.deepl.com/es/pro-api" target="_blank" rel="noopener">deepl.com/pro-api</a>
-                                </div>
-                            </div>
-                            <div class="ajuste-nota" style="margin-top:6px;">
-                                Fallback siempre activo: MyMemory si el proveedor principal falla
                             </div>
                         </div>
 
-                        <!-- ── 4. GRAMÁTICA ── -->
-                        <div class="ajuste-seccion">
-                            <div class="ajuste-titulo">
-                                📝 Gramática
+                        <!-- 4. GRAMÁTICA -->
+                        <div class="ajuste-seccion" id="acc-gramatica">
+                            <button type="button" class="ajuste-acc-btn" onclick="toggleAjusteAcc('acc-gramatica')">
+                                <span class="ajuste-acc-titulo">Gramática</span>
                                 <span class="ajuste-badge">(revisión · corrección)</span>
+                                <span class="ajuste-acc-spacer"></span>
                                 <span class="ajuste-modo" id="ajustes-lt-modo">—</span>
-                            </div>
-                            <div class="ajuste-label">Proveedor</div>
-                            <select id="ajustes-grammar-provider" class="ajuste-select"
-                                    onchange="cambiarProveedorGramaticaAjustes(this.value)">
-                                <option value="languagetool">LanguageTool · API pública (gratis)</option>
-                                <option value="languagetool-premium">LanguageTool · cuenta premium</option>
-                            </select>
-                            <div id="ajustes-lt-premium-area" class="ajuste-key-area" style="display:none;">
-                                <div class="ajuste-label">
-                                    Email de cuenta LT
-                                    <span id="ajustes-lt-status" class="ajuste-key-status"></span>
+                                <span class="ajuste-acc-chevron">›</span>
+                            </button>
+                            <div class="ajuste-acc-body">
+                                <div class="ajuste-label">Proveedor</div>
+                                <select id="ajustes-grammar-provider" class="ajuste-select"
+                                        onchange="cambiarProveedorGramaticaAjustes(this.value)">
+                                    <option value="languagetool">LanguageTool · API pública (gratis)</option>
+                                    <option value="languagetool-premium">LanguageTool · cuenta premium</option>
+                                </select>
+                                <div id="ajustes-lt-premium-area" class="ajuste-key-area" style="display:none;">
+                                    <div class="ajuste-label">
+                                        Email de cuenta LT
+                                        <span id="ajustes-lt-status" class="ajuste-key-status"></span>
+                                    </div>
+                                    <input type="text" id="ajustes-lt-username" placeholder="Email de tu cuenta LT..." class="ajuste-input-full" style="margin-bottom:6px;">
+                                    <div class="ajuste-label">API Key</div>
+                                    <div class="ajuste-row">
+                                        <input type="password" id="ajustes-lt-apikey" placeholder="API key de LT..." class="ajuste-input">
+                                        <button type="button" onclick="guardarLtDesdeAjustes()" class="ajuste-btn-alt">Guardar</button>
+                                    </div>
+                                    <div class="ajuste-nota" style="margin-top:5px;">
+                                        Cuenta gratis → 20 K chars/req ·
+                                        <a href="https://languagetool.org/es/cuenta" target="_blank" rel="noopener">languagetool.org</a>
+                                    </div>
                                 </div>
-                                <input type="text" id="ajustes-lt-username" placeholder="Email de tu cuenta LT..." class="ajuste-input-full" style="margin-bottom:6px;">
-                                <div class="ajuste-label">API Key</div>
-                                <div class="ajuste-row">
-                                    <input type="password" id="ajustes-lt-apikey" placeholder="API key de LT..." class="ajuste-input">
-                                    <button type="button" onclick="guardarLtDesdeAjustes()" class="ajuste-btn-alt">Guardar</button>
+                                <div id="ajustes-lt-free-nota" class="ajuste-nota" style="margin-top:6px;">
+                                    Sin cuenta → ~1 400 chars/req · Sin API key necesaria
                                 </div>
-                                <div class="ajuste-nota" style="margin-top:5px;">
-                                    Cuenta gratis → 20 K chars/req ·
-                                    <a href="https://languagetool.org/es/cuenta" target="_blank" rel="noopener">languagetool.org</a>
-                                </div>
-                            </div>
-                            <div id="ajustes-lt-free-nota" class="ajuste-nota" style="margin-top:6px;">
-                                Sin cuenta → ~1 400 chars/req · Sin API key necesaria
                             </div>
                         </div>
 
-                        <!-- ── 5. MÚSICA AMBIENTAL ── -->
-                        <div class="ajuste-seccion">
-                            <div class="ajuste-titulo">
-                                🎵 Música ambiental
+                        <!-- 5. MÚSICA AMBIENTAL -->
+                        <div class="ajuste-seccion" id="acc-musica">
+                            <button type="button" class="ajuste-acc-btn" onclick="toggleAjusteAcc('acc-musica')">
+                                <span class="ajuste-acc-titulo">Música ambiental</span>
                                 <span class="ajuste-badge">(durante la lectura)</span>
+                                <span class="ajuste-acc-spacer"></span>
                                 <span class="ajuste-modo" id="ajustes-music-modo">—</span>
-                            </div>
-                            <div class="ajuste-label">Proveedor</div>
-                            <select id="ajustes-music-provider" class="ajuste-select"
-                                    onchange="cambiarProveedorMusicaAjustes(this.value)">
-                                <option value="freesound">Freesound · tracks reales CC0 (key)</option>
-                                <option value="local">Generador procedural · Web Audio API (sin key)</option>
-                            </select>
-                            <div id="ajustes-freesound-key-area" class="ajuste-key-area">
-                                <div class="ajuste-label">
-                                    API Key Freesound <span id="ajustes-freesound-status" class="ajuste-key-status"></span>
-                                </div>
-                                <div class="ajuste-row">
-                                    <input type="password" id="ajustes-freesound-key" placeholder="Freesound API key..." class="ajuste-input">
-                                    <button type="button" onclick="guardarFreesoundDesdeAjustes()" class="ajuste-btn">Guardar</button>
-                                </div>
-                                <div class="ajuste-nota" style="margin-top:5px;">
-                                    Gratis en <a href="https://freesound.org/apiv2/apply" target="_blank" rel="noopener">freesound.org/apiv2/apply</a>
+                                <span class="ajuste-acc-chevron">›</span>
+                            </button>
+                            <div class="ajuste-acc-body">
+                                <div class="ajuste-label">Proveedor</div>
+                                <select id="ajustes-music-provider" class="ajuste-select"
+                                        onchange="cambiarProveedorMusicaAjustes(this.value)">
+                                    <option value="freesound">Freesound · tracks reales CC0 (key)</option>
+                                    <option value="local">Generador procedural · Web Audio API (sin key)</option>
+                                </select>
+                                <div id="ajustes-freesound-key-area" class="ajuste-key-area">
+                                    <div class="ajuste-label">
+                                        API Key Freesound <span id="ajustes-freesound-status" class="ajuste-key-status"></span>
+                                    </div>
+                                    <div class="ajuste-row">
+                                        <input type="password" id="ajustes-freesound-key" placeholder="Freesound API key..." class="ajuste-input">
+                                        <button type="button" onclick="guardarFreesoundDesdeAjustes()" class="ajuste-btn">Guardar</button>
+                                    </div>
+                                    <div class="ajuste-nota" style="margin-top:5px;">
+                                        Gratis en <a href="https://freesound.org/apiv2/apply" target="_blank" rel="noopener">freesound.org/apiv2/apply</a>
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- ── 6. IMÁGENES · BÚSQUEDA ── -->
-                        <div class="ajuste-seccion">
-                            <div class="ajuste-titulo">
-                                🖼 Imágenes · Búsqueda
+                        <!-- 6. IMÁGENES · BÚSQUEDA -->
+                        <div class="ajuste-seccion" id="acc-imgsearch">
+                            <button type="button" class="ajuste-acc-btn" onclick="toggleAjusteAcc('acc-imgsearch')">
+                                <span class="ajuste-acc-titulo">Imágenes · Búsqueda</span>
                                 <span class="ajuste-badge">(fondo durante lectura)</span>
+                                <span class="ajuste-acc-spacer"></span>
                                 <span class="ajuste-modo" id="ajustes-imgsearch-modo">—</span>
-                            </div>
-                            <div class="ajuste-label">Proveedor</div>
-                            <select id="ajustes-imgsearch-provider" class="ajuste-select"
-                                    onchange="cambiarProveedorImgSearchAjustes(this.value)">
-                                <option value="picsum">Picsum · placeholders aleatorios (sin key)</option>
-                                <option value="pixabay">Pixabay · fotos HD (key gratis)</option>
-                                <option value="pexels">Pexels · fotos HD (key gratis)</option>
-                                <option value="unsplash">Unsplash · fotos HD (key gratis)</option>
-                                <option value="openverse">Openverse · Creative Commons (sin key)</option>
-                            </select>
-                            <div id="ajustes-imgsearch-key-area" class="ajuste-key-area" style="display:none;">
-                                <div class="ajuste-label">
-                                    API Key <span id="ajustes-imgsearch-key-status" class="ajuste-key-status"></span>
+                                <span class="ajuste-acc-chevron">›</span>
+                            </button>
+                            <div class="ajuste-acc-body">
+                                <div class="ajuste-label">Proveedor</div>
+                                <select id="ajustes-imgsearch-provider" class="ajuste-select"
+                                        onchange="cambiarProveedorImgSearchAjustes(this.value)">
+                                    <option value="picsum">Picsum · placeholders aleatorios (sin key)</option>
+                                    <option value="pixabay">Pixabay · fotos HD (key gratis)</option>
+                                    <option value="pexels">Pexels · fotos HD (key gratis)</option>
+                                    <option value="unsplash">Unsplash · fotos HD (key gratis)</option>
+                                    <option value="openverse">Openverse · Creative Commons (sin key)</option>
+                                </select>
+                                <div id="ajustes-imgsearch-key-area" class="ajuste-key-area" style="display:none;">
+                                    <div class="ajuste-label">
+                                        API Key <span id="ajustes-imgsearch-key-status" class="ajuste-key-status"></span>
+                                    </div>
+                                    <div class="ajuste-row">
+                                        <input type="password" id="ajustes-imgsearch-key" placeholder="Pegar API key..." class="ajuste-input">
+                                        <button type="button" onclick="guardarImgSearchKeyDesdeAjustes()" class="ajuste-btn">Guardar</button>
+                                    </div>
+                                    <div class="ajuste-nota" id="ajustes-imgsearch-link-nota" style="margin-top:5px;"></div>
                                 </div>
-                                <div class="ajuste-row">
-                                    <input type="password" id="ajustes-imgsearch-key" placeholder="Pegar API key..." class="ajuste-input">
-                                    <button type="button" onclick="guardarImgSearchKeyDesdeAjustes()" class="ajuste-btn">Guardar</button>
-                                </div>
-                                <div class="ajuste-nota" id="ajustes-imgsearch-link-nota" style="margin-top:5px;"></div>
                             </div>
                         </div>
 
-                        <!-- ── 7. IMÁGENES · IA GENERATIVA ── -->
-                        <div class="ajuste-seccion">
-                            <div class="ajuste-titulo">
-                                🎨 Imágenes · IA Generativa
+                        <!-- 7. IMÁGENES · IA GENERATIVA -->
+                        <div class="ajuste-seccion" id="acc-imgia">
+                            <button type="button" class="ajuste-acc-btn" onclick="toggleAjusteAcc('acc-imgia')">
+                                <span class="ajuste-acc-titulo">Imágenes · IA Generativa</span>
                                 <span class="ajuste-badge">(modo video)</span>
+                                <span class="ajuste-acc-spacer"></span>
                                 <span class="ajuste-modo" id="ajustes-imgia-modo">—</span>
-                            </div>
-                            <div class="ajuste-label">Proveedor</div>
-                            <select id="ajustes-imgia-provider" class="ajuste-select"
-                                    onchange="cambiarProveedorImgIADesdeAjustes(this.value)">
-                                <option value="procedural">Procedural · Canvas 2D (sin key, offline)</option>
-                                <option value="pollinations">Pollinations · Flux (sin key, gratis)</option>
-                                <option value="puter">Puter.js · GPT-Image / Grok / Gemini (cuenta Puter)</option>
-                                <option value="stability">Stability AI · SD3.5 / Ultra (key de pago)</option>
-                            </select>
-                            <div id="ajustes-imgia-key-area" class="ajuste-key-area" style="display:none;">
-                                <div class="ajuste-label">
-                                    API Key Stability AI <span id="ajustes-stability-status" class="ajuste-key-status"></span>
+                                <span class="ajuste-acc-chevron">›</span>
+                            </button>
+                            <div class="ajuste-acc-body">
+                                <div class="ajuste-label">Proveedor</div>
+                                <select id="ajustes-imgia-provider" class="ajuste-select"
+                                        onchange="cambiarProveedorImgIADesdeAjustes(this.value)">
+                                    <option value="procedural">Procedural · Canvas 2D (sin key, offline)</option>
+                                    <option value="pollinations">Pollinations · Flux (sin key, gratis)</option>
+                                    <option value="puter">Puter.js · GPT-Image / Grok / Gemini (cuenta Puter)</option>
+                                    <option value="stability">Stability AI · SD3.5 / Ultra (key de pago)</option>
+                                </select>
+                                <div id="ajustes-imgia-key-area" class="ajuste-key-area" style="display:none;">
+                                    <div class="ajuste-label">
+                                        API Key Stability AI <span id="ajustes-stability-status" class="ajuste-key-status"></span>
+                                    </div>
+                                    <div class="ajuste-row">
+                                        <input type="password" id="ajustes-stability-key" placeholder="sk-..." class="ajuste-input">
+                                        <button type="button" onclick="guardarStabilityDesdeAjustes()" class="ajuste-btn">Guardar</button>
+                                    </div>
+                                    <div class="ajuste-nota" style="margin-top:5px;">
+                                        Obtener en <a href="https://platform.stability.ai/account/keys" target="_blank" rel="noopener">platform.stability.ai</a>
+                                    </div>
                                 </div>
-                                <div class="ajuste-row">
-                                    <input type="password" id="ajustes-stability-key" placeholder="sk-..." class="ajuste-input">
-                                    <button type="button" onclick="guardarStabilityDesdeAjustes()" class="ajuste-btn">Guardar</button>
+                                <div id="ajustes-imgia-puter-nota" class="ajuste-nota" style="display:none;margin-top:6px;">
+                                    Puter.js usa tu cuenta <a href="https://puter.com" target="_blank" rel="noopener">puter.com</a> — sin API key propia necesaria
                                 </div>
-                                <div class="ajuste-nota" style="margin-top:5px;">
-                                    Obtener en <a href="https://platform.stability.ai/account/keys" target="_blank" rel="noopener">platform.stability.ai</a>
-                                </div>
-                            </div>
-                            <div id="ajustes-imgia-puter-nota" class="ajuste-nota" style="display:none;margin-top:6px;">
-                                Puter.js usa tu cuenta <a href="https://puter.com" target="_blank" rel="noopener">puter.com</a> — sin API key propia necesaria
                             </div>
                         </div>
 
@@ -1360,7 +1206,6 @@
                     <!-- ════ PANEL: REEMPLAZAR ════ -->
                     <div id="ajustes-panel-reemplazar" class="ajustes-panel" style="display:none;padding:20px;">
 
-                        <!-- Archivo activo -->
                         <div style="margin-bottom:12px;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;">
                             <div style="font-size:0.55rem;color:var(--text-dim);margin-bottom:2px;text-transform:uppercase;letter-spacing:0.05em;">Libro activo</div>
                             <div id="ajustes-archivo-activo" style="font-size:0.68rem;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Sin archivo cargado</div>
@@ -1371,7 +1216,6 @@
                             Cargar un archivo diferente cargará sus propios reemplazos.
                         </div>
 
-                        <!-- Formulario -->
                         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
                             <div>
                                 <div style="font-size:0.55rem;color:var(--text-dim);margin-bottom:3px;">Buscar</div>
@@ -1393,10 +1237,9 @@
                                font-family:'DM Mono',monospace;font-size:0.7rem;font-weight:700;padding:9px 0;
                                cursor:pointer;transition:opacity 0.2s;letter-spacing:0.03em;margin-bottom:14px;"
                                 onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">
-                            ↩ Aplicar reemplazo en el texto actual
+                            Aplicar reemplazo en el texto actual
                         </button>
 
-                        <!-- Lista -->
                         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
                             <div style="font-size:0.6rem;font-weight:700;color:var(--text);letter-spacing:0.05em;text-transform:uppercase;">Reemplazos guardados</div>
                             <button type="button" id="btn-limpiar-reemplazos" onclick="limpiarReemplazosGuardados()" disabled
@@ -1405,65 +1248,85 @@
                                    transition:color 0.2s,border-color 0.2s;"
                                     onmouseover="if(!this.disabled){this.style.color='#ff6b6b';this.style.borderColor='#ff6b6b'}"
                                     onmouseout="this.style.color='var(--text-dim)';this.style.borderColor='var(--border)'">
-                                🗑 Limpiar todo
+                                Limpiar todo
                             </button>
+                        </div>
 
-                            <div id="ajustes-lista-reemplazos"
-                                 style="max-height:200px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--border) transparent;">
-                                <div style="font-size:0.62rem;color:var(--text-dim);padding:8px 0;text-align:center;">Sin reemplazos para este libro</div>
-                            </div>
+                        <div id="ajustes-lista-reemplazos"
+                             style="max-height:200px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--border) transparent;">
+                            <div style="font-size:0.62rem;color:var(--text-dim);padding:8px 0;text-align:center;">Sin reemplazos para este libro</div>
+                        </div>
 
-                            <!-- Botón otros libros -->
-                            <button type="button" onclick="togglePanelOtrosLibros()"
-                                    style="width:100%;margin-top:14px;background:none;border:1px solid var(--border);border-radius:6px;
+                        <button type="button" onclick="togglePanelOtrosLibros()"
+                                style="width:100%;margin-top:14px;background:none;border:1px solid var(--border);border-radius:6px;
                                color:var(--text-dim);font-family:'DM Mono',monospace;font-size:0.62rem;font-weight:600;
                                padding:7px 0;cursor:pointer;letter-spacing:0.03em;transition:color 0.2s,border-color 0.2s;
                                display:flex;align-items:center;justify-content:center;gap:6px;"
-                                    onmouseover="this.style.color='var(--text)';this.style.borderColor='var(--text)'"
-                                    onmouseout="this.style.color='var(--text-dim)';this.style.borderColor='var(--border)'">
-                                Ver reemplazos de otros libros
-                            </button>
-                            <div id="panel-otros-libros"
-                                 style="display:none;margin-top:10px;max-height:260px;overflow-y:auto;
-                            scrollbar-width:thin;scrollbar-color:var(--border) transparent;">
-                            </div>
+                                onmouseover="this.style.color='var(--text)';this.style.borderColor='var(--text)'"
+                                onmouseout="this.style.color='var(--text-dim)';this.style.borderColor='var(--border)'">
+                            Ver reemplazos de otros libros
+                        </button>
+                        <div id="panel-otros-libros"
+                             style="display:none;margin-top:10px;max-height:260px;overflow-y:auto;
+                             scrollbar-width:thin;scrollbar-color:var(--border) transparent;">
+                        </div>
 
-                        </div><!-- /panel reemplazar -->
+                    </div><!-- /panel reemplazar -->
 
-                    </div><!-- /panel content wrapper -->
-                </div><!-- /layout flex -->
-            </div>
-        </div><!-- /modal-ajustes -->
-        <!-- ─── SCRIPTS ─── -->
-        <!-- Supabase SDK -->
-        <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-        <!-- Librerías externas -->
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-        <script src="https://js.puter.com/v2/"></script>
-        <!-- Estado global — debe cargarse primero -->
-        <script src="js/main.js"></script>
-        <!-- Módulos funcionales -->
-        <script src="js/epub.js"></script>
-        <script src="js/formats.js"></script>
-        <script src="js/translation.js"></script>
-        <script src="js/player.js"></script>
-        <script src="js/tts.js"></script>
-        <script src="js/video.js"></script>
-        <!-- Imágenes web via Unsplash — carga después de player.js -->
-        <script src="js/images.js"></script>
-        <!-- Grabador de video — depende de tts.js, video.js, images.js -->
-        <script src="js/export_video.js"></script>
-        <script src="js/convert_mp4.js"></script>
-        <script src="js/convert_mp3.js"></script>
-        <script src="js/export_buttons.js"></script>
-        <!-- UI: patches y helpers — debe cargarse último -->
-        <script src="js/grammar.js"></script>
-        <script src="js/ui.js"></script>
-        <!-- Auth — debe cargarse después de ui.js -->
-        <script src="js/auth.js"></script>
-        <script src="js/auth-ui.js"></script>
-        <!-- Inicialización de UI — debe cargarse después de ui.js -->
-        <script src="js/init.js"></script>
+                </div><!-- /scroll content -->
+            </div><!-- /layout flex -->
+        </div>
+    </div><!-- /modal-ajustes -->
+
+    <script>
+        // Accordion del modal de Ajustes
+        function toggleAjusteAcc(id) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            const isOpen = el.classList.contains('open');
+            el.closest('.ajustes-panel').querySelectorAll('.ajuste-seccion.open').forEach(s => {
+                if (s !== el) s.classList.remove('open');
+            });
+            el.classList.toggle('open', !isOpen);
+        }
+        function abrirAjusteAcc(id) {
+            const el = document.getElementById(id);
+            if (el) el.classList.add('open');
+        }
+    </script>
+
+    <!-- ─── SCRIPTS ─── -->
+    <!-- Supabase SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Librerías externas -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://js.puter.com/v2/"></script>
+    <!-- Estado global — debe cargarse primero -->
+    <script src="js/main.js"></script>
+    <!-- uStorage: capa de abstracción de localStorage por usuario — debe cargarse PRIMERO -->
+    <script src="js/ustorage.js"></script>
+    <!-- Módulos funcionales -->
+    <script src="js/epub.js"></script>
+    <script src="js/formats.js"></script>
+    <script src="js/translation.js"></script>
+    <script src="js/player.js"></script>
+    <script src="js/tts.js"></script>
+    <script src="js/video.js"></script>
+    <!-- Imágenes web via Unsplash — carga después de player.js -->
+    <script src="js/images.js"></script>
+    <!-- Grabador de video — depende de tts.js, video.js, images.js -->
+    <script src="js/export_video.js"></script>
+    <script src="js/convert_mp4.js"></script>
+    <script src="js/convert_mp3.js"></script>
+    <script src="js/export_buttons.js"></script>
+    <!-- UI: patches y helpers — debe cargarse último -->
+    <script src="js/grammar.js"></script>
+    <script src="js/ui.js"></script>
+    <!-- Auth — debe cargarse después de ui.js -->
+    <script src="js/auth.js"></script>
+    <script src="js/auth-ui.js"></script>
+    <!-- Inicialización de UI — debe cargarse después de ui.js -->
+    <script src="js/init.js"></script>
 
 </body>
 </html>

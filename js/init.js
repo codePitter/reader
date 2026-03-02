@@ -45,7 +45,7 @@
             if (typeof cambiarProveedorImagenes === 'function') {
                 cambiarProveedorImagenes(key);
             } else {
-                localStorage.setItem('image_provider', key);
+                uSet('image_provider', key);
             }
         }
 
@@ -134,23 +134,23 @@
         // Leer proveedor guardado — Pixabay como default.
         // Si hay un provider de IA guardado, limpiarlo y forzar picsum.
         const _webProvs = new Set(['pixabay', 'pexels', 'picsum', 'unsplash', 'openverse', 'procedural']);
-        const _rawProv = localStorage.getItem('image_provider');
-        if (_rawProv && !_webProvs.has(_rawProv)) localStorage.removeItem('image_provider');
+        const _rawProv = uGet('image_provider');
+        if (_rawProv && !_webProvs.has(_rawProv)) uRemove('image_provider');
         const savedProv = (_rawProv && _webProvs.has(_rawProv)) ? _rawProv : 'picsum';
         _activarProv(savedProv);
 
         // Sincronizar modelo Puter
-        const puterModelSaved = localStorage.getItem('puter_model') || 'gpt-image-1.5';
+        const puterModelSaved = uGet('puter_model') || 'gpt-image-1.5';
         const puterModelPop = document.getElementById('puter-model-pop');
         if (puterModelPop) puterModelPop.value = puterModelSaved;
 
         // Mostrar estado de key Pixabay
-        const pixKey = localStorage.getItem('pixabay_api_key');
+        const pixKey = uGet('pixabay_api_key');
         const pixStatusEl = document.getElementById('pixabay-key-status-video');
         if (pixKey && pixStatusEl) { pixStatusEl.textContent = '✓'; pixStatusEl.style.color = 'var(--accent2)'; }
 
         // Mostrar estado de key Pexels
-        const pexKey = localStorage.getItem('pexels_api_key');
+        const pexKey = uGet('pexels_api_key');
         const pexStatusEl = document.getElementById('pexels-key-status-video');
         if (pexKey && pexStatusEl) { pexStatusEl.textContent = '✓'; pexStatusEl.style.color = 'var(--accent2)'; }
     });
@@ -165,10 +165,10 @@ window.guardarPexelsKeyVideo = function () {
     const key = input?.value?.trim();
     if (!key) { if (typeof mostrarNotificacion === 'function') mostrarNotificacion('⚠ Ingresa una API Key de Pexels'); return; }
     if (typeof _pexelsKey !== 'undefined') window._pexelsKey = key;
-    localStorage.setItem('pexels_api_key', key);
+    uSet('pexels_api_key', key);
     const status = document.getElementById('pexels-key-status-video');
     if (status) { status.textContent = '✓'; status.style.color = 'var(--accent2)'; }
-    localStorage.setItem('image_provider', 'pexels');
+    uSet('image_provider', 'pexels');
     if (typeof mostrarNotificacion === 'function') mostrarNotificacion('✓ Pexels key guardada');
     if (typeof _pixabayPoolShared !== 'undefined') window._pixabayPoolShared = [];
     if (typeof precalentarPoolPixabay === 'function') precalentarPoolPixabay();
@@ -242,7 +242,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // auto-translate
     const autoTranslate = document.getElementById('auto-translate');
     if (autoTranslate) {
-        const saved = localStorage.getItem('toggle_auto_translate');
+        const saved = uGet('toggle_auto_translate');
         if (saved !== null) {
             autoTranslate.checked = saved === 'true';
             // Actualizar el texto de status sin marcar cambio pendiente ni tocar
@@ -262,7 +262,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // tts-humanizer
     const ttsHumanizer = document.getElementById('tts-humanizer');
     if (ttsHumanizer) {
-        const saved = localStorage.getItem('toggle_tts_humanizer');
+        const saved = uGet('toggle_tts_humanizer');
         if (saved !== null) {
             ttsHumanizer.checked = saved === 'true';
             // Sincronizar estado interno (ttsHumanizerActivo) y visibilidad del panel
@@ -280,21 +280,21 @@ document.addEventListener('DOMContentLoaded', () => {
     // auto-play-after-translate (default: true — respetar solo si fue guardado explícitamente)
     const autoPlay = document.getElementById('auto-play-after-translate');
     if (autoPlay) {
-        const saved = localStorage.getItem('toggle_auto_play');
+        const saved = uGet('toggle_auto_play');
         if (saved !== null) autoPlay.checked = saved === 'true';
     }
 
     // auto-next-chapter (default: true — igual)
     const autoNext = document.getElementById('auto-next-chapter');
     if (autoNext) {
-        const saved = localStorage.getItem('toggle_auto_next');
+        const saved = uGet('toggle_auto_next');
         if (saved !== null) autoNext.checked = saved === 'true';
     }
 
     // auto-onoma — clave usada por grammar.js: 'auto_onoma'
     const autoOnoma = document.getElementById('auto-onoma');
     if (autoOnoma) {
-        const saved = localStorage.getItem('auto_onoma');
+        const saved = uGet('auto_onoma');
         if (saved !== null) {
             autoOnoma.checked = saved === 'true';
             // Sincronizar variable interna directamente (toggleAutoOnoma llamaría
@@ -313,7 +313,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // grammar-review — clave usada por grammar.js: 'grammar_review_activo'
     const gramReview = document.getElementById('grammar-review');
     if (gramReview) {
-        const saved = localStorage.getItem('grammar_review_activo');
+        const saved = uGet('grammar_review_activo');
         if (saved !== null) {
             gramReview.checked = saved === 'true';
             if (typeof grammarReviewActivo !== 'undefined') {

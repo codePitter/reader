@@ -434,13 +434,13 @@ const GENRE_LABELS = {
 };
 
 // ── Freesound API key management ──
-let freesoundApiKey = localStorage.getItem('freesound_api_key') || 'JCXLtKvEpLo3DJTYy3pRIXEcEWMTLRWK3UEcJ5iD';
+let freesoundApiKey = uGet('freesound_api_key') || 'JCXLtKvEpLo3DJTYy3pRIXEcEWMTLRWK3UEcJ5iD';
 
 function guardarApiKey() {
     const key = document.getElementById('freesound-api-key').value.trim();
     if (key) {
         freesoundApiKey = key;
-        localStorage.setItem('freesound_api_key', key);
+        uSet('freesound_api_key', key);
         document.getElementById('key-status').textContent = '✓ guardada';
         document.getElementById('freesound-api-key').value = '';
         setTimeout(() => document.getElementById('key-status').textContent = '', 2000);
@@ -452,7 +452,7 @@ window.addEventListener('DOMContentLoaded', () => {
     const keyStatusEl = document.getElementById('key-status');
     if (freesoundApiKey) {
         if (keyStatusEl) keyStatusEl.textContent = '✓ configurada';
-        const origen = localStorage.getItem('freesound_api_key') ? 'localStorage' : 'hardcodeada (default)';
+        const origen = uGet('freesound_api_key') ? 'localStorage' : 'hardcodeada (default)';
         console.log(`🎵 [Freesound] API key cargada desde ${origen}`);
     } else {
         console.warn('🎵 [Freesound] Sin API key — el player usará generador local exclusivamente');

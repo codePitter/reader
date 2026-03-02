@@ -25,13 +25,13 @@ function toggleSubPanel(bodyId, arrowId) {
 function _getReemplazosKey() {
     if (!_epubFilename) return 'reemplazos__sin_archivo';
     const safe = _epubFilename.replace(/[^a-zA-Z0-9._-]/g, '_');
-    return `reemplazos__${safe}`;
+    return uKey(`reemplazos__${safe}`);
 }
 
 // Llamado desde epub.js al cargar un nuevo archivo
 function cargarReemplazosParaArchivo(filename) {
     Object.keys(reemplazosAutomaticos).forEach(k => delete reemplazosAutomaticos[k]);
-    const key = `reemplazos__${filename.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+    const key = uKey(`reemplazos__${filename.replace(/[^a-zA-Z0-9._-]/g, '_')}`);
     const guardados = JSON.parse(localStorage.getItem(key) || '{}');
     Object.assign(reemplazosAutomaticos, guardados);
     if (typeof _capCache !== 'undefined') Object.keys(_capCache).forEach(k => delete _capCache[k]);
@@ -158,7 +158,7 @@ function limpiarReemplazosGuardados() {
     const libro = _epubFilename || 'este libro';
     if (!confirm(`⚠ ¿Eliminar los ${count} reemplazo(s) guardados para:\n"${libro}"?\n\nEsta acción no se puede deshacer.`)) return;
     Object.keys(reemplazosAutomaticos).forEach(k => delete reemplazosAutomaticos[k]);
-    localStorage.removeItem(_getReemplazosKey());
+    localStorage.removeItem(_getReemplazosKey());  // _getReemplazosKey() ya usa uKey internamente
     if (typeof _capCache !== 'undefined') Object.keys(_capCache).forEach(k => delete _capCache[k]);
     actualizarBotonLimpiarReemplazos();
     renderListaReemplazos();
@@ -447,7 +447,7 @@ function _sincronizarInputsApiKeys() {
     if (orNote) orNote.style.display = activeProvider === 'openrouter' ? 'block' : 'none';
 
     // ── Detección de universo ──
-    const univProv = localStorage.getItem('universe_provider') || 'local';
+    const univProv = uGet('universe_provider') || 'local';
     const univSel = document.getElementById('ajustes-universe-provider');
     if (univSel) univSel.value = univProv;
     const univKeyArea = document.getElementById('ajustes-universe-key-area');
@@ -456,16 +456,16 @@ function _sincronizarInputsApiKeys() {
     if (univModo) univModo.textContent = univProv === 'openrouter' ? 'IA' : 'local';
     const univKeyOk = document.getElementById('ajustes-universe-key-ok');
     if (univKeyOk && univProv === 'openrouter') {
-        const k = localStorage.getItem('humanizer_key_openrouter') || localStorage.getItem('openrouter_api_key') || '';
+        const k = uGet('humanizer_key_openrouter') || uGet('openrouter_api_key') || '';
         univKeyOk.textContent = k ? '✓ encontrada' : '⚠ no configurada';
     }
 
     // ── Traducción ──
-    const trProv = localStorage.getItem('translation_provider') || 'google';
+    const trProv = uGet('translation_provider') || 'google';
     const trSel = document.getElementById('ajustes-translate-provider');
     if (trSel) trSel.value = trProv;
     _toggleTranslateKeyArea(trProv);
-    const trKey = localStorage.getItem('deepl_api_key') || '';
+    const trKey = uGet('deepl_api_key') || '';
     const trStatus = document.getElementById('ajustes-translate-key-status');
     if (trStatus) trStatus.textContent = trKey ? '✓ guardada' : '';
     const trModo = document.getElementById('ajustes-translate-modo');
@@ -483,18 +483,18 @@ function _sincronizarInputsApiKeys() {
     if (ltModo) ltModo.textContent = hasLt ? 'premium' : 'público';
 
     // ── Música ──
-    const musicProv = localStorage.getItem('music_provider') || 'freesound';
+    const musicProv = uGet('music_provider') || 'freesound';
     const musicSel = document.getElementById('ajustes-music-provider');
     if (musicSel) musicSel.value = musicProv;
     _toggleMusicKeyArea(musicProv);
-    const fsKey = localStorage.getItem('freesound_api_key') || localStorage.getItem('freesound-api-key') || '';
+    const fsKey = uGet('freesound_api_key') || uGet('freesound-api-key') || '';
     const fsStatus = document.getElementById('ajustes-freesound-status');
     if (fsStatus) fsStatus.textContent = fsKey ? '✓ guardada' : '';
     const musicModo = document.getElementById('ajustes-music-modo');
     if (musicModo) musicModo.textContent = musicProv === 'freesound' ? 'Freesound' : 'local';
 
     // ── Imágenes búsqueda ──
-    const imgSearchProv = localStorage.getItem('image_provider') || 'picsum';
+    const imgSearchProv = uGet('image_provider') || 'picsum';
     const imgSearchSel = document.getElementById('ajustes-imgsearch-provider');
     if (imgSearchSel) imgSearchSel.value = imgSearchProv;
     _toggleImgSearchKeyArea(imgSearchProv);
@@ -502,11 +502,11 @@ function _sincronizarInputsApiKeys() {
     if (imgSearchModo) imgSearchModo.textContent = imgSearchProv;
 
     // ── Imágenes IA ──
-    const imgIAProv = localStorage.getItem('img_provider') || 'procedural';
+    const imgIAProv = uGet('img_provider') || 'procedural';
     const imgIASel = document.getElementById('ajustes-imgia-provider');
     if (imgIASel) imgIASel.value = imgIAProv;
     _toggleImgIAKeyArea(imgIAProv);
-    const stKey = localStorage.getItem('stability_api_key') || '';
+    const stKey = uGet('stability_api_key') || '';
     const stStatus = document.getElementById('ajustes-stability-status');
     if (stStatus) stStatus.textContent = stKey ? '✓ guardada' : '';
     const imgIAModo = document.getElementById('ajustes-imgia-modo');
@@ -548,7 +548,7 @@ function _toggleImgSearchKeyArea(prov) {
     if (linkNota && _IMG_SEARCH_LINKS[prov]) linkNota.innerHTML = _IMG_SEARCH_LINKS[prov];
     // Update key status from localStorage
     const keyMap = { pixabay: 'pixabay_api_key', pexels: 'pexels_api_key', unsplash: 'unsplash_api_key' };
-    const savedKey = keyMap[prov] ? (localStorage.getItem(keyMap[prov]) || '') : '';
+    const savedKey = keyMap[prov] ? (uGet(keyMap[prov]) || '') : '';
     const ks = document.getElementById('ajustes-imgsearch-key-status');
     if (ks) ks.textContent = savedKey ? '✓ guardada' : '';
 }
@@ -563,21 +563,21 @@ function _toggleImgIAKeyArea(prov) {
 // ── Provider change handlers ──
 
 function cambiarProveedorUniversoAjustes(prov) {
-    localStorage.setItem('universe_provider', prov);
+    uSet('universe_provider', prov);
     const keyArea = document.getElementById('ajustes-universe-key-area');
     if (keyArea) keyArea.style.display = prov === 'openrouter' ? 'block' : 'none';
     const modo = document.getElementById('ajustes-universe-modo');
     if (modo) modo.textContent = prov === 'openrouter' ? 'IA' : 'local';
     const ok = document.getElementById('ajustes-universe-key-ok');
     if (ok && prov === 'openrouter') {
-        const k = localStorage.getItem('humanizer_key_openrouter') || localStorage.getItem('openrouter_api_key') || '';
+        const k = uGet('humanizer_key_openrouter') || uGet('openrouter_api_key') || '';
         ok.textContent = k ? '✓ encontrada' : '⚠ no configurada';
     }
     mostrarNotificacion('✓ Detección de universo: ' + prov);
 }
 
 function cambiarProveedorTraduccionAjustes(prov) {
-    localStorage.setItem('translation_provider', prov);
+    uSet('translation_provider', prov);
     _toggleTranslateKeyArea(prov);
     const modo = document.getElementById('ajustes-translate-modo');
     if (modo) modo.textContent = prov;
@@ -591,7 +591,7 @@ function cambiarProveedorGramaticaAjustes(prov) {
 }
 
 function cambiarProveedorMusicaAjustes(prov) {
-    localStorage.setItem('music_provider', prov);
+    uSet('music_provider', prov);
     _toggleMusicKeyArea(prov);
     const modo = document.getElementById('ajustes-music-modo');
     if (modo) modo.textContent = prov === 'freesound' ? 'Freesound' : 'local';
@@ -606,7 +606,7 @@ function cambiarProveedorImgSearchAjustes(prov) {
     if (modo) modo.textContent = prov;
     // Llamar a cambiarProveedorImagenes de images.js si existe
     if (typeof cambiarProveedorImagenes === 'function') cambiarProveedorImagenes(prov);
-    else localStorage.setItem('image_provider', prov);
+    else uSet('image_provider', prov);
 }
 
 function cambiarProveedorImgIADesdeAjustes(prov) {
@@ -615,7 +615,7 @@ function cambiarProveedorImgIADesdeAjustes(prov) {
     if (modo) modo.textContent = prov;
     // Llamar a setImageProvider de video.js si existe
     if (typeof setImageProvider === 'function') setImageProvider(prov);
-    else localStorage.setItem('img_provider', prov);
+    else uSet('img_provider', prov);
 }
 
 // ── Save handlers ──
@@ -625,7 +625,7 @@ function guardarTranslateKeyDesdeAjustes() {
     if (!input) return;
     const key = input.value.trim();
     if (!key) { mostrarNotificacion('⚠ Ingresa la API key de DeepL'); return; }
-    localStorage.setItem('deepl_api_key', key);
+    uSet('deepl_api_key', key);
     input.value = '';
     const status = document.getElementById('ajustes-translate-key-status');
     if (status) status.textContent = '✓ guardada';
@@ -640,7 +640,7 @@ function guardarImgSearchKeyDesdeAjustes() {
     const prov = document.getElementById('ajustes-imgsearch-provider')?.value || 'pixabay';
     const keyMap = { pixabay: 'pixabay_api_key', pexels: 'pexels_api_key', unsplash: 'unsplash_api_key' };
     if (keyMap[prov]) {
-        localStorage.setItem(keyMap[prov], key);
+        uSet(keyMap[prov], key);
         // Actualizar variable global correspondiente
         if (prov === 'pixabay' && typeof _pixabayKey !== 'undefined') window._pixabayKey = key;
         if (prov === 'pexels' && typeof _pexelsKey !== 'undefined') window._pexelsKey = key;
@@ -666,9 +666,9 @@ function guardarHumanizerKeyDesdeAjustes() {
     else {
         // Fallback directo
         if (typeof claudeApiKey !== 'undefined') window.claudeApiKey = key;
-        localStorage.setItem('claude_api_key', key);
+        uSet('claude_api_key', key);
         if (typeof humanizerProvider !== 'undefined')
-            localStorage.setItem(`humanizer_key_${humanizerProvider}`, key);
+            uSet(`humanizer_key_${humanizerProvider}`, key);
     }
 
     input.value = '';
@@ -681,7 +681,7 @@ function cambiarProveedorHumanizerAjustes(provId) {
     const origSel = document.getElementById('humanizer-provider');
     if (origSel) { origSel.value = provId; origSel.dispatchEvent(new Event('change')); }
     else if (typeof cambiarProveedorHumanizer === 'function') cambiarProveedorHumanizer(provId);
-    const savedKey = localStorage.getItem(`humanizer_key_${provId}`) || '';
+    const savedKey = uGet(`humanizer_key_${provId}`) || '';
     const status = document.getElementById('ajustes-humanizer-key-status');
     if (status) status.textContent = savedKey ? '✓ guardada' : '';
 }
@@ -696,8 +696,8 @@ function guardarLtDesdeAjustes() {
     if (origK) origK.value = k;
     if (typeof guardarLtCredenciales === 'function') guardarLtCredenciales();
     else {
-        localStorage.setItem('lt_username', u);
-        localStorage.setItem('lt_apikey', k);
+        uSet('lt_username', u);
+        uSet('lt_apikey', k);
     }
     const status = document.getElementById('ajustes-lt-status');
     if (status) status.textContent = (u && k) ? '✓ guardadas' : '';
@@ -714,7 +714,7 @@ function guardarFreesoundDesdeAjustes() {
     // Rellenar el input original oculto y llamar a guardarApiKey de player.js
     const orig = document.getElementById('freesound-api-key');
     if (orig) { orig.value = key; if (typeof guardarApiKey === 'function') guardarApiKey(); }
-    else { localStorage.setItem('freesound_api_key', key); mostrarNotificacion('✓ Freesound key guardada'); }
+    else { uSet('freesound_api_key', key); mostrarNotificacion('✓ Freesound key guardada'); }
     input.value = '';
     const status = document.getElementById('ajustes-freesound-status');
     if (status) status.textContent = '✓ guardada';
@@ -727,7 +727,7 @@ function guardarPixabayDesdeAjustes() {
     if (!key) { mostrarNotificacion('⚠ Ingresa la API key de Pixabay'); return; }
     // Actualizar variable global y localStorage
     if (typeof _pixabayKey !== 'undefined') window._pixabayKey = key;
-    localStorage.setItem('pixabay_api_key', key);
+    uSet('pixabay_api_key', key);
     // Disparar recarga del pool si hay una función disponible
     if (typeof guardarPixabayKey === 'function') {
         const orig = document.getElementById('pixabay-key-input');
@@ -745,7 +745,7 @@ function guardarPexelsDesdeAjustes() {
     const key = input.value.trim();
     if (!key) { mostrarNotificacion('⚠ Ingresa la API key de Pexels'); return; }
     if (typeof _pexelsKey !== 'undefined') window._pexelsKey = key;
-    localStorage.setItem('pexels_api_key', key);
+    uSet('pexels_api_key', key);
     if (typeof guardarPexelsKey === 'function') {
         const orig = document.getElementById('pexels-key-input');
         if (orig) { orig.value = key; guardarPexelsKey(); }
@@ -762,7 +762,7 @@ function guardarUnsplashDesdeAjustes() {
     const key = input.value.trim();
     if (!key) { mostrarNotificacion('⚠ Ingresa la Access key de Unsplash'); return; }
     if (typeof _unsplashKey !== 'undefined') window._unsplashKey = key;
-    localStorage.setItem('unsplash_api_key', key);
+    uSet('unsplash_api_key', key);
     if (typeof guardarUnsplashKey === 'function') {
         const orig = document.getElementById('unsplash-key-input');
         if (orig) { orig.value = key; guardarUnsplashKey(); }
@@ -779,7 +779,7 @@ function guardarStabilityDesdeAjustes() {
     const key = input.value.trim();
     if (!key) { mostrarNotificacion('⚠ Ingresa la API key de Stability AI'); return; }
     if (typeof stabilityApiKey !== 'undefined') window.stabilityApiKey = key;
-    localStorage.setItem('stability_api_key', key);
+    uSet('stability_api_key', key);
     // Sincronizar con el input oculto original de video.js si existe
     const orig = document.getElementById('stability-api-key');
     if (orig) { orig.value = key; if (typeof guardarStabilityKey === 'function') guardarStabilityKey(); }
@@ -822,7 +822,7 @@ function renderPanelOtrosLibros() {
     const libros = [];
     for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
-        if (!k || !k.startsWith('reemplazos__')) continue;
+        if (!k || !k.startsWith(uKey('reemplazos__').split('reemplazos__')[0] + 'reemplazos__')) continue;
         if (k === claveActual) continue;
         try {
             const pares = JSON.parse(localStorage.getItem(k) || '{}');
