@@ -228,7 +228,12 @@ document.getElementById('epub-file').addEventListener('change', async function (
         mostrarNotificacion('✓ EPUB cargado correctamente');
 
         if (archivosOrdenados.length > 0) {
-            cargarCapitulo(archivosOrdenados[0]);
+            // Hook de progreso: permite mostrar "¿continuar?" antes de abrir cap 1
+            if (typeof onEpubCargado === 'function') {
+                onEpubCargado(archivosOrdenados, () => cargarCapitulo(archivosOrdenados[0]));
+            } else {
+                cargarCapitulo(archivosOrdenados[0]);
+            }
         }
 
     } catch (error) {
@@ -522,6 +527,9 @@ async function cargarCapitulo(ruta, _cancelToken) {
 
         renderizarTextoEnContenedor(document.getElementById('texto-contenido'), textoCompleto);
         actualizarEstadisticas();
+
+        // Hook de progreso/marcadores: capítulo completamente cargado y renderizado
+        if (typeof onCapituloCargado === 'function') onCapituloCargado(ruta);
 
         // ── Actualizar título de capítulo en el header (junto al botón Editor) ──
         const selector = document.getElementById('chapters');

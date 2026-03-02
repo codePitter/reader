@@ -20,7 +20,7 @@
 
 // ── CDN dinámico: cargar librería solo cuando se necesita ──
 const _cdnLoaded = {};
-async function _loadScript(id, src) {
+async function _fmtLoadScript(id, src) {
     if (_cdnLoaded[id]) return;
     return new Promise((resolve, reject) => {
         if (document.getElementById(id)) { _cdnLoaded[id] = true; resolve(); return; }
@@ -194,7 +194,7 @@ async function parseFB2(arrayBuffer) {
 
 // ── FB3 (FictionBook 3 — ZIP con XML interno) ──
 async function parseFB3(arrayBuffer) {
-    await _loadScript('jszip-cdn', 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
+    await _fmtLoadScript('jszip-cdn', 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
     const zip = await JSZip.loadAsync(arrayBuffer);
     // FB3 tiene un body.xml o similar
     let xmlContent = null;
@@ -221,7 +221,7 @@ async function parseFB3(arrayBuffer) {
 // ── PDF ───────────────────────────────────
 async function parsePDF(arrayBuffer) {
     // Cargar PDF.js desde CDN
-    await _loadScript('pdfjs-cdn', 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js');
+    await _fmtLoadScript('pdfjs-cdn', 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js');
 
     const pdfjsLib = window['pdfjs-dist/build/pdf'];
     if (!pdfjsLib) throw new Error('PDF.js no disponible');
@@ -229,7 +229,7 @@ async function parsePDF(arrayBuffer) {
     // Worker
     if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
         pdfjsLib.GlobalWorkerOptions.workerSrc =
-            'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+            'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
     }
 
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
@@ -264,7 +264,7 @@ async function parsePDF(arrayBuffer) {
 
 // ── DOCX ──────────────────────────────────
 async function parseDOCX(arrayBuffer) {
-    await _loadScript('mammoth-cdn', 'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js');
+    await _fmtLoadScript('mammoth-cdn', 'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js');
 
     const result = await mammoth.convertToHtml({ arrayBuffer });
     const html = result.value;
@@ -326,7 +326,7 @@ async function parseRTF(arrayBuffer) {
 
 // ── ODT (OpenDocument Text) ───────────────
 async function parseODT(arrayBuffer) {
-    await _loadScript('jszip-cdn', 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
+    await _fmtLoadScript('jszip-cdn', 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
     const zip = await JSZip.loadAsync(arrayBuffer);
     const contentFile = zip.file('content.xml');
     if (!contentFile) throw new Error('No se encontró content.xml en el ODT');
@@ -551,7 +551,7 @@ function _mobiHtmlToChapters(htmlRaw) {
 
 
 async function parseCBZ(arrayBuffer) {
-    await _loadScript('jszip-cdn', 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
+    await _fmtLoadScript('jszip-cdn', 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
     const zip = await JSZip.loadAsync(arrayBuffer);
 
     const imagenes = [];

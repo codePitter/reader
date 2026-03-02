@@ -7,244 +7,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📚</text></svg>">
-    <style>
-        /* ── Modal API Keys — scrollbar temático ── */
-        #ajustes-scroll-content::-webkit-scrollbar {
-            width: 4px;
-        }
 
-        #ajustes-scroll-content::-webkit-scrollbar-track {
-            background: transparent;
-        }
-
-        #ajustes-scroll-content::-webkit-scrollbar-thumb {
-            background: var(--border);
-            border-radius: 4px;
-        }
-
-            #ajustes-scroll-content::-webkit-scrollbar-thumb:hover {
-                background: var(--accent);
-            }
-
-        #ajustes-scroll-content {
-            scrollbar-width: thin;
-            scrollbar-color: var(--border) transparent;
-        }
-
-        /* ── Accordion secciones ── */
-        .ajuste-seccion {
-            border-bottom: 1px solid var(--border);
-        }
-
-            .ajuste-seccion:last-child {
-                border-bottom: none;
-            }
-
-        /* Botón cabecera del accordion */
-        .ajuste-acc-btn {
-            width: 100%;
-            background: none;
-            border: none;
-            padding: 13px 20px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            text-align: left;
-            transition: background 0.15s;
-            user-select: none;
-        }
-
-            .ajuste-acc-btn:hover {
-                background: rgba(255,255,255,0.03);
-            }
-
-        .ajuste-seccion.open > .ajuste-acc-btn {
-            background: rgba(255,255,255,0.04);
-            border-bottom: 1px solid var(--border);
-        }
-
-        .ajuste-acc-titulo {
-            font-size: 0.6rem;
-            font-weight: 700;
-            color: var(--text);
-            letter-spacing: 0.07em;
-            text-transform: uppercase;
-            white-space: nowrap;
-        }
-
-        .ajuste-badge {
-            font-weight: 400;
-            text-transform: none;
-            letter-spacing: 0;
-            font-size: 0.52rem;
-            color: var(--text-dim);
-        }
-
-        .ajuste-modo {
-            font-size: 0.5rem;
-            font-weight: 600;
-            letter-spacing: 0.04em;
-            text-transform: uppercase;
-            color: var(--accent2);
-            background: rgba(var(--accent2-rgb,100,200,150),0.12);
-            border: 1px solid rgba(var(--accent2-rgb,100,200,150),0.25);
-            border-radius: 3px;
-            padding: 1px 5px;
-            white-space: nowrap;
-        }
-
-        .ajuste-acc-spacer {
-            flex: 1;
-            min-width: 4px;
-        }
-
-        .ajuste-acc-chevron {
-            font-size: 1rem;
-            color: var(--text-dim);
-            transition: transform 0.2s ease;
-            flex-shrink: 0;
-            line-height: 1;
-        }
-
-        .ajuste-seccion.open > .ajuste-acc-btn .ajuste-acc-chevron {
-            transform: rotate(90deg);
-        }
-
-        /* Cuerpo colapsable */
-        .ajuste-acc-body {
-            overflow: hidden;
-            max-height: 0;
-            transition: max-height 0.28s ease, padding 0.2s ease;
-            padding: 0 20px;
-        }
-
-        .ajuste-seccion.open > .ajuste-acc-body {
-            max-height: 600px;
-            padding: 14px 20px 16px;
-        }
-
-        .ajuste-label {
-            font-size: 0.57rem;
-            color: var(--text-dim);
-            margin-bottom: 4px;
-            margin-top: 8px;
-        }
-
-            .ajuste-label:first-child {
-                margin-top: 0;
-            }
-
-        .ajuste-select {
-            width: 100%;
-            background: var(--bg);
-            border: 1px solid var(--border);
-            border-radius: 4px;
-            color: var(--text);
-            font-family: 'DM Mono', monospace;
-            font-size: 0.62rem;
-            padding: 5px 8px;
-            outline: none;
-            cursor: pointer;
-        }
-
-        .ajuste-input {
-            flex: 1;
-            background: var(--bg);
-            border: 1px solid var(--border);
-            border-radius: 4px;
-            color: var(--text);
-            font-family: 'DM Mono', monospace;
-            font-size: 0.62rem;
-            padding: 5px 8px;
-            outline: none;
-        }
-
-        .ajuste-input-full {
-            width: 100%;
-            background: var(--bg);
-            border: 1px solid var(--border);
-            border-radius: 4px;
-            color: var(--text);
-            font-family: 'DM Mono', monospace;
-            font-size: 0.62rem;
-            padding: 5px 8px;
-            outline: none;
-            box-sizing: border-box;
-        }
-
-        .ajuste-btn {
-            background: var(--accent);
-            border: none;
-            border-radius: 4px;
-            color: var(--bg);
-            font-family: 'DM Mono', monospace;
-            font-size: 0.6rem;
-            padding: 5px 10px;
-            cursor: pointer;
-            white-space: nowrap;
-            transition: opacity 0.15s;
-        }
-
-            .ajuste-btn:hover {
-                opacity: 0.85;
-            }
-
-        .ajuste-btn-alt {
-            background: var(--accent2);
-            border: none;
-            border-radius: 4px;
-            color: var(--bg);
-            font-family: 'DM Mono', monospace;
-            font-size: 0.6rem;
-            padding: 5px 10px;
-            cursor: pointer;
-            transition: opacity 0.15s;
-        }
-
-            .ajuste-btn-alt:hover {
-                opacity: 0.85;
-            }
-
-        .ajuste-row {
-            display: flex;
-            gap: 6px;
-            align-items: center;
-        }
-
-        .ajuste-nota {
-            font-size: 0.51rem;
-            color: var(--text-dim);
-            margin-top: 5px;
-            line-height: 1.5;
-        }
-
-            .ajuste-nota a {
-                color: var(--accent2);
-                text-decoration: none;
-            }
-
-                .ajuste-nota a:hover {
-                    text-decoration: underline;
-                }
-
-        .ajuste-key-status {
-            color: var(--accent2);
-            margin-left: 4px;
-            font-size: 0.55rem;
-        }
-
-        .ajuste-key-area {
-            margin-top: 6px;
-        }
-
-        /* Tab activo */
-        .ajustes-tab-btn.active {
-            border-left-color: var(--accent) !important;
-            color: var(--text) !important;
-            background: rgba(255,255,255,0.03) !important;
-        }
-    </style>
 </head>
 <body>
 
@@ -339,6 +102,12 @@
                 </div>
             </div>
             <select id="voice-select" class="tts-bar-voice"></select>
+            <button type="button" id="btn-voz-predeterminada"
+                    class="btn-voz-default"
+                    onclick="guardarVozPredeterminada()"
+                    title="Guardar esta voz como predeterminada">
+                ⭐ Predeterminado
+            </button>
 
             <!-- Botón toggle: usar servidor TTS local para reproducción en vivo -->
             <button type="button"
@@ -443,6 +212,12 @@
                     <option value="es-GQ-TeresaNeural">Teresa — ♀</option>
                 </optgroup>
             </select>
+            <button type="button" id="btn-edge-voz-predeterminada"
+                    class="btn-voz-default"
+                    onclick="guardarVozPredeterminada()"
+                    title="Guardar esta voz como predeterminada">
+                ⭐ Predeterminado
+            </button>
         </div>
 
         <div class="reading-area" style="position:relative;">
@@ -788,83 +563,7 @@
     </div>
 
 
-    <script>
-        // ── Ajustes sidebar: mostrar contenido solo al hover ──
-        // ── Editar texto inline en el reading area ──
-        var _editandoTexto = false;
-        var _textoOriginalAntesDeedicion = null;
-        window._toggleEditarTexto = function () {
-            var contenido = document.getElementById("texto-contenido");
-            var btn = document.getElementById("btn-editar-texto");
-            if (!contenido) return;
-            _editandoTexto = !_editandoTexto;
-            if (_editandoTexto) {
-                // Limpiar spans TTS para edición limpia — preservar solo el texto plano en párrafos
-                var parrafos = Array.from(contenido.querySelectorAll("p"));
-                if (parrafos.length > 0) {
-                    _textoOriginalAntesDeedicion = contenido.innerHTML;
-                    parrafos.forEach(function (p) {
-                        p.innerHTML = p.textContent;
-                    });
-                } else {
-                    // Sin párrafos — limpiar spans directamente
-                    _textoOriginalAntesDeedicion = contenido.innerHTML;
-                    contenido.querySelectorAll(".tts-sentence").forEach(function (s) {
-                        s.replaceWith(document.createTextNode(s.textContent));
-                    });
-                    contenido.normalize();
-                }
-                contenido.contentEditable = "true";
-                contenido.style.outline = "2px solid var(--accent)";
-                contenido.style.borderRadius = "4px";
-                contenido.style.padding = "8px";
-                contenido.focus();
-                if (btn) {
-                    btn.innerHTML = "&#10003; Guardar";
-                    btn.style.color = "var(--accent)";
-                    btn.style.borderColor = "var(--accent)";
-                    btn.onmouseover = null; btn.onmouseout = null;
-                }
-            } else {
-                // Desactivar edición
-                contenido.contentEditable = "false";
-                contenido.style.outline = "";
-                contenido.style.borderRadius = "";
-                contenido.style.padding = "";
-                if (btn) {
-                    btn.innerHTML = "&#9999; Editar texto";
-                    btn.style.color = "";
-                    btn.style.borderColor = "";
-                    btn.onmouseover = function () { this.style.color = "var(--accent)"; this.style.borderColor = "var(--accent)"; };
-                    btn.onmouseout = function () { this.style.color = ""; this.style.borderColor = ""; };
-                }
-                // Actualizar sentences para TTS con el nuevo texto
-                if (typeof dividirEnOraciones === "function" && typeof sentences !== "undefined") {
-                    sentences = dividirEnOraciones(contenido.textContent.trim());
-                }
-                if (typeof actualizarContadores === "function") actualizarContadores();
-                if (typeof mostrarNotificacion === "function") mostrarNotificacion("✓ Texto actualizado");
-            }
-        };
-        // Esc para salir del modo edición
-        document.addEventListener("keydown", function (e) {
-            if (e.key === "Escape" && _editandoTexto) window._toggleEditarTexto();
-        });
 
-        document.addEventListener("DOMContentLoaded", function () {
-            var section = document.getElementById("ajustes-sidebar-section");
-            var content = document.getElementById("ajustes-sidebar-content");
-            if (!section || !content) return;
-            section.addEventListener("mouseenter", function () {
-                content.style.maxHeight = "1000px";
-                content.style.opacity = "1";
-            });
-            section.addEventListener("mouseleave", function () {
-                content.style.maxHeight = "0";
-                content.style.opacity = "0";
-            });
-        });
-    </script>
 
     <!-- ─── FOOTER ─── -->
     <footer class="app-footer">
@@ -1514,24 +1213,6 @@
             </div><!-- /layout flex -->
         </div>
     </div><!-- /modal-ajustes -->
-
-    <script>
-        // Accordion del modal de Ajustes
-        function toggleAjusteAcc(id) {
-            const el = document.getElementById(id);
-            if (!el) return;
-            const isOpen = el.classList.contains('open');
-            el.closest('.ajustes-panel').querySelectorAll('.ajuste-seccion.open').forEach(s => {
-                if (s !== el) s.classList.remove('open');
-            });
-            el.classList.toggle('open', !isOpen);
-        }
-        function abrirAjusteAcc(id) {
-            const el = document.getElementById(id);
-            if (el) el.classList.add('open');
-        }
-    </script>
-
     <!-- ─── SCRIPTS ─── -->
     <!-- Supabase SDK -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -1542,6 +1223,10 @@
     <script src="js/main.js"></script>
     <!-- uStorage: capa de abstracción de localStorage por usuario — debe cargarse PRIMERO -->
     <script src="js/ustorage.js"></script>
+    <!-- Progreso de lectura: capítulo + frase, modal "¿continuar?" -->
+    <script src="js/progress.js"></script>
+    <!-- Marcadores: sistema de bookmarks por libro -->
+    <script src="js/bookmarks.js"></script>
     <!-- Módulos funcionales -->
     <script src="js/epub.js"></script>
     <script src="js/formats.js"></script>

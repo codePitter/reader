@@ -32,6 +32,15 @@ let _authReady = false;
         const prevUser = _authUser;
         _authUser = session?.user ?? null;
 
+        // ─── PREFIJO DE STORAGE PRIMERO ───
+        // uSetUser/uClearUser deben correr ANTES de despachar cualquier evento,
+        // para que los listeners (init.js, etc.) lean con el prefijo correcto.
+        if (_authUser?.id) {
+            if (typeof uSetUser === 'function') uSetUser(_authUser.id);
+        } else if (event === 'SIGNED_OUT') {
+            if (typeof uClearUser === 'function') uClearUser();
+        }
+
         if (!_authReady) {
             _authReady = true;
             document.dispatchEvent(new CustomEvent('auth:ready', { detail: { user: _authUser } }));
@@ -40,13 +49,13 @@ let _authReady = false;
         // SIGNED_IN dispara también al re-enfocar la pestaña (bug conocido de Supabase).
         // Solo actuar si el user.id cambió de verdad.
         if (event === 'SIGNED_IN' && _authUser?.id !== prevUser?.id) {
-            if (typeof uSetUser === 'function') uSetUser(_authUser.id);
+            // uSetUser ya fue llamado arriba — no duplicar
             document.dispatchEvent(new CustomEvent('auth:signin', { detail: { user: _authUser } }));
             _onSignIn(_authUser);
         }
 
         if (event === 'SIGNED_OUT') {
-            if (typeof uClearUser === 'function') uClearUser();
+            // uClearUser ya fue llamado arriba — no duplicar
             document.dispatchEvent(new CustomEvent('auth:signout'));
             _onSignOut();
         }

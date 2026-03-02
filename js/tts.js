@@ -335,7 +335,12 @@ function cargarVoces() {
         v.name.toLowerCase().includes('google') && v.lang === 'es-ES'
     );
     const defaultVoice = googleEsES || vocesEspanol.find(v => v.lang === 'es-ES') || vocesEspanol[0];
-    if (defaultVoice) {
+
+    // Restaurar voz guardada si existe; si no, usar el default
+    const savedVoiceIdx = uGet('tts_voice_idx');
+    if (savedVoiceIdx !== null && voiceSelect.querySelector(`option[value="${savedVoiceIdx}"]`)) {
+        voiceSelect.value = savedVoiceIdx;
+    } else if (defaultVoice) {
         voiceSelect.value = voices.indexOf(defaultVoice);
     }
 }
@@ -349,19 +354,30 @@ cargarVoces();
 // Sincronizar el estado del botón toggle al cargar la página
 document.addEventListener('DOMContentLoaded', () => {
     _sincronizarBtnServidorLive();
+    // Restaurar voz Edge TTS en el selector
+    const edgeSel = document.getElementById('edge-voice-select');
+    if (edgeSel && _edgeTtsVoice) edgeSel.value = _edgeTtsVoice;
 });
 
-// Controles de TTS
+// Controles de TTS — actualizar display Y persistir en uStorage
 document.getElementById('rate-control').addEventListener('input', function (e) {
     document.getElementById('rate-value').textContent = e.target.value;
+    uSet('tts_rate', e.target.value);
 });
 
 document.getElementById('pitch-control').addEventListener('input', function (e) {
     document.getElementById('pitch-value').textContent = e.target.value;
+    uSet('tts_pitch', e.target.value);
 });
 
 document.getElementById('volume-control').addEventListener('input', function (e) {
     document.getElementById('volume-value').textContent = e.target.value;
+    uSet('tts_volume', e.target.value);
+});
+
+// Persistir voz del navegador al cambiar
+document.getElementById('voice-select').addEventListener('change', function (e) {
+    uSet('tts_voice_idx', e.target.value);
 });
 
 function dividirEnOraciones(texto) {

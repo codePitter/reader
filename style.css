@@ -1960,6 +1960,32 @@ input[type="text"] {
 
 /* TTS 900px rules merged into the first @media (max-width: 900px) block above */
 
+/* Botón "⭐ Predeterminado" — aparece al lado del selector de voz al detectar cambio */
+.btn-voz-default {
+    display: none; /* oculto por defecto; JS lo muestra con display:inline-flex */
+    align-items: center;
+    flex-shrink: 0;
+    background: none;
+    border: 1px solid var(--accent2);
+    border-radius: 4px;
+    color: var(--accent2);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.52rem;
+    font-weight: 600;
+    padding: 3px 6px;
+    cursor: pointer;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+    margin-left: 2px;
+    transition: background 0.18s, opacity 0.18s;
+    opacity: 0.85;
+}
+
+    .btn-voz-default:hover {
+        background: rgba(126, 184, 154, 0.12);
+        opacity: 1;
+    }
+
 /* ─── LEGACY COMPAT ─── */
 /* .notification es un alias de #notification (el HTML usa ambos) */
 .notification {

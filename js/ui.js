@@ -302,24 +302,23 @@ function poblarSelectorIdioma() {
     const sel = document.getElementById('translation-lang-select');
     if (!sel) return;
     sel.innerHTML = '';
+    // Restaurar idioma guardado; si no hay ninguno, usar TRANSLATION_TARGET_LANG o 'es'
+    const savedLang = uGet('translation_lang') ||
+        (typeof TRANSLATION_TARGET_LANG !== 'undefined' ? TRANSLATION_TARGET_LANG : 'es');
+    // Aplicar el override para que la sesión arranque con el idioma correcto
+    if (savedLang) window._traduccionLangOverride = savedLang;
     Object.entries(SUPPORTED_LANGS).forEach(([code, name]) => {
         const opt = document.createElement('option');
         opt.value = code;
         opt.textContent = `${name} (${code})`;
-        if (code === (typeof TRANSLATION_TARGET_LANG !== 'undefined' ? TRANSLATION_TARGET_LANG : 'es')) {
-            opt.selected = true;
-        }
+        if (code === savedLang) opt.selected = true;
         sel.appendChild(opt);
     });
 }
 
 function cambiarIdiomaTraduccion(langCode) {
-    // Sobrescribir la constante en translation.js no es posible directamente,
-    // pero podemos sobreescribir la variable que usan las funciones de traducción.
-    // Se usa window para hacerla accesible globalmente.
     window._traduccionLangOverride = langCode;
-    // Reflejar en la constante exportada si es posible (TRANSLATION_TARGET_LANG es const,
-    // así que parcheamos a través de las funciones que la consumen)
+    uSet('translation_lang', langCode);   // ← persistir
     mostrarNotificacion(`✓ Idioma destino: ${SUPPORTED_LANGS[langCode] || langCode}`);
     marcarCambioPendiente();
 }

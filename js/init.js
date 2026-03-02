@@ -6,6 +6,113 @@
 // ═══════════════════════════════════════
 
 // ═══════════════════════════════════════
+// EDITAR TEXTO INLINE — reading area
+// Migrado desde index.html (script inline)
+// ═══════════════════════════════════════
+
+var _editandoTexto = false;
+var _textoOriginalAntesDeedicion = null;
+
+window._toggleEditarTexto = function () {
+    var contenido = document.getElementById("texto-contenido");
+    var btn = document.getElementById("btn-editar-texto");
+    if (!contenido) return;
+    _editandoTexto = !_editandoTexto;
+    if (_editandoTexto) {
+        // Limpiar spans TTS para edición limpia — preservar solo el texto plano en párrafos
+        var parrafos = Array.from(contenido.querySelectorAll("p"));
+        if (parrafos.length > 0) {
+            _textoOriginalAntesDeedicion = contenido.innerHTML;
+            parrafos.forEach(function (p) {
+                p.innerHTML = p.textContent;
+            });
+        } else {
+            // Sin párrafos — limpiar spans directamente
+            _textoOriginalAntesDeedicion = contenido.innerHTML;
+            contenido.querySelectorAll(".tts-sentence").forEach(function (s) {
+                s.replaceWith(document.createTextNode(s.textContent));
+            });
+            contenido.normalize();
+        }
+        contenido.contentEditable = "true";
+        contenido.style.outline = "2px solid var(--accent)";
+        contenido.style.borderRadius = "4px";
+        contenido.style.padding = "8px";
+        contenido.focus();
+        if (btn) {
+            btn.innerHTML = "&#10003; Guardar";
+            btn.style.color = "var(--accent)";
+            btn.style.borderColor = "var(--accent)";
+            btn.onmouseover = null;
+            btn.onmouseout = null;
+        }
+    } else {
+        // Desactivar edición
+        contenido.contentEditable = "false";
+        contenido.style.outline = "";
+        contenido.style.borderRadius = "";
+        contenido.style.padding = "";
+        if (btn) {
+            btn.innerHTML = "&#9999; Editar texto";
+            btn.style.color = "";
+            btn.style.borderColor = "";
+            btn.onmouseover = function () { this.style.color = "var(--accent)"; this.style.borderColor = "var(--accent)"; };
+            btn.onmouseout = function () { this.style.color = ""; this.style.borderColor = ""; };
+        }
+        // Actualizar sentences para TTS con el nuevo texto
+        if (typeof dividirEnOraciones === "function" && typeof sentences !== "undefined") {
+            sentences = dividirEnOraciones(contenido.textContent.trim());
+        }
+        if (typeof actualizarContadores === "function") actualizarContadores();
+        if (typeof mostrarNotificacion === "function") mostrarNotificacion("✓ Texto actualizado");
+    }
+};
+
+// Esc para salir del modo edición
+document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && _editandoTexto) window._toggleEditarTexto();
+});
+
+// ═══════════════════════════════════════
+// HOVER SIDEBAR DE AJUSTES
+// Migrado desde index.html (script inline)
+// ═══════════════════════════════════════
+
+document.addEventListener("DOMContentLoaded", function () {
+    var section = document.getElementById("ajustes-sidebar-section");
+    var content = document.getElementById("ajustes-sidebar-content");
+    if (!section || !content) return;
+    section.addEventListener("mouseenter", function () {
+        content.style.maxHeight = "1000px";
+        content.style.opacity = "1";
+    });
+    section.addEventListener("mouseleave", function () {
+        content.style.maxHeight = "0";
+        content.style.opacity = "0";
+    });
+});
+
+// ═══════════════════════════════════════
+// ACCORDION MODAL DE AJUSTES
+// Migrado desde index.html (script inline)
+// ═══════════════════════════════════════
+
+function toggleAjusteAcc(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const isOpen = el.classList.contains('open');
+    el.closest('.ajustes-panel').querySelectorAll('.ajuste-seccion.open').forEach(s => {
+        if (s !== el) s.classList.remove('open');
+    });
+    el.classList.toggle('open', !isOpen);
+}
+
+function abrirAjusteAcc(id) {
+    const el = document.getElementById(id);
+    if (el) el.classList.add('open');
+}
+
+// ═══════════════════════════════════════
 // SELECTOR DE PROVEEDOR DE IMÁGENES (video bar popup)
 // ═══════════════════════════════════════
 
@@ -233,25 +340,31 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // ── Restaurar estado de toggles desde localStorage ──
-    // IMPORTANTE: solo se restaura el estado visual del checkbox.
-    // La variable interna `traduccionAutomatica` NO se toca aquí — solo cambia
-    // cuando el usuario presiona "Aplicar". Esto evita que al cargar un EPUB
-    // se dispare la traducción automáticamente sin acción explícita del usuario.
+    // Restaurar toggles en la carga inicial (prefijo guest_ — sesión aún no resolvió)
+    _restaurarToggles();
+    _registrarListenersPrefs();
+});
 
+// ═══════════════════════════════════════
+// RESTAURAR TOGGLES — función reutilizable
+// Se llama en DOMContentLoaded Y en auth:ready para que los valores del usuario
+// autenticado (prefijo user_XXXX_) se apliquen correctamente a la UI incluso
+// cuando la sesión Supabase resuelve después del primer render.
+// IMPORTANTE: solo restaura el estado visual del checkbox.
+// La variable interna `traduccionAutomatica` NO se toca aquí — solo cambia
+// cuando el usuario presiona "Aplicar".
+// ═══════════════════════════════════════
+function _restaurarToggles() {
     // auto-translate
     const autoTranslate = document.getElementById('auto-translate');
     if (autoTranslate) {
         const saved = uGet('toggle_auto_translate');
         if (saved !== null) {
             autoTranslate.checked = saved === 'true';
-            // Actualizar el texto de status sin marcar cambio pendiente ni tocar
-            // la variable interna (eso queda para cuando el usuario presione Aplicar)
             const statusEl = document.getElementById('translation-status');
             if (statusEl && autoTranslate.checked) {
                 statusEl.textContent = '⏳ Traducción activada (presiona Aplicar)';
             }
-            // Mostrar botón Aplicar si la traducción está activada
             if (autoTranslate.checked) {
                 const row = document.getElementById('aplicar-row');
                 if (row) row.style.display = 'block';
@@ -265,8 +378,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const saved = uGet('toggle_tts_humanizer');
         if (saved !== null) {
             ttsHumanizer.checked = saved === 'true';
-            // Sincronizar estado interno (ttsHumanizerActivo) y visibilidad del panel
-            // sin llamar marcarCambioPendiente (no hay capítulo cargado aún)
             if (typeof ttsHumanizerActivo !== 'undefined') {
                 ttsHumanizerActivo = ttsHumanizer.checked;
             }
@@ -277,28 +388,26 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // auto-play-after-translate (default: true — respetar solo si fue guardado explícitamente)
+    // auto-play-after-translate
     const autoPlay = document.getElementById('auto-play-after-translate');
     if (autoPlay) {
         const saved = uGet('toggle_auto_play');
         if (saved !== null) autoPlay.checked = saved === 'true';
     }
 
-    // auto-next-chapter (default: true — igual)
+    // auto-next-chapter
     const autoNext = document.getElementById('auto-next-chapter');
     if (autoNext) {
         const saved = uGet('toggle_auto_next');
         if (saved !== null) autoNext.checked = saved === 'true';
     }
 
-    // auto-onoma — clave usada por grammar.js: 'auto_onoma'
+    // auto-onoma
     const autoOnoma = document.getElementById('auto-onoma');
     if (autoOnoma) {
         const saved = uGet('auto_onoma');
         if (saved !== null) {
             autoOnoma.checked = saved === 'true';
-            // Sincronizar variable interna directamente (toggleAutoOnoma llamaría
-            // marcarCambioPendiente, que no queremos al inicio)
             if (typeof autoReemplazarOnomatopeyas !== 'undefined') {
                 autoReemplazarOnomatopeyas = autoOnoma.checked;
             }
@@ -310,7 +419,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // grammar-review — clave usada por grammar.js: 'grammar_review_activo'
+    // grammar-review
     const gramReview = document.getElementById('grammar-review');
     if (gramReview) {
         const saved = uGet('grammar_review_activo');
@@ -326,4 +435,269 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     }
+
+    // btn-tts-servidor-live: restaurar estado visual (el valor ya se cargó en tts.js)
+    // _sincronizarBtnServidorLive() puede no estar disponible si tts.js aún no cargó,
+    // por eso usamos un pequeño defer.
+    setTimeout(() => {
+        if (typeof _sincronizarBtnServidorLive === 'function') {
+            _sincronizarBtnServidorLive();
+        }
+    }, 0);
+
+    // ── Sliders TTS ──
+    const rateControl = document.getElementById('rate-control');
+    const rateValue = document.getElementById('rate-value');
+    const savedRate = uGet('tts_rate');
+    if (rateControl && savedRate !== null) {
+        rateControl.value = savedRate;
+        if (rateValue) rateValue.textContent = savedRate;
+    }
+
+    const pitchControl = document.getElementById('pitch-control');
+    const pitchValue = document.getElementById('pitch-value');
+    const savedPitch = uGet('tts_pitch');
+    if (pitchControl && savedPitch !== null) {
+        pitchControl.value = savedPitch;
+        if (pitchValue) pitchValue.textContent = savedPitch;
+    }
+
+    const volumeControl = document.getElementById('volume-control');
+    const volumeValue = document.getElementById('volume-value');
+    const savedVolume = uGet('tts_volume');
+    if (volumeControl && savedVolume !== null) {
+        volumeControl.value = savedVolume;
+        if (volumeValue) volumeValue.textContent = savedVolume;
+    }
+}
+
+// ── Handlers de guardado para toggles del sidebar que no tienen módulo propio ──
+// Se definen aquí (init.js carga último) para que no dependan del orden de carga
+// de grammar.js, tts.js, etc.
+
+window.toggleTTSHumanizer = function () {
+    const cb = document.getElementById('tts-humanizer');
+    if (!cb) return;
+    const checked = cb.checked;
+    uSet('toggle_tts_humanizer', checked);
+    if (typeof ttsHumanizerActivo !== 'undefined') ttsHumanizerActivo = checked;
+    const panel = document.getElementById('claude-key-panel');
+    if (panel) panel.style.display = checked ? 'block' : 'none';
+    const humStatus = document.getElementById('humanizer-status');
+    if (humStatus) {
+        humStatus.textContent = checked
+            ? (typeof claudeApiKey !== 'undefined' && claudeApiKey ? '✓ activo' : '⚠ necesita API key')
+            : 'Desactivado';
+    }
+    marcarCambioPendiente();
+};
+
+window.toggleAutoOnoma = function () {
+    const cb = document.getElementById('auto-onoma');
+    if (!cb) return;
+    const checked = cb.checked;
+    uSet('auto_onoma', checked);
+    if (typeof autoReemplazarOnomatopeyas !== 'undefined') autoReemplazarOnomatopeyas = checked;
+    const statusEl = document.getElementById('auto-onoma-status');
+    if (statusEl) {
+        statusEl.textContent = checked ? '✓ Activo' : 'Desactivado';
+        statusEl.style.color = checked ? 'var(--accent2)' : '';
+    }
+};
+
+window.toggleGrammarReview = function () {
+    const cb = document.getElementById('grammar-review');
+    if (!cb) return;
+    const checked = cb.checked;
+    uSet('grammar_review_activo', checked);
+    if (typeof grammarReviewActivo !== 'undefined') grammarReviewActivo = checked;
+    const statusEl = document.getElementById('grammar-review-status');
+    if (statusEl) {
+        statusEl.textContent = checked ? '✓ Activo' : 'Desactivado';
+        statusEl.style.color = checked ? 'var(--accent2)' : '';
+    }
+};
+
+// ── Reaplicar toggles cuando la sesión auth resuelve ──
+document.addEventListener('auth:ready', (e) => {
+    const userId = e.detail?.user?.id ?? null;
+    console.log(`[Prefs] auth:ready — userId: ${userId} | prefijo: ${uGetPrefix()}`);
+
+    _restaurarToggles();
+    _restaurarVoces();
+
+    // Sincronizar btn-tts-servidor-live
+    const savedLocal = uGet('tts_servidor_live');
+    if (savedLocal !== null && typeof _sincronizarBtnServidorLive === 'function') {
+        const debeEstarActivo = savedLocal === 'true';
+        const btn = document.getElementById('btn-tts-servidor-live');
+        const btnActivo = btn && btn.classList.contains('active');
+        if (debeEstarActivo !== btnActivo && typeof toggleServidorLive === 'function') {
+            toggleServidorLive();
+        }
+    }
+
+    _registrarListenersPrefs();
 });
+
+// ═══════════════════════════════════════
+// RESTAURAR VOCES
+// ═══════════════════════════════════════
+function _restaurarVoces() {
+    const edgeVoice = uGet('edge_tts_voice');
+    if (edgeVoice) {
+        if (typeof setEdgeTtsVoice === 'function') {
+            setEdgeTtsVoice(edgeVoice);
+        } else {
+            const sel = document.getElementById('edge-voice-select');
+            if (sel) sel.value = edgeVoice;
+        }
+    }
+    const voiceIdx = uGet('tts_voice_idx');
+    if (voiceIdx !== null) {
+        const sel = document.getElementById('voice-select');
+        if (sel && sel.querySelector(`option[value="${voiceIdx}"]`)) sel.value = voiceIdx;
+    }
+    // Después de restaurar, no debe haber diff → ocultar botones
+    _actualizarBtnVozPredeterminada();
+}
+
+// ═══════════════════════════════════════
+// BOTÓN "⭐ Predeterminado" — voz TTS
+// Aparece al lado del selector activo cuando la voz difiere de uStorage.
+// Usa clase CSS .btn-voz-default (definida en style.css).
+// ═══════════════════════════════════════
+
+function _edgeSelVisible() {
+    const s = document.getElementById('edge-voice-select');
+    return s && s.style.display !== 'none';
+}
+
+function _vozActualDifiere() {
+    if (_edgeSelVisible()) {
+        const sel = document.getElementById('edge-voice-select');
+        const stored = uGet('edge_tts_voice');
+        // null = nunca guardada → siempre ofrecer guardar si hay valor seleccionado
+        return sel && sel.value && (stored === null || sel.value !== stored);
+    } else {
+        const sel = document.getElementById('voice-select');
+        const stored = uGet('tts_voice_idx');
+        return sel && sel.value && (stored === null || sel.value !== stored);
+    }
+}
+
+function _actualizarBtnVozPredeterminada() {
+    const difiere = _vozActualDifiere();
+    const edgeVisible = _edgeSelVisible();
+    const btnEdge = document.getElementById('btn-edge-voz-predeterminada');
+    const btnNative = document.getElementById('btn-voz-predeterminada');
+    // Usar inline-flex para respetar el layout flexbox de .tts-control-bar
+    if (btnEdge) btnEdge.style.display = (edgeVisible && difiere) ? 'inline-flex' : 'none';
+    if (btnNative) btnNative.style.display = (!edgeVisible && difiere) ? 'inline-flex' : 'none';
+}
+
+window.guardarVozPredeterminada = function () {
+    if (_edgeSelVisible()) {
+        const sel = document.getElementById('edge-voice-select');
+        if (sel && sel.value) {
+            uSet('edge_tts_voice', sel.value);
+            console.log(`[Prefs] Voz Edge guardada: ${sel.value}`);
+        }
+    } else {
+        const sel = document.getElementById('voice-select');
+        if (sel && sel.value) {
+            uSet('tts_voice_idx', sel.value);
+            console.log(`[Prefs] Voz navegador guardada: ${sel.value}`);
+        }
+    }
+    _actualizarBtnVozPredeterminada();
+    mostrarNotificacion('⭐ Voz guardada como predeterminada');
+};
+
+// ═══════════════════════════════════════
+// GUARDAR PREFERENCIAS (toggles)
+// ═══════════════════════════════════════
+
+const _PREFS_TOGGLES = {
+    'auto-translate': 'toggle_auto_translate',
+    'tts-humanizer': 'toggle_tts_humanizer',
+    'auto-play-after-translate': 'toggle_auto_play',
+    'auto-next-chapter': 'toggle_auto_next',
+    'auto-onoma': 'auto_onoma',
+    'grammar-review': 'grammar_review_activo',
+};
+
+let _ttsBtnObserver = null;
+let _restaurandoPrefs = false;
+
+function _leerEstadoBtnTTS() {
+    const btn = document.getElementById('btn-tts-servidor-live');
+    return btn ? btn.classList.contains('active') : false;
+}
+
+function _hayDiffPrefs() {
+    for (const [id, storageKey] of Object.entries(_PREFS_TOGGLES)) {
+        const el = document.getElementById(id);
+        const raw = uGet(storageKey);
+        if (raw !== null && (el ? el.checked : false) !== (raw === 'true')) return true;
+    }
+    const ttsRaw = uGet('tts_servidor_live');
+    if (ttsRaw !== null && _leerEstadoBtnTTS() !== (ttsRaw === 'true')) return true;
+    return false;
+}
+
+function _actualizarBtnGuardarPrefs() {
+    if (_restaurandoPrefs) return;
+    const btn = document.getElementById('btn-guardar-prefs');
+    if (!btn) return;
+    btn.style.display = _hayDiffPrefs() ? 'block' : 'none';
+}
+
+window.guardarTodasPreferencias = function () {
+    console.log(`[Prefs] Guardando — prefijo: ${uGetPrefix()}`);
+    for (const [id, storageKey] of Object.entries(_PREFS_TOGGLES)) {
+        const el = document.getElementById(id);
+        uSet(storageKey, el ? el.checked : false);
+    }
+    uSet('tts_servidor_live', _leerEstadoBtnTTS());
+    const btn = document.getElementById('btn-guardar-prefs');
+    if (btn) btn.style.display = 'none';
+    mostrarNotificacion('✓ Preferencias guardadas');
+};
+
+function _registrarListenersPrefs() {
+    console.log(`[Prefs] _registrarListenersPrefs() — prefijo: ${uGetPrefix()}`);
+    if (_ttsBtnObserver) { _ttsBtnObserver.disconnect(); _ttsBtnObserver = null; }
+
+    _restaurandoPrefs = true;
+    setTimeout(() => {
+        _restaurandoPrefs = false;
+
+        // Toggles → botón guardar prefs
+        for (const id of Object.keys(_PREFS_TOGGLES)) {
+            const el = document.getElementById(id);
+            if (!el) continue;
+            el.removeEventListener('change', _actualizarBtnGuardarPrefs);
+            el.addEventListener('change', _actualizarBtnGuardarPrefs);
+        }
+
+        // Selects de voz → botón ⭐ predeterminado
+        ['edge-voice-select', 'voice-select'].forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.removeEventListener('change', _actualizarBtnVozPredeterminada);
+            el.addEventListener('change', _actualizarBtnVozPredeterminada);
+        });
+
+        // MutationObserver en btn-tts-servidor-live
+        const btnTTS = document.getElementById('btn-tts-servidor-live');
+        if (btnTTS) {
+            _ttsBtnObserver = new MutationObserver(() => {
+                if (_restaurandoPrefs) return;
+                _actualizarBtnGuardarPrefs();
+                _actualizarBtnVozPredeterminada(); // re-evaluar qué selector está visible
+            });
+            _ttsBtnObserver.observe(btnTTS, { attributes: true, attributeFilter: ['class'] });
+        }
+    }, 400);
+}

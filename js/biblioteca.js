@@ -18,37 +18,37 @@
     'use strict';
 
     // ─── CONSTANTES ───────────────────────────────────────────────
-    const IDB_NAME    = 'totalreader_biblioteca';
+    const IDB_NAME = 'totalreader_biblioteca';
     const IDB_VERSION = 1;
-    const IDB_STORE   = 'archivos';
-    const SB_TABLE    = 'biblioteca';
-    const META_KEY    = 'biblioteca_meta'; // uStorage fallback para guests
+    const IDB_STORE = 'archivos';
+    const SB_TABLE = 'biblioteca';
+    const META_KEY = 'biblioteca_meta'; // uStorage fallback para guests
 
     // Formatos aceptados por el lector
     const FORMATOS_ACEPTADOS = [
-        'epub','pdf','txt','html','htm','fb2','fb3',
-        'docx','rtf','odt','mobi','prc','azw3','azw','cbz','cbr'
+        'epub', 'pdf', 'txt', 'html', 'htm', 'fb2', 'fb3',
+        'docx', 'rtf', 'odt', 'mobi', 'prc', 'azw3', 'azw', 'cbz', 'cbr'
     ];
 
     // Paletas procedurales para portadas sin imagen
     const COVER_PALETTES = [
-        ['#1a2a1a','#3a6a3a','#7eb89a'],
-        ['#2a1a0a','#6a3a0a','#c8a96e'],
-        ['#1a1a2a','#3a3a6a','#8a8ac8'],
-        ['#2a0a0a','#6a1a1a','#c87a7a'],
-        ['#0a2a2a','#1a5a5a','#5ab8b8'],
-        ['#1a1a0a','#4a4a1a','#a8a860'],
-        ['#2a0a1a','#6a1a4a','#c87ab0'],
+        ['#1a2a1a', '#3a6a3a', '#7eb89a'],
+        ['#2a1a0a', '#6a3a0a', '#c8a96e'],
+        ['#1a1a2a', '#3a3a6a', '#8a8ac8'],
+        ['#2a0a0a', '#6a1a1a', '#c87a7a'],
+        ['#0a2a2a', '#1a5a5a', '#5ab8b8'],
+        ['#1a1a0a', '#4a4a1a', '#a8a860'],
+        ['#2a0a1a', '#6a1a4a', '#c87ab0'],
     ];
 
     // ─── ESTADO ───────────────────────────────────────────────────
-    let _idb        = null;   // instancia de IDBDatabase
-    let _libros     = [];     // array de metadata en memoria
-    let _vista      = 'grid'; // 'grid' | 'lista'
-    let _tab        = 'todos';
-    let _busqueda   = '';
-    let _orden      = 'reciente';
-    let _abierta    = false;
+    let _idb = null;   // instancia de IDBDatabase
+    let _libros = [];     // array de metadata en memoria
+    let _vista = 'grid'; // 'grid' | 'lista'
+    let _tab = 'todos';
+    let _busqueda = '';
+    let _orden = 'reciente';
+    let _abierta = false;
 
     // ─── INIT ─────────────────────────────────────────────────────
 
@@ -60,7 +60,7 @@
         _render();
 
         // Escuchar eventos de auth para sincronizar con Supabase
-        document.addEventListener('auth:signin',  () => _sincronizarConSupabase());
+        document.addEventListener('auth:signin', () => _sincronizarConSupabase());
         document.addEventListener('auth:signout', () => _cargarMeta());
     }
 
@@ -76,7 +76,7 @@
                 }
             };
             req.onsuccess = e => { _idb = e.target.result; resolve(); };
-            req.onerror   = e => { console.error('[bib] IDB error:', e); resolve(); };
+            req.onerror = e => { console.error('[bib] IDB error:', e); resolve(); };
         });
     }
 
@@ -96,7 +96,7 @@
             const tx = _idb.transaction(IDB_STORE, 'readonly');
             const req = tx.objectStore(IDB_STORE).get(id);
             req.onsuccess = e => resolve(e.target.result);
-            req.onerror   = reject;
+            req.onerror = reject;
         });
     }
 
@@ -194,34 +194,34 @@
     // Mapeo Supabase ↔ local
     function _mapSupabaseALocal(row) {
         return {
-            id:           row.id,
-            titulo:       row.titulo,
-            autor:        row.autor || '',
-            formato:      row.formato,
-            portada:      row.portada || null,
-            progreso:     row.progreso || 0,
-            capActual:    row.cap_actual || 0,
-            totalCaps:    row.total_caps || 0,
-            idbKey:       row.idb_key,
-            tamano:       row.tamano || 0,
+            id: row.id,
+            titulo: row.titulo,
+            autor: row.autor || '',
+            formato: row.formato,
+            portada: row.portada || null,
+            progreso: row.progreso || 0,
+            capActual: row.cap_actual || 0,
+            totalCaps: row.total_caps || 0,
+            idbKey: row.idb_key,
+            tamano: row.tamano || 0,
             fechaAgregado: new Date(row.fecha_agregado).getTime(),
-            activo:       false,
+            activo: false,
         };
     }
 
     function _mapLocalASupabase(libro) {
         return {
-            id:             libro.id,
-            user_id:        typeof getUserId === 'function' ? getUserId() : null,
-            titulo:         libro.titulo,
-            autor:          libro.autor || null,
-            formato:        libro.formato,
-            portada:        libro.portada || null,
-            progreso:       libro.progreso || 0,
-            cap_actual:     libro.capActual || 0,
-            total_caps:     libro.totalCaps || 0,
-            idb_key:        libro.idbKey,
-            tamano:         libro.tamano || 0,
+            id: libro.id,
+            user_id: typeof getUserId === 'function' ? getUserId() : null,
+            titulo: libro.titulo,
+            autor: libro.autor || null,
+            formato: libro.formato,
+            portada: libro.portada || null,
+            progreso: libro.progreso || 0,
+            cap_actual: libro.capActual || 0,
+            total_caps: libro.totalCaps || 0,
+            idb_key: libro.idbKey,
+            tamano: libro.tamano || 0,
             fecha_agregado: new Date(libro.fechaAgregado).toISOString(),
         };
     }
@@ -244,21 +244,21 @@
         const nombreLimpio = file.name.replace(/\.(epub|pdf|txt|html?|fb[23]|docx|rtf|odt|mobi|prc|azw3?|cbz|cbr)$/i, '');
         const partes = nombreLimpio.split(' - ');
         const titulo = partes[0]?.trim() || nombreLimpio;
-        const autor  = partes[1]?.trim() || '';
+        const autor = partes[1]?.trim() || '';
 
         const libro = {
             id,
             titulo,
             autor,
-            formato:       ext,
-            portada:       null,
-            progreso:      0,
-            capActual:     0,
-            totalCaps:     0,
-            idbKey:        id,
-            tamano:        file.size,
+            formato: ext,
+            portada: null,
+            progreso: 0,
+            capActual: 0,
+            totalCaps: 0,
+            idbKey: id,
+            tamano: file.size,
             fechaAgregado: Date.now(),
-            activo:        false,
+            activo: false,
         };
 
         // Mostrar feedback inmediato
@@ -374,9 +374,9 @@
         );
         if (!libro) return;
 
-        libro.capActual  = capActual;
-        libro.totalCaps  = totalCaps;
-        libro.progreso   = totalCaps > 0 ? capActual / totalCaps : 0;
+        libro.capActual = capActual;
+        libro.totalCaps = totalCaps;
+        libro.progreso = totalCaps > 0 ? capActual / totalCaps : 0;
 
         _persistirMetaLocal();
         await _guardarMetaSupabase(libro);
@@ -439,8 +439,8 @@
         let libros = [..._libros];
 
         // Filtro tab
-        if (_tab === 'epub')    libros = libros.filter(l => l.formato === 'epub');
-        if (_tab === 'pdf')     libros = libros.filter(l => l.formato === 'pdf');
+        if (_tab === 'epub') libros = libros.filter(l => l.formato === 'epub');
+        if (_tab === 'pdf') libros = libros.filter(l => l.formato === 'pdf');
         if (_tab === 'leyendo') libros = libros.filter(l => l.progreso > 0);
 
         // Filtro búsqueda
@@ -453,10 +453,10 @@
         }
 
         // Ordenar
-        if (_orden === 'titulo')   libros.sort((a,b) => a.titulo.localeCompare(b.titulo));
-        if (_orden === 'autor')    libros.sort((a,b) => (a.autor||'').localeCompare(b.autor||''));
-        if (_orden === 'reciente') libros.sort((a,b) => b.fechaAgregado - a.fechaAgregado);
-        if (_orden === 'progreso') libros.sort((a,b) => b.progreso - a.progreso);
+        if (_orden === 'titulo') libros.sort((a, b) => a.titulo.localeCompare(b.titulo));
+        if (_orden === 'autor') libros.sort((a, b) => (a.autor || '').localeCompare(b.autor || ''));
+        if (_orden === 'reciente') libros.sort((a, b) => b.fechaAgregado - a.fechaAgregado);
+        if (_orden === 'progreso') libros.sort((a, b) => b.progreso - a.progreso);
 
         if (countEl) {
             const n = _libros.length;
@@ -474,8 +474,8 @@
                     </div>
                     <div class="bib-empty-sub">
                         ${_busqueda
-                            ? `No hay libros que coincidan con "${_busqueda}"`
-                            : 'Agregá archivos EPUB o PDF\narrastrándolos aquí o con el botón +'}
+                    ? `No hay libros que coincidan con "${_busqueda}"`
+                    : 'Agregá archivos EPUB o PDF\narrastrándolos aquí o con el botón +'}
                     </div>
                     ${!_busqueda ? `<button class="bib-empty-btn" onclick="window._bibAgregarClick()">📂 Agregar libro</button>` : ''}
                 </div>`;
@@ -493,8 +493,8 @@
 
     function _renderCard(l, idx) {
         const palette = COVER_PALETTES[_hashTitulo(l.titulo)];
-        const iconos  = { epub:'📖', pdf:'📄', txt:'📝' };
-        const pct     = Math.round(l.progreso * 100);
+        const iconos = { epub: '📖', pdf: '📄', txt: '📝' };
+        const pct = Math.round(l.progreso * 100);
 
         const coverHTML = l.portada
             ? `<img class="libro-cover" src="${l.portada}" alt="${_esc(l.titulo)}" loading="lazy">`
@@ -534,8 +534,8 @@
 
     function _esc(str) {
         return String(str || '')
-            .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-            .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
     // ─── INYECCIÓN HTML ───────────────────────────────────────────
@@ -603,7 +603,32 @@
                     <button class="bib-view-btn active" id="bib-btn-grid"  onclick="window._bibVista('grid')"  title="Grilla">⊞</button>
                     <button class="bib-view-btn"         id="bib-btn-lista" onclick="window._bibVista('lista')" title="Lista">☰</button>
                 </div>
+                <button class="bib-btn-url" onclick="window._bibAgregarURLClick()" title="Agregar desde URL web">🌐</button>
                 <button class="bib-btn-agregar" onclick="window._bibAgregarClick()">+ Agregar</button>
+            </div>
+
+            <!-- MODAL URL -->
+            <div class="bib-url-modal" id="bib-url-modal" style="display:none;">
+                <div class="bib-url-modal-inner">
+                    <div class="bib-url-modal-title">🌐 Agregar desde URL</div>
+                    <div class="bib-url-modal-hint">Soporta Google Drive · Dropbox · OneDrive · Box · GitHub · URLs directas</div>
+                    <div class="bib-url-modal-hint bib-url-tip" id="bib-url-cloud-tip">
+                        💡 <strong>Google Drive:</strong> El archivo debe ser público.<br>
+                        Compartir → <em>"Cualquier persona con el enlace"</em> → pegá la URL.
+                    </div>
+                    <input class="bib-url-input" id="bib-url-input" type="url"
+                           placeholder="https://drive.google.com/file/d/…/view"
+                           autocomplete="off" spellcheck="false"
+                           oninput="window._bibURLHint(this.value)">
+                    <input class="bib-url-input" id="bib-url-titulo" type="text"
+                           placeholder="Título (opcional — se auto-detecta del nombre)"
+                           autocomplete="off">
+                    <div class="bib-url-actions">
+                        <button class="bib-url-btn-cancel" onclick="window._bibCerrarURLModal()">Cancelar</button>
+                        <button class="bib-url-btn-ok" id="bib-url-btn-ok" onclick="window._bibAgregarDesdeURL()">⬇ Descargar y agregar</button>
+                    </div>
+                    <div class="bib-url-status" id="bib-url-status"></div>
+                </div>
             </div>
 
             <!-- GRID -->
@@ -1117,18 +1142,518 @@
     background: linear-gradient(90deg, var(--accent2), var(--accent));
     border-radius: 3px;
 }
-.bib-storage-label { font-size: 0.5rem; color: var(--text-dim); white-space: nowrap; }
+.bib-btn-url {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-dim);
+    font-size: 0.75rem;
+    padding: 3px 7px;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+    line-height: 1.4;
+}
+.bib-btn-url:hover { border-color: var(--accent2); color: var(--accent2); }
+
+/* ── Modal URL ── */
+.bib-url-modal {
+    position: absolute;
+    inset: 0;
+    background: rgba(10,10,10,0.75);
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    backdrop-filter: blur(3px);
+    animation: bibFadeIn 0.15s ease;
+}
+@keyframes bibFadeIn { from { opacity:0; } to { opacity:1; } }
+.bib-url-modal-inner {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 18px 16px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+    max-width: 340px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+}
+.bib-url-modal-title {
+    font-size: 0.62rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent2);
+}
+.bib-url-modal-hint {
+    font-size: 0.55rem;
+    color: var(--text-dim);
+    line-height: 1.5;
+}
+.bib-url-input {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.6rem;
+    padding: 7px 10px;
+    outline: none;
+    transition: border-color 0.2s;
+    box-sizing: border-box;
+}
+.bib-url-input:focus { border-color: var(--accent); }
+.bib-url-input::placeholder { color: var(--text-dim); }
+.bib-url-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 2px;
+}
+.bib-url-btn-cancel {
+    flex: 1;
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-dim);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.58rem;
+    padding: 6px;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+}
+.bib-url-btn-cancel:hover { border-color: var(--accent); color: var(--accent); }
+.bib-url-btn-ok {
+    flex: 2;
+    background: var(--accent2);
+    border: none;
+    border-radius: 4px;
+    color: var(--bg);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.58rem;
+    font-weight: 500;
+    padding: 6px;
+    cursor: pointer;
+    transition: opacity 0.15s;
+}
+.bib-url-btn-ok:hover { opacity: 0.85; }
+.bib-url-btn-ok:disabled { opacity: 0.5; cursor: default; }
+.bib-url-status {
+    font-size: 0.55rem;
+    min-height: 14px;
+    color: var(--text-dim);
+    text-align: center;
+}
+.bib-url-status.error { color: #ff6b6b; }
+.bib-url-status.ok    { color: var(--accent2); }
+.bib-url-tip {
+    background: rgba(126,184,154,0.06);
+    border: 1px solid rgba(126,184,154,0.18);
+    border-radius: 4px;
+    padding: 6px 8px;
+    line-height: 1.6;
+    font-size: 0.52rem !important;
+}
+.bib-url-tip strong { color: var(--accent2); }
+.bib-url-tip em     { color: var(--text-muted); font-style: normal; }
         `;
         document.head.appendChild(style);
     }
 
+    // ─── IMPORTAR DESDE URL ───────────────────────────────────────
+
+    function _abrirURLModal() {
+        const modal = document.getElementById('bib-url-modal');
+        if (!modal) return;
+        modal.style.display = 'flex';
+        const input = document.getElementById('bib-url-input');
+        if (input) { input.value = ''; input.focus(); }
+        const tituloInput = document.getElementById('bib-url-titulo');
+        if (tituloInput) tituloInput.value = '';
+        _setURLStatus('', '');
+        const btn = document.getElementById('bib-url-btn-ok');
+        if (btn) { btn.disabled = false; btn.textContent = '⬇ Descargar y agregar'; }
+    }
+
+    function _cerrarURLModal() {
+        const modal = document.getElementById('bib-url-modal');
+        if (modal) modal.style.display = 'none';
+    }
+
+    function _setURLStatus(msg, tipo) {
+        const el = document.getElementById('bib-url-status');
+        if (!el) return;
+        el.textContent = msg;
+        el.className = `bib-url-status${tipo ? ' ' + tipo : ''}`;
+    }
+
+    // ─── RESOLVER URLS DE SERVICIOS CLOUD ────────────────────────
+    // Transforma URLs de visor/compartir en URLs de descarga directa.
+    //
+    // Servicios soportados:
+    //   1. Google Drive   — proxy requerido (CORS bloqueado)
+    //   2. Dropbox        — dl.dropboxusercontent.com + mantener rlkey
+    //   3. OneDrive       — proxy requerido (302 no-CORS)
+    //   4. Box            — proxy para links /s/, directo para /shared/static/
+    //   5. GitHub         — raw.githubusercontent.com CORS nativo ✓
+    //
+    // Retorna: { downloadURL, ext, nombreSugerido, servicio, corsNativo, needsProxy, error? }
+
+    function _resolverURLCloud(rawURL) {
+        let url;
+        try { url = new URL(rawURL); } catch { return null; }
+
+        const host = url.hostname.toLowerCase();
+
+        // ── 1. Google Drive ───────────────────────────────────────
+        if (host === 'drive.google.com' || host === 'docs.google.com') {
+            // Google Docs/Sheets/Slides → exportar
+            const matchDoc = url.pathname.match(/\/(document|spreadsheets|presentation)\/d\/([a-zA-Z0-9_-]+)/);
+            if (matchDoc) {
+                const tipo = matchDoc[1];
+                const docId = matchDoc[2];
+                const fmt = tipo === 'document' ? 'docx' : tipo === 'spreadsheets' ? 'xlsx' : 'pdf';
+                return {
+                    downloadURL: `https://docs.google.com/feeds/download/${tipo}/Export?id=${docId}&exportFormat=${fmt}`,
+                    ext: fmt,
+                    nombreSugerido: `documento-google.${fmt}`,
+                    servicio: 'Google Docs',
+                    corsNativo: false,
+                    needsProxy: true,
+                };
+            }
+            let fileId = url.pathname.match(/\/file\/d\/([a-zA-Z0-9_-]+)/)?.[1]
+                || url.searchParams.get('id');
+            if (!fileId) return { error: 'No se pudo extraer el ID de Google Drive. Usá el enlace "Compartir" del archivo.' };
+            return {
+                downloadURL: `https://drive.google.com/uc?export=download&id=${fileId}&confirm=t`,
+                ext: null,
+                nombreSugerido: 'archivo-gdrive',
+                fileId,
+                servicio: 'Google Drive',
+                corsNativo: false,
+                needsProxy: true,
+                instruccion: 'El archivo debe ser público: Drive → Compartir → "Cualquier persona con el enlace".',
+            };
+        }
+
+        // ── 2. Dropbox ────────────────────────────────────────────
+        // FIX CRÍTICO: mantener rlkey (obligatorio en /scl/fi/ links)
+        // Cambiar host a dl.dropboxusercontent.com que tiene CORS habilitado
+        // Usar raw=1 en vez de dl=1 para evitar redirect que rompe CORS
+        if (host === 'www.dropbox.com' || host === 'dropbox.com' || host === 'dl.dropboxusercontent.com') {
+            const pathParts = url.pathname.split('/');
+            const fileName = decodeURIComponent(pathParts[pathParts.length - 1] || 'archivo');
+            const extMatch = fileName.match(/\.([a-zA-Z0-9]+)$/);
+
+            const cdnURL = new URL(rawURL);
+            cdnURL.hostname = 'dl.dropboxusercontent.com';
+            cdnURL.searchParams.delete('dl');      // quitar dl=0/dl=1
+            cdnURL.searchParams.set('raw', '1');   // raw=1 sirve los bytes directos
+            // rlkey SE MANTIENE — es obligatorio en links /scl/fi/
+
+            return {
+                downloadURL: cdnURL.toString(),
+                ext: extMatch ? extMatch[1].toLowerCase() : null,
+                nombreSugerido: fileName,
+                servicio: 'Dropbox',
+                corsNativo: true,
+                needsProxy: false,
+            };
+        }
+
+        // ── 3. OneDrive / SharePoint ──────────────────────────────
+        if (host === '1drv.ms' || host.includes('onedrive.live.com') || host.includes('sharepoint.com')) {
+            const resid = url.searchParams.get('resid');
+            const authkey = url.searchParams.get('authkey') || url.searchParams.get('AuthKey') || '';
+            const dlURL = resid
+                ? `https://onedrive.live.com/download?resid=${resid}&authkey=${authkey}`
+                : rawURL;
+            const pathParts = url.pathname.split('/');
+            const fileName = decodeURIComponent(pathParts[pathParts.length - 1] || 'archivo-onedrive');
+            const extMatch = fileName.match(/\.([a-zA-Z0-9]+)$/);
+            return {
+                downloadURL: dlURL,
+                ext: extMatch ? extMatch[1].toLowerCase() : null,
+                nombreSugerido: fileName,
+                servicio: 'OneDrive',
+                corsNativo: false,
+                needsProxy: true,
+                instruccion: 'Verificá que el archivo sea compartido públicamente desde OneDrive.',
+            };
+        }
+
+        // ── 4. Box ────────────────────────────────────────────────
+        if (host === 'app.box.com' || host === 'box.com' || host === 'www.box.com') {
+            const pathParts = url.pathname.split('/');
+            const fileName = decodeURIComponent(pathParts[pathParts.length - 1] || 'archivo');
+            const extMatch = fileName.match(/\.([a-zA-Z0-9]+)$/);
+            const esDirecta = url.pathname.includes('/shared/static/');
+            return {
+                downloadURL: rawURL,
+                ext: extMatch ? extMatch[1].toLowerCase() : null,
+                nombreSugerido: fileName,
+                servicio: 'Box',
+                corsNativo: esDirecta,
+                needsProxy: !esDirecta,
+                instruccion: 'En Box usar "Compartir" → "Crear enlace directo" para mejor compatibilidad.',
+            };
+        }
+
+        // ── 5. GitHub ─────────────────────────────────────────────
+        // github.com/.../blob/... → raw.githubusercontent.com (CORS nativo)
+        if (host === 'github.com') {
+            const match = url.pathname.match(/^\/([^/]+)\/([^/]+)\/blob\/(.+)$/);
+            if (match) {
+                const [, user, repo, rest] = match;
+                const rawGHURL = `https://raw.githubusercontent.com/${user}/${repo}/${rest}`;
+                const pathParts = rest.split('/');
+                const fileName = decodeURIComponent(pathParts[pathParts.length - 1] || 'archivo');
+                const extMatch = fileName.match(/\.([a-zA-Z0-9]+)$/);
+                return {
+                    downloadURL: rawGHURL,
+                    ext: extMatch ? extMatch[1].toLowerCase() : null,
+                    nombreSugerido: fileName,
+                    servicio: 'GitHub',
+                    corsNativo: true,
+                    needsProxy: false,
+                };
+            }
+        }
+        if (host === 'raw.githubusercontent.com') {
+            const pathParts = url.pathname.split('/');
+            const fileName = decodeURIComponent(pathParts[pathParts.length - 1] || 'archivo');
+            const extMatch = fileName.match(/\.([a-zA-Z0-9]+)$/);
+            return {
+                downloadURL: rawURL,
+                ext: extMatch ? extMatch[1].toLowerCase() : null,
+                nombreSugerido: fileName,
+                servicio: 'GitHub',
+                corsNativo: true,
+                needsProxy: false,
+            };
+        }
+
+        // ── URL directa sin transformación ────────────────────────
+        const pathParts = url.pathname.split('/');
+        const rawFilename = decodeURIComponent(pathParts[pathParts.length - 1] || 'archivo');
+        const extMatch = rawFilename.match(/\.([a-zA-Z0-9]+)(\?|$)/);
+        return {
+            downloadURL: rawURL,
+            ext: extMatch ? extMatch[1].toLowerCase() : null,
+            nombreSugerido: rawFilename || 'archivo',
+            servicio: null,
+            corsNativo: false,
+            needsProxy: false,
+        };
+    }
+
+    // ─── DETECTAR MIME → EXTENSIÓN ────────────────────────────────
+    const MIME_A_EXT = {
+        'application/epub+zip': 'epub',
+        'application/pdf': 'pdf',
+        'text/plain': 'txt',
+        'text/html': null,
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+        'application/msword': 'doc',
+        'application/x-mobipocket-ebook': 'mobi',
+        'application/x-fictionbook+xml': 'fb2',
+        'application/zip': 'epub',
+        'application/octet-stream': null,
+    };
+
+    function _extDesdeMime(contentType) {
+        if (!contentType) return null;
+        const base = contentType.split(';')[0].trim().toLowerCase();
+        return MIME_A_EXT[base] ?? null;
+    }
+
+    // ─── FUNCIÓN PRINCIPAL ────────────────────────────────────────
+
+    // Proxies CORS — solo para servidores que no admiten CORS nativo.
+    // Se prueban en orden con timeout individual.
+    const CORS_PROXIES = [
+        url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+        url => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
+        url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+    ];
+
+    // fetch con AbortController timeout
+    function _fetchTimeout(url, opts = {}, ms = 25000) {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), ms);
+        return fetch(url, { ...opts, signal: ctrl.signal })
+            .finally(() => clearTimeout(timer));
+    }
+
+    // Intenta fetch directo; si falla por CORS/red prueba proxies (salvo corsNativo=true).
+    // Retorna { resp, viaProxy } o lanza error.
+    async function _fetchConFallback(targetURL, corsNativo, onStatus) {
+        // 1. Intento directo (siempre primero)
+        try {
+            onStatus('Conectando...', '');
+            const resp = await _fetchTimeout(targetURL, { method: 'GET', mode: 'cors' }, 20000);
+            if (resp.ok) return { resp, viaProxy: false };
+            // HTTP error no-CORS (ej: 404, 500)
+            throw new Error(`HTTP ${resp.status} ${resp.statusText}`);
+        } catch (e) {
+            if (e.name === 'AbortError') throw new Error('Tiempo de espera agotado. El servidor no respondió.');
+            // Si es error de red/CORS y el servicio tiene CORS nativo → no hay proxy que ayude
+            if (corsNativo) throw new Error(e.message || 'Error de red');
+            // Solo continuar con proxies si fue CORS/red
+            const esCORSoRed = e.message.includes('Failed to fetch') ||
+                e.message.includes('NetworkError') ||
+                e.message.includes('Load failed') ||
+                e.message.includes('fetch');
+            if (!esCORSoRed) throw e;
+            console.warn('[bib] Fetch directo bloqueado, probando proxies:', e.message);
+        }
+
+        // 2. Proxies con timeout individual
+        for (let i = 0; i < CORS_PROXIES.length; i++) {
+            const proxyURL = CORS_PROXIES[i](targetURL);
+            try {
+                onStatus(`⏳ Proxy ${i + 1}/${CORS_PROXIES.length}...`, '');
+                const resp = await _fetchTimeout(proxyURL, { method: 'GET' }, 25000);
+                if (resp.ok) return { resp, viaProxy: true };
+                console.warn(`[bib] Proxy ${i + 1} devolvió ${resp.status}`);
+            } catch (e) {
+                const msg = e.name === 'AbortError' ? 'timeout' : e.message;
+                console.warn(`[bib] Proxy ${i + 1} falló: ${msg}`);
+            }
+        }
+
+        throw new Error('CORS_ALL_FAILED');
+    }
+
+    async function _agregarDesdeURL() {
+        const urlInput = document.getElementById('bib-url-input');
+        const tituloInput = document.getElementById('bib-url-titulo');
+        const btn = document.getElementById('bib-url-btn-ok');
+
+        const rawURL = (urlInput?.value || '').trim();
+        if (!rawURL) { _setURLStatus('⚠ Ingresá una URL', 'error'); return; }
+
+        // Resolver URL (detecta Drive, Dropbox, etc.)
+        const resolved = _resolverURLCloud(rawURL);
+        if (!resolved) { _setURLStatus('⚠ URL inválida', 'error'); return; }
+        if (resolved.error) { _setURLStatus(`⚠ ${resolved.error}`, 'error'); return; }
+
+        const { downloadURL, nombreSugerido, servicio, adviso, corsNativo } = resolved;
+        const tituloRaw = (tituloInput?.value || '').trim();
+
+        if (servicio) _setURLStatus(`🔗 Detectado: ${servicio} — preparando descarga...`, '');
+        if (btn) { btn.disabled = true; btn.textContent = '⏳ Descargando...'; }
+
+        try {
+            const { resp, viaProxy } = await _fetchConFallback(downloadURL, corsNativo || false, _setURLStatus);
+
+            // Detectar extensión desde Content-Type de la respuesta real
+            const contentType = resp.headers.get('content-type') || '';
+
+            // Si el Content-Type es HTML, el servidor devolvió una página de login/visor
+            if (contentType.includes('text/html')) {
+                throw new Error(
+                    servicio === 'Google Drive'
+                        ? 'Google Drive requiere que el archivo sea público: Compartir → "Cualquier persona con el enlace".'
+                        : 'El servidor devolvió una página HTML en vez del archivo. Usá un enlace de descarga directa.'
+                );
+            }
+
+            const extDesdeMime = _extDesdeMime(contentType);
+            const ext = resolved.ext || extDesdeMime;
+            if (!ext) throw new Error(`No se pudo determinar el tipo de archivo. Content-Type: "${contentType}"`);
+            if (!FORMATOS_ACEPTADOS.includes(ext)) {
+                throw new Error(`Formato .${ext} no soportado. Válidos: ${FORMATOS_ACEPTADOS.join(', ')}`);
+            }
+
+            _setURLStatus(`Recibiendo archivo${viaProxy ? ' (vía proxy)' : ''}...`, '');
+
+            // arrayBuffer con timeout de 60s para archivos grandes
+            const arrayBuffer = await Promise.race([
+                resp.arrayBuffer(),
+                new Promise((_, rej) =>
+                    setTimeout(() => rej(new Error('Tiempo de espera al leer el archivo (60s). El archivo puede ser demasiado grande para descarga directa.')), 60000)
+                ),
+            ]);
+
+            // Verificar que no sea HTML disfrazado (primeros bytes: '<!')
+            const primeros = new Uint8Array(arrayBuffer.slice(0, 5));
+            const eraHTML = primeros[0] === 0x3C &&
+                (primeros[1] === 0x21 || primeros[1] === 0x68 || primeros[1] === 0x48 || primeros[1] === 0x44);
+            if (eraHTML) {
+                throw new Error(
+                    servicio === 'Google Drive'
+                        ? 'Google Drive devolvió la página del visor. Verificá que el archivo sea público y usá el enlace de compartir.'
+                        : 'El servidor devolvió HTML en vez del archivo binario.'
+                );
+            }
+
+            const mimeBlob = contentType.split(';')[0].trim() || 'application/octet-stream';
+            const blob = new Blob([arrayBuffer], { type: mimeBlob });
+            const nombreBase = tituloRaw || nombreSugerido.replace(/\.[^.]+$/, '') || 'archivo';
+            const nombreFinal = `${nombreBase}.${ext}`;
+            const file = new File([blob], nombreFinal, { type: mimeBlob });
+
+            if (adviso) mostrarNotificacion(`ℹ️ ${adviso}`);
+            _cerrarURLModal();
+            await bibAgregarArchivo(file);
+
+        } catch (err) {
+            console.warn('[bib] Error importando URL:', err);
+            let msg;
+            if (err.message === 'CORS_ALL_FAILED') {
+                msg = servicio
+                    ? `⚠ ${servicio} bloqueó todos los intentos de descarga. Descargá el archivo manualmente y usá el botón + Agregar.`
+                    : '⚠ No se pudo descargar el archivo (bloqueado por CORS). Descargalo manualmente y agregalo con el botón + Agregar.';
+            } else {
+                msg = `⚠ ${err.message}`;
+            }
+            _setURLStatus(msg, 'error');
+            if (btn) { btn.disabled = false; btn.textContent = '⬇ Descargar y agregar'; }
+        }
+    }
+
     // ─── API PÚBLICA (expuesta en window) ─────────────────────────
 
-    window._bibAbrir        = bibAbrir;
-    window._bibCerrar       = bibCerrar;
-    window._bibAbrirLibro   = (id) => bibAbrirLibro(id);
-    window._bibEliminar     = (id) => bibEliminar(id);
+    window._bibAbrir = bibAbrir;
+    window._bibCerrar = bibCerrar;
+    window._bibAbrirLibro = (id) => bibAbrirLibro(id);
+    window._bibEliminar = (id) => bibEliminar(id);
     window._bibAgregarClick = () => document.getElementById('bib-file-input')?.click();
+    window._bibAgregarURLClick = _abrirURLModal;
+    window._bibCerrarURLModal = _cerrarURLModal;
+    window._bibAgregarDesdeURL = _agregarDesdeURL;
+
+    // Actualiza el tip del modal según el servicio detectado en tiempo real
+    window._bibURLHint = function (val) {
+        const tip = document.getElementById('bib-url-cloud-tip');
+        if (!tip) return;
+        const v = (val || '').toLowerCase();
+        if (v.includes('drive.google.com') || v.includes('docs.google.com')) {
+            tip.innerHTML = '💡 <strong>Google Drive:</strong> El archivo debe ser público.<br>Compartir → <em>"Cualquier persona con el enlace"</em> → pegá la URL de compartir.';
+            tip.style.display = 'block';
+        } else if (v.includes('dropbox.com')) {
+            tip.innerHTML = '💡 <strong>Dropbox:</strong> Se transforma automáticamente a descarga directa. Asegurate de compartir el link públicamente.';
+            tip.style.display = 'block';
+        } else if (v.includes('1drv.ms') || v.includes('onedrive.live.com') || v.includes('sharepoint.com')) {
+            tip.innerHTML = '💡 <strong>OneDrive:</strong> Usá "Compartir" → "Copiar vínculo" con acceso público (sin iniciar sesión).';
+            tip.style.display = 'block';
+        } else if (v.includes('box.com')) {
+            tip.innerHTML = '💡 <strong>Box:</strong> Compartir → "Crear enlace directo" para mejor compatibilidad.';
+            tip.style.display = 'block';
+        } else if (v.includes('github.com') || v.includes('raw.githubusercontent.com')) {
+            tip.innerHTML = '💡 <strong>GitHub:</strong> Se convierte automáticamente a raw. También podés pegar directamente la URL raw.';
+            tip.style.display = 'block';
+        } else if (v.length > 8) {
+            tip.innerHTML = '💡 URL directa a un archivo EPUB, PDF, TXT, DOCX, etc.';
+            tip.style.display = 'block';
+        } else {
+            tip.style.display = 'none';
+        }
+    };
 
     window._bibTab = (tab) => {
         _tab = tab;
