@@ -20,27 +20,27 @@
 // Credenciales opcionales de cuenta LT gratuita
 // Desbloquean 20 K chars/req y 75 K chars/min (vs ~1 500 chars anónimo)
 // Registro gratuito en: https://languagetool.org/es/cuenta
-let _ltUsername = localStorage.getItem('lt_username') || '';
-let _ltApiKey = localStorage.getItem('lt_apikey') || '';
+let _ltUsername = uGet('lt_username') || '';
+let _ltApiKey = uGet('lt_apikey') || '';
 
 function guardarLtCredenciales() {
     const u = document.getElementById('lt-username')?.value.trim() || '';
     const k = document.getElementById('lt-apikey')?.value.trim() || '';
     _ltUsername = u;
     _ltApiKey = k;
-    localStorage.setItem('lt_username', u);
-    localStorage.setItem('lt_apikey', k);
+    uSet('lt_username', u);
+    uSet('lt_apikey', k);
     const statusEl = document.getElementById('lt-cred-status');
     if (statusEl) statusEl.textContent = (u && k) ? '✓ guardadas' : '';
-    _ltCache = {};  // invalidar caché al cambiar credenciales
-    localStorage.removeItem('lt_cache');
+    _ltCache = {};
+    uRemove('lt_cache');
     if (typeof mostrarNotificacion === 'function')
         mostrarNotificacion(u && k ? '✓ Credenciales LT guardadas' : '✓ Credenciales LT borradas');
 }
 
 function toggleGrammarReview() {
     grammarReviewActivo = document.getElementById('grammar-review')?.checked ?? false;
-    try { localStorage.setItem('grammar_review_activo', grammarReviewActivo); } catch (e) { }
+    try { uSet('grammar_review_activo', grammarReviewActivo); } catch (e) { }
     const statusEl = document.getElementById('grammar-review-status');
     if (statusEl) {
         const modo = (_ltUsername && _ltApiKey) ? '· cuenta LT activa' : '· modo anónimo';
@@ -59,7 +59,7 @@ function toggleGrammarReview() {
 // Máximo 20 entradas (las más recientes).
 // ═══════════════════════════════════════
 let _ltCache = (() => {
-    try { return JSON.parse(localStorage.getItem('lt_cache') || '{}'); }
+    try { return JSON.parse(uGet('lt_cache') || '{}'); }
     catch (e) { return {}; }
 })();
 
@@ -76,7 +76,7 @@ function _guardarCacheTexto(hash, matches) {
     _ltCache[hash] = matches;
     const claves = Object.keys(_ltCache);
     if (claves.length > 20) delete _ltCache[claves[0]];
-    try { localStorage.setItem('lt_cache', JSON.stringify(_ltCache)); } catch (e) { /* cuota llena */ }
+    try { uSet('lt_cache', JSON.stringify(_ltCache)); } catch (e) { /* cuota llena */ }
 }
 
 // ═══════════════════════════════════════
@@ -782,7 +782,7 @@ async function revisarGramaticaYOnomatopeyas(texto) {
 
 function toggleAutoOnoma() {
     autoReemplazarOnomatopeyas = document.getElementById('auto-onoma')?.checked ?? false;
-    try { localStorage.setItem('auto_onoma', autoReemplazarOnomatopeyas); } catch (e) { }
+    try { uSet('auto_onoma', autoReemplazarOnomatopeyas); } catch (e) { }
     const statusEl = document.getElementById('auto-onoma-status');
     if (statusEl) {
         statusEl.textContent = autoReemplazarOnomatopeyas ? '✓ Activo' : 'Desactivado';
@@ -839,7 +839,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Checkbox grammar-review (grammarReviewActivo por defecto es false)
     const chkGram = document.getElementById('grammar-review');
     if (chkGram) {
-        const saved = localStorage.getItem('grammar_review_activo') === 'true';
+        const saved = uGet('grammar_review_activo') === 'true';
         grammarReviewActivo = saved;
         chkGram.checked = saved;
         const st2 = document.getElementById('grammar-review-status');

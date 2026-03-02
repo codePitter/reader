@@ -8,15 +8,15 @@
 
 // ─── CONFIG ───
 const PIXABAY_API_BASE = 'https://pixabay.com/api/';
-let _pixabayKey = localStorage.getItem('pixabay_api_key') || '';
+let _pixabayKey = uGet('pixabay_api_key') || '';
 
 // ─── PEXELS CONFIG ───
 const PEXELS_API_BASE = 'https://api.pexels.com/v1/';
-let _pexelsKey = localStorage.getItem('pexels_api_key') || '0eYJYF7CXXnjo9fOuyYvRNnAZL26iuOCM7RGGMbrx1EXqrWwPN5REP66';
+let _pexelsKey = uGet('pexels_api_key') || '0eYJYF7CXXnjo9fOuyYvRNnAZL26iuOCM7RGGMbrx1EXqrWwPN5REP66';
 
 // ─── UNSPLASH CONFIG ───
 const UNSPLASH_API_BASE = 'https://api.unsplash.com/';
-let _unsplashKey = localStorage.getItem('unsplash_api_key') || '';
+let _unsplashKey = uGet('unsplash_api_key') || '';
 
 // ─── OPENVERSE CONFIG ───
 // API pública sin key para primeras requests (800M imágenes CC)
@@ -34,7 +34,7 @@ let _unsplashPoolCargando = false;
 let _unsplashPoolListo = false;
 
 // Proveedor activo: 'pixabay' | 'pexels' | 'picsum' | 'unsplash'
-let _imageProvider = localStorage.getItem('image_provider') || 'picsum';
+let _imageProvider = uGet('image_provider') || 'picsum';
 
 // ─── ESTADO ───
 let _imgActualIndex = 0;
@@ -968,7 +968,7 @@ function guardarPixabayKey() {
     const key = input?.value?.trim();
     if (!key) { mostrarNotificacion('⚠ Ingresa una API Key válida'); return; }
     _pixabayKey = key;
-    localStorage.setItem('pixabay_api_key', key);
+    uSet('pixabay_api_key', key);
     mostrarNotificacion('✓ Pixabay key guardada');
     // Actualizar estado en el panel
     const status = document.getElementById('pixabay-key-status');
@@ -1178,7 +1178,7 @@ function _renderizarPanelKey() {
 // Cambiar proveedor activo y actualizar UI
 function cambiarProveedorImagenes(proveedor) {
     _imageProvider = proveedor;
-    localStorage.setItem('image_provider', proveedor);
+    uSet('image_provider', proveedor);
     IMAGE_CHANGE_EVERY = _getChangeEvery(proveedor);  // actualizar frecuencia activa
     _renderizarPanelKey();
     mostrarNotificacion(`✓ Proveedor: ${proveedor.charAt(0).toUpperCase() + proveedor.slice(1)}`);
@@ -1202,7 +1202,7 @@ function guardarPexelsKey() {
     const key = input?.value?.trim();
     if (!key || key === '••••••••') { mostrarNotificacion('⚠ Ingresa una API Key válida'); return; }
     _pexelsKey = key;
-    localStorage.setItem('pexels_api_key', key);
+    uSet('pexels_api_key', key);
     mostrarNotificacion('✓ Pexels key guardada');
     _renderizarPanelKey();
     if (_imgUltimaQuery) _ejecutarBusqueda(_imgUltimaQuery, 1);
@@ -1247,13 +1247,13 @@ const IMAGE_CHANGE_DEFAULTS = {
 
 function _getChangeEvery(proveedor) {
     const key = `img_change_every_${proveedor}`;
-    const saved = parseInt(localStorage.getItem(key), 10);
+    const saved = parseInt(uGet(key), 10);
     return (!isNaN(saved) && saved >= 1) ? saved : (IMAGE_CHANGE_DEFAULTS[proveedor] || 20);
 }
 
 function _setChangeEvery(proveedor, valor) {
     const v = Math.max(1, parseInt(valor, 10) || IMAGE_CHANGE_DEFAULTS[proveedor] || 20);
-    localStorage.setItem(`img_change_every_${proveedor}`, v);
+    uSet(`img_change_every_${proveedor}`, v);
     console.log(`[img] ⚙ Frecuencia "${proveedor}" → cada ${v} frases`);
     return v;
 }
@@ -1680,7 +1680,7 @@ function actualizarPoolPixabayConPrompt(promptVisual) {
 
 async function _generarQueriesConClaude(universo) {
     const cacheKey = `img_queries__${universo.toLowerCase().replace(/\s+/g, '_')}`;
-    const cached = localStorage.getItem(cacheKey);
+    const cached = uGet(cacheKey);
     if (cached) {
         try {
             const cachedData = JSON.parse(cached);
@@ -1702,8 +1702,8 @@ async function _generarQueriesConClaude(universo) {
     }
 
     // Usar OpenRouter (gratis con modelos :free)
-    const apiKey = localStorage.getItem('humanizer_key_openrouter')
-        || localStorage.getItem('openrouter_api_key') || '';
+    const apiKey = uGet('humanizer_key_openrouter')
+        || uGet('openrouter_api_key') || '';
     if (!apiKey) {
         console.warn(`[img] ⚠ OpenRouter API key no disponible — configurala como proveedor del humanizador o en openrouter_api_key`);
         return null;
@@ -1754,7 +1754,7 @@ Rules for freesoundQueries (Freesound — 3-5 words each):
 
         console.log(`[img] 🤖 OpenRouter image queries para "${universo}":`, imageQueries);
         console.log(`[img] 🤖 OpenRouter freesound queries para "${universo}":`, freesoundQueries);
-        localStorage.setItem(cacheKey, JSON.stringify({ imageQueries, freesoundQueries }));
+        uSet(cacheKey, JSON.stringify({ imageQueries, freesoundQueries }));
 
         // Inyectar image queries en los diccionarios
         UNIVERSE_IMAGE_QUERIES[universo] = imageQueries.map(q => q + ' cinematic');
@@ -1872,7 +1872,7 @@ function guardarUnsplashKey() {
     const key = input?.value?.trim();
     if (!key) { if (typeof mostrarNotificacion === 'function') mostrarNotificacion('⚠ Ingresa una Access Key de Unsplash'); return; }
     _unsplashKey = key;
-    localStorage.setItem('unsplash_api_key', key);
+    uSet('unsplash_api_key', key);
     const status = document.getElementById('unsplash-key-status');
     if (status) { status.textContent = '✓'; status.style.color = 'var(--accent2)'; }
     if (typeof mostrarNotificacion === 'function') mostrarNotificacion('✓ Unsplash key guardada');
@@ -1887,7 +1887,7 @@ function guardarPixabayKeyVideo() {
     const key = input?.value?.trim();
     if (!key) { if (typeof mostrarNotificacion === 'function') mostrarNotificacion('⚠ Ingresa una API Key'); return; }
     _pixabayKey = key;
-    localStorage.setItem('pixabay_api_key', key);
+    uSet('pixabay_api_key', key);
     const status = document.getElementById('pixabay-key-status-video');
     if (status) { status.textContent = '✓'; status.style.color = 'var(--accent2)'; }
     if (typeof mostrarNotificacion === 'function') mostrarNotificacion('✓ Pixabay key guardada');

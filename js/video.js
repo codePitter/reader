@@ -1075,16 +1075,16 @@ function dibujarFondoProcedural(slot, tipoOPrompt, promptCompleto) {
 // ═══════════════════════════════════════
 // Forzar pixabay como default — limpiar providers de IA guardados previamente.
 const _webProviders = new Set(['pixabay', 'pexels', 'picsum', 'unsplash', 'procedural']);
-const _savedImgProvider = localStorage.getItem('img_provider');
+const _savedImgProvider = uGet('img_provider');
 if (_savedImgProvider && !_webProviders.has(_savedImgProvider)) {
-    localStorage.removeItem('img_provider');
+    uRemove('img_provider');
 }
 let imageProvider = (_savedImgProvider && _webProviders.has(_savedImgProvider))
     ? _savedImgProvider
     : 'picsum';
-let stabilityApiKey = localStorage.getItem('stability_api_key') || '';
-let stabilityModel = localStorage.getItem('stability_model') || 'sd3.5-medium';
-let puterModel = localStorage.getItem('puter_model') || 'gpt-image-1.5';
+let stabilityApiKey = uGet('stability_api_key') || '';
+let stabilityModel = uGet('stability_model') || 'sd3.5-medium';
+let puterModel = uGet('puter_model') || 'gpt-image-1.5';
 
 // Inicializar UI al cargar
 (function initImageProviderUI() {
@@ -1124,7 +1124,7 @@ function _updateProviderPanels(prov) {
 
 function setImageProvider(prov) {
     imageProvider = prov;
-    localStorage.setItem('img_provider', prov);
+    uSet('img_provider', prov);
     _updateProviderPanels(prov);
     // Invalidar slots cargados para que se regeneren con el nuevo proveedor
     if (aiImagesEnabled) {
@@ -1140,7 +1140,7 @@ function guardarStabilityKey() {
     const key = document.getElementById('stability-api-key').value.trim();
     if (!key) { document.getElementById('stability-key-status').textContent = '⚠ vacía'; return; }
     stabilityApiKey = key;
-    localStorage.setItem('stability_api_key', key);
+    uSet('stability_api_key', key);
     document.getElementById('stability-api-key').value = '';
     document.getElementById('stability-key-status').textContent = '✓ guardada';
     setTimeout(() => { document.getElementById('stability-key-status').textContent = ''; }, 2000);
@@ -2091,7 +2091,7 @@ function toggleAmbientMute() {
 
 // ─── MODAL DE REEMPLAZOS ───
 function abrirModalReemplazos() {
-    const datos = JSON.parse(localStorage.getItem('reemplazos_custom') || '{}');
+    const datos = JSON.parse(uGet('reemplazos_custom') || '{}');
     const body = document.getElementById('modal-reemplazos-body');
     const modal = document.getElementById('modal-reemplazos');
     if (Object.keys(datos).length === 0) {
@@ -2114,9 +2114,9 @@ function cerrarModalReemplazos() {
 }
 
 function eliminarReemplazo(clave) {
-    const datos = JSON.parse(localStorage.getItem('reemplazos_custom') || '{}');
+    const datos = JSON.parse(uGet('reemplazos_custom') || '{}');
     delete datos[clave];
-    localStorage.setItem('reemplazos_custom', JSON.stringify(datos));
+    uSet('reemplazos_custom', JSON.stringify(datos));
     if (typeof reemplazosAutomaticos !== 'undefined') delete reemplazosAutomaticos[clave];
     // Invalidar cache BG para que el próximo capítulo se re-procese sin este reemplazo
     if (typeof _capCache !== 'undefined') Object.keys(_capCache).forEach(k => delete _capCache[k]);
