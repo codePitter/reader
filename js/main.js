@@ -17,10 +17,10 @@ let isReading = false;
 let currentSentenceIndex = 0;
 let sentences = [];
 
-// ─── TTS API LOCAL (XTTS v2) ───
+// ─── TTS API LOCAL (edge-tts) ───
+// TTS_API_URL eliminado — usar _getTTSApiURL() de tts.js (puerto configurable vía xtts-status.js)
 let usarAPILocal = false;
 let servidorTTSDisponible = false;
-const TTS_API_URL = 'http://localhost:5000';
 let audioActual = null;
 
 // Token de sesión TTS: se incrementa en detenerTTS() para invalidar callbacks onended pendientes
