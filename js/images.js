@@ -498,11 +498,18 @@ async function _cargarPoolOpenverse(promptVisual = '') {
     // Fallback: si las queries del universo fallan, usar _default
     const queriesFallback = OPENVERSE_QUERIES._default;
 
-    console.log(`[img] 🚀 Openverse pool · universo="${universo}" · queries:`, queries.slice(0, 3));
+    // Extraer 1 keyword del promptVisual (Openverse falla con queries largas)
+    let promptQuery = '';
+    if (promptVisual) {
+        const grupo = _extraerGruposDePrompt(promptVisual)[0]; // ej: "dark castle ruins"
+        promptQuery = grupo.split(' ')[0]; // solo 1 palabra, más fiable en Openverse
+    }
+
+    console.log(`[img] 🚀 Openverse pool · universo="${universo}" · queries:`, queries.slice(0, 3), promptQuery ? `· prompt="${promptQuery}"` : '');
 
     const urls = [];
 
-    // Intentar hasta 3 queries del universo (en vez de 2)
+    // Intentar hasta 3 queries del universo + 1 del prompt visual
     const queriesToFetch = queries.slice(0, 3);
     for (const q of queriesToFetch) {
         const page = Math.floor(Math.random() * 5) + 1;
@@ -510,6 +517,14 @@ async function _cargarPoolOpenverse(promptVisual = '') {
         results.forEach(r => { if (r.urlFull) urls.push(r.urlFull); });
         console.log(`[img]   └─ "${q}" p${page} → ${results.length} imgs · acum: ${urls.length}`);
         if (urls.length >= 15) break; // suficientes, no gastar más cuota
+    }
+
+    // Query adicional: primera keyword del promptVisual (si hay y aún necesitamos más imgs)
+    if (promptQuery && urls.length < 15) {
+        const page = Math.floor(Math.random() * 5) + 1;
+        const results = await _buscarEnOpenverse(promptQuery, page);
+        results.forEach(r => { if (r.urlFull) urls.push(r.urlFull); });
+        console.log(`[img]   └─ [prompt] "${promptQuery}" p${page} → ${results.length} imgs · acum: ${urls.length}`);
     }
 
     // Si el universo no dio resultados, intentar con queries _default como fallback
@@ -1687,9 +1702,10 @@ async function _generarQueriesConClaude(universo) {
     }
 
     // Usar OpenRouter (gratis con modelos :free)
-    const apiKey = localStorage.getItem('openrouter_api_key') || '';
+    const apiKey = localStorage.getItem('humanizer_key_openrouter')
+        || localStorage.getItem('openrouter_api_key') || '';
     if (!apiKey) {
-        console.warn(`[img] ⚠ OpenRouter API key no disponible — no se pueden generar queries para "${universo}"`);
+        console.warn(`[img] ⚠ OpenRouter API key no disponible — configurala como proveedor del humanizador o en openrouter_api_key`);
         return null;
     }
 

@@ -1198,7 +1198,7 @@ async function generarImagenStability(prompt, seed) {
 // Genera imagen con Pollinations.AI (Flux) — gratis, sin key
 function pollinationsUrl(prompt, seed) {
     const encoded = encodeURIComponent(prompt);
-    return `https://image.pollinations.ai/prompt/${encoded}?model=flux&width=1280&height=720&seed=${seed}&nologo=true&enhance=true&private=true`;
+    return `https://image.pollinations.ai/prompt/${encoded}?model=flux&width=1280&height=720&seed=${seed}&nologo=true&enhance=true`;
 }
 
 // Genera imagen con Puter.js — gratis, sin API key (usuario paga con cuenta Puter)
@@ -1622,8 +1622,12 @@ async function videoMusicaPrev() {
     _actualizarMusicLabel();
 }
 
-function videoToggleAmbient() {
-    if (typeof toggleAmbientPlay === 'function') toggleAmbientPlay();
+async function videoToggleAmbient() {
+    if (typeof toggleAmbientPlay === 'function') {
+        toggleAmbientPlay();
+        // Si se estaba iniciando un play nuevo, esperar a que termine antes de sincronizar
+        await new Promise(r => setTimeout(r, 150));
+    }
     _syncAmbientBtn();
 }
 

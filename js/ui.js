@@ -430,28 +430,226 @@ function cambiarSolapa(nombre) {
 }
 
 function _sincronizarInputsApiKeys() {
-    // Estado humanizador
+
+    // ── Humanizador ──
     const provEl = document.getElementById('ajustes-humanizer-provider');
-    if (provEl && typeof humanizerProvider !== 'undefined') provEl.value = humanizerProvider;
+    const activeProvider = (typeof humanizerProvider !== 'undefined') ? humanizerProvider : 'perplexity';
+    if (provEl) provEl.value = activeProvider;
 
-    const keyStatus = document.getElementById('ajustes-humanizer-key-status');
-    if (keyStatus) {
-        const savedKey = typeof claudeApiKey !== 'undefined' ? claudeApiKey : '';
-        keyStatus.textContent = savedKey ? '✓ guardada' : '';
+    const humKey = typeof claudeApiKey !== 'undefined' ? claudeApiKey : '';
+    const humStatus = document.getElementById('ajustes-humanizer-key-status');
+    if (humStatus) humStatus.textContent = humKey ? '✓ guardada' : '';
+
+    const modoHum = document.getElementById('ajustes-humanizer-modo');
+    if (modoHum) modoHum.textContent = activeProvider;
+
+    const orNote = document.getElementById('ajustes-humanizer-or-note');
+    if (orNote) orNote.style.display = activeProvider === 'openrouter' ? 'block' : 'none';
+
+    // ── Detección de universo ──
+    const univProv = localStorage.getItem('universe_provider') || 'local';
+    const univSel = document.getElementById('ajustes-universe-provider');
+    if (univSel) univSel.value = univProv;
+    const univKeyArea = document.getElementById('ajustes-universe-key-area');
+    if (univKeyArea) univKeyArea.style.display = univProv === 'openrouter' ? 'block' : 'none';
+    const univModo = document.getElementById('ajustes-universe-modo');
+    if (univModo) univModo.textContent = univProv === 'openrouter' ? 'IA' : 'local';
+    const univKeyOk = document.getElementById('ajustes-universe-key-ok');
+    if (univKeyOk && univProv === 'openrouter') {
+        const k = localStorage.getItem('humanizer_key_openrouter') || localStorage.getItem('openrouter_api_key') || '';
+        univKeyOk.textContent = k ? '✓ encontrada' : '⚠ no configurada';
     }
 
-    // Estado LT
+    // ── Traducción ──
+    const trProv = localStorage.getItem('translation_provider') || 'google';
+    const trSel = document.getElementById('ajustes-translate-provider');
+    if (trSel) trSel.value = trProv;
+    _toggleTranslateKeyArea(trProv);
+    const trKey = localStorage.getItem('deepl_api_key') || '';
+    const trStatus = document.getElementById('ajustes-translate-key-status');
+    if (trStatus) trStatus.textContent = trKey ? '✓ guardada' : '';
+    const trModo = document.getElementById('ajustes-translate-modo');
+    if (trModo) trModo.textContent = trProv;
+
+    // ── Gramática ──
+    const hasLt = !!(typeof _ltUsername !== 'undefined' && _ltUsername && typeof _ltApiKey !== 'undefined' && _ltApiKey);
+    const ltProv = hasLt ? 'languagetool-premium' : 'languagetool';
+    const ltSel = document.getElementById('ajustes-grammar-provider');
+    if (ltSel) ltSel.value = ltProv;
+    _toggleGramarPremiumArea(ltProv);
     const ltStatus = document.getElementById('ajustes-lt-status');
-    if (ltStatus) {
-        const hasLt = !!(typeof _ltUsername !== 'undefined' && _ltUsername &&
-            typeof _ltApiKey !== 'undefined' && _ltApiKey);
-        ltStatus.textContent = hasLt ? '✓ guardadas' : '';
-    }
+    if (ltStatus) ltStatus.textContent = hasLt ? '✓ guardadas' : '';
+    const ltModo = document.getElementById('ajustes-lt-modo');
+    if (ltModo) ltModo.textContent = hasLt ? 'premium' : 'público';
 
-    // Estado Freesound
+    // ── Música ──
+    const musicProv = localStorage.getItem('music_provider') || 'freesound';
+    const musicSel = document.getElementById('ajustes-music-provider');
+    if (musicSel) musicSel.value = musicProv;
+    _toggleMusicKeyArea(musicProv);
     const fsKey = localStorage.getItem('freesound_api_key') || localStorage.getItem('freesound-api-key') || '';
     const fsStatus = document.getElementById('ajustes-freesound-status');
     if (fsStatus) fsStatus.textContent = fsKey ? '✓ guardada' : '';
+    const musicModo = document.getElementById('ajustes-music-modo');
+    if (musicModo) musicModo.textContent = musicProv === 'freesound' ? 'Freesound' : 'local';
+
+    // ── Imágenes búsqueda ──
+    const imgSearchProv = localStorage.getItem('image_provider') || 'picsum';
+    const imgSearchSel = document.getElementById('ajustes-imgsearch-provider');
+    if (imgSearchSel) imgSearchSel.value = imgSearchProv;
+    _toggleImgSearchKeyArea(imgSearchProv);
+    const imgSearchModo = document.getElementById('ajustes-imgsearch-modo');
+    if (imgSearchModo) imgSearchModo.textContent = imgSearchProv;
+
+    // ── Imágenes IA ──
+    const imgIAProv = localStorage.getItem('img_provider') || 'procedural';
+    const imgIASel = document.getElementById('ajustes-imgia-provider');
+    if (imgIASel) imgIASel.value = imgIAProv;
+    _toggleImgIAKeyArea(imgIAProv);
+    const stKey = localStorage.getItem('stability_api_key') || '';
+    const stStatus = document.getElementById('ajustes-stability-status');
+    if (stStatus) stStatus.textContent = stKey ? '✓ guardada' : '';
+    const imgIAModo = document.getElementById('ajustes-imgia-modo');
+    if (imgIAModo) imgIAModo.textContent = imgIAProv;
+}
+
+// ── Toggle helpers ──
+
+function _toggleTranslateKeyArea(prov) {
+    const area = document.getElementById('ajustes-translate-key-area');
+    if (area) area.style.display = prov === 'deepl' ? 'block' : 'none';
+}
+
+function _toggleGramarPremiumArea(prov) {
+    const area = document.getElementById('ajustes-lt-premium-area');
+    const freeNota = document.getElementById('ajustes-lt-free-nota');
+    if (area) area.style.display = prov === 'languagetool-premium' ? 'block' : 'none';
+    if (freeNota) freeNota.style.display = prov === 'languagetool' ? 'block' : 'none';
+}
+
+function _toggleMusicKeyArea(prov) {
+    const area = document.getElementById('ajustes-freesound-key-area');
+    if (area) area.style.display = prov === 'freesound' ? 'block' : 'none';
+}
+
+const _IMG_SEARCH_LINKS = {
+    pixabay: 'Gratis en <a href="https://pixabay.com/api/docs/" target="_blank" rel="noopener">pixabay.com</a>',
+    pexels: 'Gratis en <a href="https://www.pexels.com/api/key/" target="_blank" rel="noopener">pexels.com/api/key</a>',
+    unsplash: 'Gratis en <a href="https://unsplash.com/developers" target="_blank" rel="noopener">unsplash.com/developers</a>',
+};
+const _IMG_SEARCH_NEEDS_KEY = new Set(['pixabay', 'pexels', 'unsplash']);
+
+function _toggleImgSearchKeyArea(prov) {
+    const area = document.getElementById('ajustes-imgsearch-key-area');
+    const linkNota = document.getElementById('ajustes-imgsearch-link-nota');
+    if (!area) return;
+    const needsKey = _IMG_SEARCH_NEEDS_KEY.has(prov);
+    area.style.display = needsKey ? 'block' : 'none';
+    if (linkNota && _IMG_SEARCH_LINKS[prov]) linkNota.innerHTML = _IMG_SEARCH_LINKS[prov];
+    // Update key status from localStorage
+    const keyMap = { pixabay: 'pixabay_api_key', pexels: 'pexels_api_key', unsplash: 'unsplash_api_key' };
+    const savedKey = keyMap[prov] ? (localStorage.getItem(keyMap[prov]) || '') : '';
+    const ks = document.getElementById('ajustes-imgsearch-key-status');
+    if (ks) ks.textContent = savedKey ? '✓ guardada' : '';
+}
+
+function _toggleImgIAKeyArea(prov) {
+    const area = document.getElementById('ajustes-imgia-key-area');
+    const puterNota = document.getElementById('ajustes-imgia-puter-nota');
+    if (area) area.style.display = prov === 'stability' ? 'block' : 'none';
+    if (puterNota) puterNota.style.display = prov === 'puter' ? 'block' : 'none';
+}
+
+// ── Provider change handlers ──
+
+function cambiarProveedorUniversoAjustes(prov) {
+    localStorage.setItem('universe_provider', prov);
+    const keyArea = document.getElementById('ajustes-universe-key-area');
+    if (keyArea) keyArea.style.display = prov === 'openrouter' ? 'block' : 'none';
+    const modo = document.getElementById('ajustes-universe-modo');
+    if (modo) modo.textContent = prov === 'openrouter' ? 'IA' : 'local';
+    const ok = document.getElementById('ajustes-universe-key-ok');
+    if (ok && prov === 'openrouter') {
+        const k = localStorage.getItem('humanizer_key_openrouter') || localStorage.getItem('openrouter_api_key') || '';
+        ok.textContent = k ? '✓ encontrada' : '⚠ no configurada';
+    }
+    mostrarNotificacion('✓ Detección de universo: ' + prov);
+}
+
+function cambiarProveedorTraduccionAjustes(prov) {
+    localStorage.setItem('translation_provider', prov);
+    _toggleTranslateKeyArea(prov);
+    const modo = document.getElementById('ajustes-translate-modo');
+    if (modo) modo.textContent = prov;
+    mostrarNotificacion('✓ Traducción: ' + prov);
+}
+
+function cambiarProveedorGramaticaAjustes(prov) {
+    _toggleGramarPremiumArea(prov);
+    const modo = document.getElementById('ajustes-lt-modo');
+    if (modo) modo.textContent = prov === 'languagetool-premium' ? 'premium' : 'público';
+}
+
+function cambiarProveedorMusicaAjustes(prov) {
+    localStorage.setItem('music_provider', prov);
+    _toggleMusicKeyArea(prov);
+    const modo = document.getElementById('ajustes-music-modo');
+    if (modo) modo.textContent = prov === 'freesound' ? 'Freesound' : 'local';
+    // Sincronizar con player.js: si no hay key de Freesound, forzar local
+    if (prov === 'local' && typeof stopAmbient === 'function') stopAmbient();
+    mostrarNotificacion('✓ Música: ' + prov);
+}
+
+function cambiarProveedorImgSearchAjustes(prov) {
+    _toggleImgSearchKeyArea(prov);
+    const modo = document.getElementById('ajustes-imgsearch-modo');
+    if (modo) modo.textContent = prov;
+    // Llamar a cambiarProveedorImagenes de images.js si existe
+    if (typeof cambiarProveedorImagenes === 'function') cambiarProveedorImagenes(prov);
+    else localStorage.setItem('image_provider', prov);
+}
+
+function cambiarProveedorImgIADesdeAjustes(prov) {
+    _toggleImgIAKeyArea(prov);
+    const modo = document.getElementById('ajustes-imgia-modo');
+    if (modo) modo.textContent = prov;
+    // Llamar a setImageProvider de video.js si existe
+    if (typeof setImageProvider === 'function') setImageProvider(prov);
+    else localStorage.setItem('img_provider', prov);
+}
+
+// ── Save handlers ──
+
+function guardarTranslateKeyDesdeAjustes() {
+    const input = document.getElementById('ajustes-translate-key');
+    if (!input) return;
+    const key = input.value.trim();
+    if (!key) { mostrarNotificacion('⚠ Ingresa la API key de DeepL'); return; }
+    localStorage.setItem('deepl_api_key', key);
+    input.value = '';
+    const status = document.getElementById('ajustes-translate-key-status');
+    if (status) status.textContent = '✓ guardada';
+    mostrarNotificacion('✓ DeepL key guardada');
+}
+
+function guardarImgSearchKeyDesdeAjustes() {
+    const input = document.getElementById('ajustes-imgsearch-key');
+    if (!input) return;
+    const key = input.value.trim();
+    if (!key) { mostrarNotificacion('⚠ Ingresa la API key'); return; }
+    const prov = document.getElementById('ajustes-imgsearch-provider')?.value || 'pixabay';
+    const keyMap = { pixabay: 'pixabay_api_key', pexels: 'pexels_api_key', unsplash: 'unsplash_api_key' };
+    if (keyMap[prov]) {
+        localStorage.setItem(keyMap[prov], key);
+        // Actualizar variable global correspondiente
+        if (prov === 'pixabay' && typeof _pixabayKey !== 'undefined') window._pixabayKey = key;
+        if (prov === 'pexels' && typeof _pexelsKey !== 'undefined') window._pexelsKey = key;
+        if (prov === 'unsplash' && typeof _unsplashKey !== 'undefined') window._unsplashKey = key;
+    }
+    input.value = '';
+    const status = document.getElementById('ajustes-imgsearch-key-status');
+    if (status) status.textContent = '✓ guardada';
+    mostrarNotificacion('✓ ' + prov + ' key guardada');
 }
 
 function guardarHumanizerKeyDesdeAjustes() {
@@ -520,6 +718,75 @@ function guardarFreesoundDesdeAjustes() {
     input.value = '';
     const status = document.getElementById('ajustes-freesound-status');
     if (status) status.textContent = '✓ guardada';
+}
+
+function guardarPixabayDesdeAjustes() {
+    const input = document.getElementById('ajustes-pixabay-key');
+    if (!input) return;
+    const key = input.value.trim();
+    if (!key) { mostrarNotificacion('⚠ Ingresa la API key de Pixabay'); return; }
+    // Actualizar variable global y localStorage
+    if (typeof _pixabayKey !== 'undefined') window._pixabayKey = key;
+    localStorage.setItem('pixabay_api_key', key);
+    // Disparar recarga del pool si hay una función disponible
+    if (typeof guardarPixabayKey === 'function') {
+        const orig = document.getElementById('pixabay-key-input');
+        if (orig) { orig.value = key; guardarPixabayKey(); }
+    }
+    input.value = '';
+    const status = document.getElementById('ajustes-pixabay-status');
+    if (status) status.textContent = '✓ guardada';
+    mostrarNotificacion('✓ Pixabay key guardada');
+}
+
+function guardarPexelsDesdeAjustes() {
+    const input = document.getElementById('ajustes-pexels-key');
+    if (!input) return;
+    const key = input.value.trim();
+    if (!key) { mostrarNotificacion('⚠ Ingresa la API key de Pexels'); return; }
+    if (typeof _pexelsKey !== 'undefined') window._pexelsKey = key;
+    localStorage.setItem('pexels_api_key', key);
+    if (typeof guardarPexelsKey === 'function') {
+        const orig = document.getElementById('pexels-key-input');
+        if (orig) { orig.value = key; guardarPexelsKey(); }
+    }
+    input.value = '';
+    const status = document.getElementById('ajustes-pexels-status');
+    if (status) status.textContent = '✓ guardada';
+    mostrarNotificacion('✓ Pexels key guardada');
+}
+
+function guardarUnsplashDesdeAjustes() {
+    const input = document.getElementById('ajustes-unsplash-key');
+    if (!input) return;
+    const key = input.value.trim();
+    if (!key) { mostrarNotificacion('⚠ Ingresa la Access key de Unsplash'); return; }
+    if (typeof _unsplashKey !== 'undefined') window._unsplashKey = key;
+    localStorage.setItem('unsplash_api_key', key);
+    if (typeof guardarUnsplashKey === 'function') {
+        const orig = document.getElementById('unsplash-key-input');
+        if (orig) { orig.value = key; guardarUnsplashKey(); }
+    }
+    input.value = '';
+    const status = document.getElementById('ajustes-unsplash-status');
+    if (status) status.textContent = '✓ guardada';
+    mostrarNotificacion('✓ Unsplash key guardada');
+}
+
+function guardarStabilityDesdeAjustes() {
+    const input = document.getElementById('ajustes-stability-key');
+    if (!input) return;
+    const key = input.value.trim();
+    if (!key) { mostrarNotificacion('⚠ Ingresa la API key de Stability AI'); return; }
+    if (typeof stabilityApiKey !== 'undefined') window.stabilityApiKey = key;
+    localStorage.setItem('stability_api_key', key);
+    // Sincronizar con el input oculto original de video.js si existe
+    const orig = document.getElementById('stability-api-key');
+    if (orig) { orig.value = key; if (typeof guardarStabilityKey === 'function') guardarStabilityKey(); }
+    input.value = '';
+    const status = document.getElementById('ajustes-stability-status');
+    if (status) status.textContent = '✓ guardada';
+    mostrarNotificacion('✓ Stability AI key guardada');
 }
 
 // Cerrar modal al clic fuera del contenedor
@@ -627,9 +894,14 @@ window._ambientLoopOn = false;
 
 function toggleAmbientLoop() {
     window._ambientLoopOn = !window._ambientLoopOn;
-    const el = window.ambientAudio || window._ambientAudio || window._ambientEl
-        || document.getElementById('ambient-audio');
-    if (el) el.loop = window._ambientLoopOn;
+    // Aplicar loop al audio de Freesound (variable en player.js)
+    if (typeof freesoundAudio !== 'undefined' && freesoundAudio) {
+        freesoundAudio.loop = window._ambientLoopOn;
+        // Si loop se activa, quitar onended para que el audio no avance al siguiente
+        freesoundAudio.onended = window._ambientLoopOn
+            ? null
+            : () => { console.log('🎵 [Player] Track terminado — cargando siguiente automáticamente'); siguienteTrack(); };
+    }
     const btn = document.getElementById('kbtn-ambient-loop');
     if (btn) btn.style.color = window._ambientLoopOn ? 'var(--accent)' : 'var(--text-dim)';
     if (typeof mostrarNotificacion === 'function')

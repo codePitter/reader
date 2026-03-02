@@ -457,6 +457,47 @@ window.addEventListener('DOMContentLoaded', () => {
     } else {
         console.warn('🎵 [Freesound] Sin API key — el player usará generador local exclusivamente');
     }
+
+    // ── Hover expand/collapse del ambient player ──
+    const player = document.getElementById('ambient-player');
+    if (player) {
+        let _hoverTimeout = null;
+        let _manuallyOpened = false; // el usuario lo abrió con click y quiere mantenerlo
+
+        player.addEventListener('mouseenter', () => {
+            clearTimeout(_hoverTimeout);
+            if (player.classList.contains('collapsed')) {
+                player.classList.remove('collapsed');
+                const arrow = document.getElementById('ambient-arrow');
+                if (arrow) arrow.textContent = '◀';
+            }
+        });
+
+        player.addEventListener('mouseleave', () => {
+            clearTimeout(_hoverTimeout);
+            // Solo colapsar automáticamente si no fue abierto con click intencional
+            if (!_manuallyOpened) {
+                _hoverTimeout = setTimeout(() => {
+                    if (!player.classList.contains('collapsed')) {
+                        player.classList.add('collapsed');
+                        const arrow = document.getElementById('ambient-arrow');
+                        if (arrow) arrow.textContent = '▶';
+                    }
+                }, 400);
+            }
+        });
+
+        // Guardar estado manual: si el usuario hace click, ancla el panel abierto/cerrado
+        // Un segundo click lo vuelve a modo hover-auto
+        const header = player.querySelector('.ambient-header');
+        if (header) {
+            header.addEventListener('click', () => {
+                // toggleAmbientPanel ya fue llamado por el onclick del HTML
+                // Aquí solo alternamos el modo manual
+                _manuallyOpened = !player.classList.contains('collapsed');
+            });
+        }
+    }
 });
 
 // ── Freesound multi-query system con subtonos ──
@@ -603,7 +644,7 @@ async function buscarEnFreesound(genre, subtono) {
     const queryFinal = queryStr2;
 
     const query = encodeURIComponent(queryFinal);
-    const url = `https://freesound.org/apiv2/search/text/?query=${query}&filter=duration:[60 TO 90]&fields=name,previews,duration,avg_rating&page_size=20&sort=rating_desc&token=${freesoundApiKey}`;
+    const url = `https://freesound.org/apiv2/search/text/?query=${query}&filter=duration:[60 TO 600]&fields=name,previews,duration,avg_rating&page_size=20&sort=rating_desc&token=${freesoundApiKey}`;
 
     console.log(`🎵 [Freesound] Buscando en API...`);
     try {
@@ -617,7 +658,7 @@ async function buscarEnFreesound(genre, subtono) {
         console.log(`🎵 [Freesound] Resultados crudos: ${data.results?.length ?? 0} tracks`);
 
         if (data.results && data.results.length > 0) {
-            const antesDeRating = data.results.filter(t => t.duration >= 60 && t.duration <= 90);
+            const antesDeRating = data.results.filter(t => t.duration >= 60 && t.duration <= 600);
             console.log(`🎵 [Freesound] Tras filtro duración 60–90s: ${antesDeRating.length} tracks`);
 
             const good = antesDeRating
@@ -676,8 +717,11 @@ async function selectGenre(genre) {
     stopAmbient();
     document.getElementById('ambient-track-name').textContent = '⏳ Cargando...';
     document.getElementById('ambient-track-genre').textContent = freesoundApiKey ? 'buscando en Freesound...' : 'generador local';
-    // Clear cache for this genre so we get a fresh random track
+    // Clear cache para este género y para la key de universo (si hay uno activo)
     delete _lastFreesoundResults[genre];
+    if (typeof aiDetectedUniverse !== 'undefined' && aiDetectedUniverse) {
+        delete _lastFreesoundResults[`__universe__${aiDetectedUniverse}`];
+    }
     await playAmbient(genre);
 }
 
@@ -772,9 +816,11 @@ function toggleAmbientPlay() {
     if (ambientPlaying) {
         // Pausar sin destruir el audio actual
         if (freesoundAudio && !freesoundAudio.paused) freesoundAudio.pause();
+        else if (ambientGainNode) ambientGainNode.gain.value = 0; // procedural: silenciar
         ambientPlaying = false;
         const playBtn = document.getElementById('ambient-play-btn');
         if (playBtn) playBtn.textContent = '▶';
+        document.getElementById('ambient-eq')?.classList.remove('playing');
         document.getElementById('ambient-player').classList.remove('ambient-playing');
     } else {
         // Reanudar el audio existente; solo cargar uno nuevo si no hay nada
@@ -783,6 +829,15 @@ function toggleAmbientPlay() {
             ambientPlaying = true;
             const playBtn = document.getElementById('ambient-play-btn');
             if (playBtn) playBtn.textContent = '⏸';
+            document.getElementById('ambient-eq')?.classList.add('playing');
+            document.getElementById('ambient-player').classList.add('ambient-playing');
+        } else if (ambientGainNode && ambientNodes.length > 0) {
+            // Procedural pausado: restaurar volumen
+            ambientGainNode.gain.value = ambientVolume;
+            ambientPlaying = true;
+            const playBtn = document.getElementById('ambient-play-btn');
+            if (playBtn) playBtn.textContent = '⏸';
+            document.getElementById('ambient-eq')?.classList.add('playing');
             document.getElementById('ambient-player').classList.add('ambient-playing');
         } else {
             playAmbient(ambientGenre);
@@ -836,11 +891,22 @@ async function siguienteTrack() {
     }
     document.getElementById('ambient-track-name').textContent = '⏳ Cargando siguiente...';
     await playAmbient(ambientGenre);
+    // Sincronizar UI del modo video si está activo
+    if (typeof _syncAmbientBtn === 'function') _syncAmbientBtn();
+    if (typeof _actualizarMusicLabel === 'function') _actualizarMusicLabel();
 }
 
 function setAmbientVolume(val) {
     ambientVolume = val / 100;
-    document.getElementById('ambient-vol-val').textContent = val + '%';
+    // Sincronizar ambos sliders (index + video)
+    const sliderIndex = document.getElementById('ambient-volume');
+    const sliderVideo = document.getElementById('kol-music-vol');
+    const valIndex = document.getElementById('ambient-vol-val');
+    const valVideo = document.getElementById('kol-music-pct');
+    if (sliderIndex) sliderIndex.value = val;
+    if (sliderVideo) sliderVideo.value = val;
+    if (valIndex) valIndex.textContent = val + '%';
+    if (valVideo) valVideo.textContent = val + '%';
     if (ambientGainNode) ambientGainNode.gain.value = ambientVolume;
     if (freesoundAudio) freesoundAudio.volume = ambientVolume;
 }
