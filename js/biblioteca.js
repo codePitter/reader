@@ -409,14 +409,14 @@
 
     function bibAbrir() {
         _abierta = true;
-        document.getElementById('sidebar-wrapper')?.classList.add('biblioteca-activa');
+        document.querySelector('.sidebar')?.classList.add('biblioteca-activa');
         _render();
         setTimeout(() => document.getElementById('bib-search')?.focus(), 320);
     }
 
     function bibCerrar() {
         _abierta = false;
-        document.getElementById('sidebar-wrapper')?.classList.remove('biblioteca-activa');
+        document.querySelector('.sidebar')?.classList.remove('biblioteca-activa');
     }
 
     // ─── RENDER ───────────────────────────────────────────────────
@@ -541,29 +541,28 @@
     // ─── INYECCIÓN HTML ───────────────────────────────────────────
 
     function _inyectarHTML() {
-        // 1) Envolver .sidebar existente en .sidebar-wrapper
+        // El panel biblioteca se inyecta directamente DENTRO de .sidebar (sin wrapper).
+        // Esto evita el naipe flip (translateX desde la derecha) que desincronizaba
+        // el colapso del sidebar con el layout flex de .app.
         const sidebar = document.querySelector('.sidebar');
         if (!sidebar) return;
 
-        const wrapper = document.createElement('div');
-        wrapper.className = 'sidebar-wrapper';
-        wrapper.id = 'sidebar-wrapper';
-        sidebar.parentNode.insertBefore(wrapper, sidebar);
-        sidebar.classList.add('sidebar-reader');
-        sidebar.id = 'sidebar-reader';
-        wrapper.appendChild(sidebar);
-
-        // 2) Inyectar botón "Mis libros" en la primera sidebar-section (Archivo)
-        const secArchivo = sidebar.querySelector('.sidebar-section');
-        if (secArchivo) {
-            const btn = document.createElement('button');
-            btn.className = 'btn-abrir-biblioteca';
-            btn.setAttribute('onclick', 'window._bibAbrir()');
-            btn.innerHTML = `📚 Mis libros <span class="badge" id="bib-badge-count">0</span>`;
-            secArchivo.appendChild(btn);
+        // 1) Inyectar botón "Mis libros" al inicio del sidebar
+        const misLibrosSlot = document.getElementById('sb-mis-libros-slot');
+        const btnWrap = document.createElement('div');
+        btnWrap.id = 'sb-mis-libros-slot-inner';
+        const btn = document.createElement('button');
+        btn.className = 'btn-abrir-biblioteca';
+        btn.setAttribute('onclick', 'window._bibAbrir()');
+        btn.innerHTML = `📚 Mis libros <span class="badge" id="bib-badge-count">0</span>`;
+        btnWrap.appendChild(btn);
+        if (misLibrosSlot) {
+            misLibrosSlot.appendChild(btnWrap);
+        } else {
+            sidebar.insertBefore(btnWrap, sidebar.firstChild);
         }
 
-        // 3) Inyectar panel biblioteca
+        // 2) Inyectar panel biblioteca dentro del sidebar (oculto por defecto)
         const bibPanel = document.createElement('div');
         bibPanel.className = 'sidebar-biblioteca';
         bibPanel.id = 'sidebar-biblioteca';
@@ -649,7 +648,7 @@
             <input type="file" id="bib-file-input" accept=".epub,.pdf,.txt,.fb2,.docx"
                    style="display:none" multiple>
         `;
-        wrapper.appendChild(bibPanel);
+        sidebar.appendChild(bibPanel);
 
         // 4) Drag & drop
         bibPanel.addEventListener('dragover', e => {
@@ -703,47 +702,23 @@
     function _inyectarEstilos() {
         const style = document.createElement('style');
         style.textContent = `
-/* ── Sidebar wrapper — contenedor del naipe flip ── */
-.sidebar-wrapper {
-    position: relative;
-    overflow: hidden;
-    flex-shrink: 0;
-    width: var(--sidebar-w);
-}
-
-/* Las dos caras del naipe comparten el mismo espacio */
-.sidebar-reader,
+/* ── Biblioteca: show/hide directo dentro del .sidebar (sin wrapper, sin translate) ── */
 .sidebar-biblioteca {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    background: var(--surface);
-    overflow-y: auto;
-    display: flex;
+    display: none;
     flex-direction: column;
-    scrollbar-width: thin;
-    scrollbar-color: var(--border) transparent;
-    transition: transform 0.32s cubic-bezier(0.4,0,0.2,1),
-                opacity 0.28s ease;
-    will-change: transform, opacity;
+    flex: 1;
+    overflow: hidden;
+    background: var(--bg-panel);
 }
-
-.sidebar-reader::-webkit-scrollbar,
 .sidebar-biblioteca::-webkit-scrollbar { width: 3px; }
-.sidebar-reader::-webkit-scrollbar-thumb,
 .sidebar-biblioteca::-webkit-scrollbar-thumb { background: var(--border); }
 
-/* Estado inicial: lector visible, biblioteca fuera por la derecha */
-.sidebar-reader     { transform: translateX(0);    opacity: 1; pointer-events: auto; }
-.sidebar-biblioteca { transform: translateX(100%); opacity: 0; pointer-events: none; }
-
-/* Biblioteca activa */
-.sidebar-wrapper.biblioteca-activa .sidebar-reader {
-    transform: translateX(-100%); opacity: 0; pointer-events: none;
+/* Cuando biblioteca está activa: ocultar contenido normal, mostrar panel bib */
+.sidebar.biblioteca-activa > *:not(#sidebar-biblioteca):not(.sidebar-biblioteca) {
+    display: none !important;
 }
-.sidebar-wrapper.biblioteca-activa .sidebar-biblioteca {
-    transform: translateX(0); opacity: 1; pointer-events: auto;
+.sidebar.biblioteca-activa .sidebar-biblioteca {
+    display: flex;
 }
 
 /* ── Botón "Mis libros" en el sidebar lector ── */
@@ -1684,6 +1659,9 @@
 
     // Exponer para que epub.js pueda actualizar el progreso
     window.bibActualizarProgreso = bibActualizarProgreso;
+
+    // ── Alias para el botón del rail (ic-chapters nth-child 4) ──
+    window.abrirBiblioteca = bibAbrir;
 
     // ─── ARRANQUE ─────────────────────────────────────────────────
     document.addEventListener('DOMContentLoaded', init);

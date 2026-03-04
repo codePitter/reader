@@ -77,6 +77,22 @@
         return (typeof currentSentenceIndex !== 'undefined') ? currentSentenceIndex : 0;
     }
 
+    // ── Actualizar barra de progreso en el sidebar nuevo ────────
+    // Calcula el porcentaje basado en la posición del capítulo actual
+    // en el selector de capítulos y lo envía a actualizarSidebarLibro().
+    function _actualizarSidebarProgreso() {
+        if (typeof actualizarSidebarLibro !== 'function') return;
+        const sel = document.getElementById('chapters');
+        if (!sel || sel.options.length === 0) return;
+        const totalCaps = sel.options.length;
+        const idxActual = sel.selectedIndex >= 0 ? sel.selectedIndex : 0;
+        const pct = Math.round(((idxActual + 1) / totalCaps) * 100);
+        const titulo = (typeof _epubFilename !== 'undefined')
+            ? _epubFilename.replace(/\.[^.]+$/, '')
+            : (document.getElementById('sb-book-title')?.textContent || 'Sin título');
+        actualizarSidebarLibro(titulo, totalCaps, pct);
+    }
+
     // ── Guardado periódico ───────────────────────────────────────
 
     function _startAutoSave() {
@@ -86,6 +102,7 @@
             const idx = _getCurrentSentenceIndex();
             if (idx < MIN_SENTENCE) return;   // no guardar si está al inicio
             _saveProgress(_bookId, _currentChapterRoute, idx, _getChapterTitle());
+            _actualizarSidebarProgreso();
         }, SAVE_INTERVAL_MS);
     }
 
@@ -160,11 +177,23 @@
                 border: 1px solid var(--border, #3a3530) !important;
                 color: var(--text-dim, #7a7060);
             }
+            #progress-modal .pm-btn-cancel {
+                background: none;
+                border: 1px solid rgba(180,60,60,0.35) !important;
+                color: rgba(200,100,100,0.75);
+                flex: 0 0 auto;
+                padding: 9px 14px;
+            }
+            #progress-modal .pm-btn-cancel:hover {
+                border-color: rgba(200,80,80,0.65) !important;
+                color: rgba(220,110,110,0.95);
+                opacity: 1 !important;
+            }
         `;
         document.head.appendChild(s);
     }
 
-    function _mostrarModal(progreso, onContinuar, onEmpezarDesdeInicio) {
+    function _mostrarModal(progreso, onContinuar, onEmpezarDesdeInicio, onCancelar) {
         _inyectarEstilosModal();
         _modalVisible = true;
 
@@ -199,6 +228,9 @@
                     <button class="pm-btn pm-btn-secondary" id="pm-btn-inicio">
                         Desde el inicio
                     </button>
+                    <button class="pm-btn pm-btn-cancel" id="pm-btn-cancelar" title="Cerrar sin cargar">
+                        ✕
+                    </button>
                 </div>
             </div>
         `;
@@ -215,12 +247,19 @@
         };
 
         document.getElementById('pm-btn-continuar').onclick = () => {
+            // Evitar que iniciarTTS() abra automáticamente el modo vídeo
+            window._noAutoVideo = true;
+            setTimeout(() => { window._noAutoVideo = false; }, 600);
             _cerrar();
             onContinuar();
         };
         document.getElementById('pm-btn-inicio').onclick = () => {
             _cerrar();
             onEmpezarDesdeInicio();
+        };
+        document.getElementById('pm-btn-cancelar').onclick = () => {
+            _cerrar();
+            if (typeof onCancelar === 'function') onCancelar();
         };
     }
 
@@ -310,6 +349,9 @@
             _saveProgress(_bookId, ruta, idx, _getChapterTitle());
         }
 
+        // ── Actualizar progreso en sidebar ──
+        _actualizarSidebarProgreso();
+
         // Notificar a bookmarks
         if (typeof onCapituloCargadoBookmarks === 'function') {
             onCapituloCargadoBookmarks(ruta);
@@ -363,7 +405,9 @@
                 window._progresoRestaurarFrase = null;
                 window._navegacionIntencionada = false;
                 cargarCapitulo(rutaDestino);
-            }
+            },
+            // Cancelar: cerrar el modal y cargar normalmente (primer capítulo, sin TTS)
+            () => fallbackCargar()
         );
     };
 

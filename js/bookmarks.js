@@ -460,12 +460,18 @@
             <div id="bm-panel-body" style="display:none;padding-top:4px;"></div>
         `;
 
-        // Insertar después de la sección "Capítulos" (segunda sidebar-section)
-        const sections = sidebar.querySelectorAll('.sidebar-section');
-        if (sections.length >= 2) {
-            sections[1].insertAdjacentElement('afterend', section);
+        // Insertar en el slot dedicado del nuevo sidebar (sb-marcadores-slot),
+        // con fallback después de la segunda sidebar-section o al final.
+        const slot = document.getElementById('sb-marcadores-slot');
+        if (slot) {
+            slot.appendChild(section);
         } else {
-            sidebar.appendChild(section);
+            const sections = sidebar.querySelectorAll('.sidebar-section');
+            if (sections.length >= 2) {
+                sections[1].insertAdjacentElement('afterend', section);
+            } else {
+                sidebar.appendChild(section);
+            }
         }
     }
 

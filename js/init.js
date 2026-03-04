@@ -293,6 +293,7 @@ function colapsarSelectorCapitulos() {
     const chipText = document.getElementById('chapter-active-chip-text');
     const chapters = document.getElementById('chapters');
     const btnLeer = document.getElementById('btn-leer-capitulo');
+    const sbLeerWrap = document.getElementById('sb-leer-wrap');
     if (!sel || !chip) return;
     _selectorExpandidoManualmente = false;
     const selOpt = chapters && chapters.selectedIndex >= 0 ? chapters.options[chapters.selectedIndex] : null;
@@ -300,8 +301,12 @@ function colapsarSelectorCapitulos() {
     chipText.textContent = label;
     sel.style.display = 'none';
     chip.style.display = 'flex';
-    // Mostrar botón Leer solo cuando hay un capítulo cargado
-    if (btnLeer) btnLeer.style.display = (selOpt && !selOpt.disabled) ? 'block' : 'none';
+    // Mostrar/ocultar el wrapper del botón Leer (no solo el botón)
+    const mostrarLeer = !!(selOpt && !selOpt.disabled);
+    if (sbLeerWrap) sbLeerWrap.style.display = mostrarLeer ? '' : 'none';
+    if (btnLeer) btnLeer.style.display = mostrarLeer ? 'block' : 'none';
+    // Actualizar preview compacto del capítulo activo
+    if (typeof window._actualizarChPreview === 'function') window._actualizarChPreview();
 }
 
 function expandirSelectorCapitulos() {
@@ -348,6 +353,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Restaurar toggles en la carga inicial (prefijo guest_ — sesión aún no resolvió)
     _restaurarToggles();
     _registrarListenersPrefs();
+
+    // ── Sincronizar pills del sidebar nuevo ──
+    if (typeof syncSidebarPills === 'function') syncSidebarPills();
 });
 
 // ═══════════════════════════════════════
@@ -528,8 +536,14 @@ document.addEventListener('auth:ready', (e) => {
     const userId = e.detail?.user?.id ?? null;
     console.log(`[Prefs] auth:ready — userId: ${userId} | prefijo: ${uGetPrefix()}`);
 
+    // Aplicar tema del usuario autenticado
+    if (typeof initTheme === 'function') initTheme();
+
     _restaurarToggles();
     _restaurarVoces();
+
+    // ── Sincronizar pills del sidebar nuevo ──
+    if (typeof syncSidebarPills === 'function') syncSidebarPills();
 
     // Sincronizar btn-tts-servidor-live
     const savedLocal = uGet('tts_servidor_live');
@@ -706,3 +720,44 @@ function _registrarListenersPrefs() {
         }
     }, 400);
 }
+
+// ═══════════════════════════════════════
+// RENDER THEME GRID — panel Apariencia
+// Los datos de temas están embebidos aquí para no depender del orden de carga de theme.js
+// ═══════════════════════════════════════
+
+window.renderThemeGrid = function () {
+    const grid = document.getElementById('theme-selector-grid');
+    if (!grid) return;
+
+    // Datos de temas (espejo de theme.js — fuente de verdad en theme.js)
+    const TEMAS = [
+        { id: 'ember',   nombre: 'Ember',   desc: 'Ámbar oscuro',      dot: '#e8a44e' },
+        { id: 'ghost',   nombre: 'Ghost',   desc: 'Azul noche',        dot: '#60a8e8' },
+        { id: 'crimson', nombre: 'Crimson', desc: 'Terracota cálida',  dot: '#d4705a' },
+        { id: 'abyss',   nombre: 'Abyss',   desc: 'Esmeralda oscuro',  dot: '#52c49a' }
+    ];
+
+    const current = (typeof getTheme === 'function') ? getTheme()
+        : (typeof uGet === 'function' ? uGet('ui_theme') : localStorage.getItem('ui_theme')) || 'ember';
+
+    grid.innerHTML = TEMAS.map(function(t) {
+        const isActive = t.id === current;
+        return '<button'
+            + ' class="theme-opt-btn' + (isActive ? ' active' : '') + '"'
+            + ' data-theme="' + t.id + '"'
+            + ' onclick="setTheme(\'' + t.id + '\');renderThemeGrid()"'
+            + ' title="' + t.nombre + '">'
+            + '<span class="theme-opt-dot" style="background:' + t.dot + ';box-shadow:0 0 8px ' + t.dot + '55;"></span>'
+            + '<span class="theme-opt-info">'
+            + '<span class="theme-opt-name">' + t.nombre + '</span>'
+            + '<span class="theme-opt-desc">' + t.desc + '</span>'
+            + '</span>'
+            + '</button>';
+    }).join('');
+};
+
+// Aplicar tema guardado al arrancar (sesión guest)
+document.addEventListener('DOMContentLoaded', function () {
+    if (typeof initTheme === 'function') initTheme();
+});

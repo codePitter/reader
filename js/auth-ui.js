@@ -11,9 +11,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
     document.addEventListener('auth:ready', (e) => actualizarAuthUI(e.detail.user));
 
+    // Actualizar rail inmediatamente si la sesión ya estaba activa antes del DOMContentLoaded
     if (typeof _authReady !== 'undefined' && _authReady) {
         actualizarAuthUI(typeof _authUser !== 'undefined' ? _authUser : null);
     }
+    // Re-llamar en el siguiente tick para cubrir el caso en que auth:ready
+    // disparó antes de que el HTML estático del rail estuviera parseado
+    requestAnimationFrame(function () {
+        if (typeof _authUser !== 'undefined') _actualizarRailCuenta(_authUser);
+    });
 });
 
 // ════════════════════════════════════════
@@ -325,7 +331,39 @@ function _inyectarBotonUsuario() {
 // ACTUALIZAR UI SEGÚN ESTADO DE AUTH
 // ════════════════════════════════════════
 
+// ── Helper: actualizar únicamente el ícono del rail ──────────
+// Se llama desde actualizarAuthUI y también directamente en auth:ready
+// para cubrir el caso en que el widget top-bar aún no esté montado.
+function _actualizarRailCuenta(user) {
+    var railIc     = document.getElementById('ic-cuenta');
+    var railSymbol = document.getElementById('ic-cuenta-symbol');
+    var railAvatar = document.getElementById('ic-cuenta-avatar');
+    if (!railIc) return;
+
+    if (user) {
+        var name      = getUserDisplayName();
+        var avatarUrl = getUserAvatarUrl();
+        railIc.title  = name;
+        if (avatarUrl && railAvatar) {
+            railAvatar.referrerPolicy = 'no-referrer';
+            railAvatar.src            = avatarUrl;
+            railAvatar.style.display  = 'block';
+            if (railSymbol) railSymbol.style.display = 'none';
+        } else {
+            if (railAvatar) railAvatar.style.display = 'none';
+            if (railSymbol) railSymbol.style.display = '';
+        }
+    } else {
+        railIc.title = 'Cuenta';
+        if (railAvatar) railAvatar.style.display = 'none';
+        if (railSymbol) railSymbol.style.display = '';
+    }
+}
+
 function actualizarAuthUI(user) {
+    // Siempre actualizar el rail, aunque el widget top-bar no esté montado aún
+    _actualizarRailCuenta(user);
+
     const btn = document.getElementById('auth-user-btn');
     const nameEl = document.getElementById('auth-user-name');
     const initialsEl = document.getElementById('auth-user-initials');

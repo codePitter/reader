@@ -148,12 +148,18 @@ document.addEventListener('DOMContentLoaded', () => {
         </div><!-- /#lg-body -->
     `;
 
-    // Insertar antes de la primera sección del sidebar (encima de "Archivo")
-    const firstSection = sidebar.querySelector('.sidebar-section');
-    if (firstSection) {
-        sidebar.insertBefore(panel, firstSection);
+    // Insertar en el slot dedicado del nuevo sidebar (sb-mis-libros-slot),
+    // con fallback antes de la primera sidebar-section o al final.
+    const slot = document.getElementById('sb-mis-libros-slot');
+    if (slot) {
+        slot.appendChild(panel);
     } else {
-        sidebar.appendChild(panel);
+        const firstSection = sidebar.querySelector('.sidebar-section');
+        if (firstSection) {
+            sidebar.insertBefore(panel, firstSection);
+        } else {
+            sidebar.appendChild(panel);
+        }
     }
 
     // Estilos dinámicos
@@ -691,3 +697,15 @@ function _formatBytes(bytes) {
 
 // Exponer para debugging
 window._lgFetch = lgFetch;
+
+// ── Alias para compatibilidad con el botón del rail (ic-chapters) ──
+// El HTML llama abrirBiblioteca(); este alias abre/cierra el panel lg-section.
+window.abrirBiblioteca = function () {
+    const panel = document.getElementById('lg-section');
+    if (!panel) return;
+    lgTogglePanel();
+    // Si el panel está oculto (slot colapsado) asegurarse de que sea visible
+    panel.style.display = '';
+    // Hacer scroll suave al panel
+    setTimeout(() => panel.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
+};

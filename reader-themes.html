@@ -1,0 +1,1785 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lector Web — Selector de Visualización</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400;1,500&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Literata:ital,opsz,wght@0,7..72,300;0,7..72,400;1,7..72,300;1,7..72,400&family=Bebas+Neue&family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=Crimson+Pro:ital,wght@0,300;1,300&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════
+   DESIGN TOKENS — 4 THEMES
+   Applied via data-theme on <body>
+═══════════════════════════════════════════════ */
+:root {
+  --transition-theme: background 0.45s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+/* EMBER — Warm charcoal + amber */
+[data-theme="ember"] {
+  --bg-base:       #0d0b09;
+  --bg-surface:    #120f0b;
+  --bg-panel:      #0d0b09;
+  --bg-elevated:   #181410;
+  --bg-hover:      rgba(232,164,78,0.05);
+  --border:        rgba(255,255,255,0.05);
+  --border-strong: rgba(255,255,255,0.09);
+  --text-primary:  #f0e8d8;
+  --text-body:     rgba(210,195,175,0.75);
+  --text-muted:    rgba(255,255,255,0.22);
+  --text-dim:      rgba(255,255,255,0.1);
+  --accent:        #e8a44e;
+  --accent-dim:    rgba(232,164,78,0.25);
+  --accent-glow:   rgba(232,164,78,0.12);
+  --accent2:       #7eb8a4;
+  --accent2-dim:   rgba(126,184,164,0.25);
+  --rail-bg:       #0a0806;
+  --font-display:  'Playfair Display', Georgia, serif;
+  --font-body:     'Literata', Georgia, serif;
+  --font-ui:       'DM Mono', monospace;
+  --font-deco:     'Bebas Neue', sans-serif;
+  --ic-active-bg:  rgba(232,164,78,0.1);
+  --pill-on:       rgba(232,164,78,0.28);
+  --pill-thumb:    #e8a44e;
+  --tts-fill:      linear-gradient(90deg, #e8a44e, #c47830);
+  --glow:          radial-gradient(circle at 80% 10%, rgba(232,164,78,0.07) 0%, transparent 55%);
+  --ch-title-size: 1.05rem;
+  --body-size:     0.77rem;
+  --body-lh:       1.95;
+}
+
+/* MERCURY — Slate + electric blue */
+[data-theme="mercury"] {
+  --bg-base:       #090c12;
+  --bg-surface:    #0b0e16;
+  --bg-panel:      #090c12;
+  --bg-elevated:   #0f1220;
+  --bg-hover:      rgba(96,168,232,0.04);
+  --border:        rgba(255,255,255,0.05);
+  --border-strong: rgba(96,168,232,0.12);
+  --text-primary:  #d0e8ff;
+  --text-body:     rgba(180,195,220,0.7);
+  --text-muted:    rgba(255,255,255,0.22);
+  --text-dim:      rgba(255,255,255,0.08);
+  --accent:        #60a8e8;
+  --accent-dim:    rgba(96,168,232,0.22);
+  --accent-glow:   rgba(96,168,232,0.1);
+  --accent2:       #e88060;
+  --accent2-dim:   rgba(232,128,96,0.22);
+  --rail-bg:       #07090e;
+  --font-display:  'Crimson Pro', Georgia, serif;
+  --font-body:     'Literata', Georgia, serif;
+  --font-ui:       'DM Mono', monospace;
+  --font-deco:     'DM Mono', monospace;
+  --ic-active-bg:  rgba(96,168,232,0.1);
+  --pill-on:       rgba(96,168,232,0.25);
+  --pill-thumb:    #60a8e8;
+  --tts-fill:      linear-gradient(90deg, #60a8e8, #3880c0);
+  --glow:          radial-gradient(circle at 10% 80%, rgba(96,168,232,0.07) 0%, transparent 55%);
+  --ch-title-size: 1.1rem;
+  --body-size:     0.76rem;
+  --body-lh:       2;
+}
+
+/* FOLIO — Ink + coral */
+[data-theme="folio"] {
+  --bg-base:       #0c0a0a;
+  --bg-surface:    #100d0d;
+  --bg-panel:      #0c0a0a;
+  --bg-elevated:   #181212;
+  --bg-hover:      rgba(212,112,90,0.04);
+  --border:        rgba(255,255,255,0.05);
+  --border-strong: rgba(212,112,90,0.15);
+  --text-primary:  #f5ece8;
+  --text-body:     rgba(225,210,198,0.65);
+  --text-muted:    rgba(255,255,255,0.2);
+  --text-dim:      rgba(255,255,255,0.08);
+  --accent:        #d4705a;
+  --accent-dim:    rgba(212,112,90,0.22);
+  --accent-glow:   rgba(212,112,90,0.08);
+  --accent2:       #7ea898;
+  --accent2-dim:   rgba(126,168,152,0.22);
+  --rail-bg:       #0a0808;
+  --font-display:  'Cormorant Garamond', Georgia, serif;
+  --font-body:     'Cormorant Garamond', Georgia, serif;
+  --font-ui:       'DM Mono', monospace;
+  --font-deco:     'Bebas Neue', sans-serif;
+  --ic-active-bg:  rgba(212,112,90,0.08);
+  --pill-on:       rgba(212,112,90,0.25);
+  --pill-thumb:    #d4705a;
+  --tts-fill:      linear-gradient(90deg, #d4705a, #a84838);
+  --glow:          radial-gradient(circle at 90% 90%, rgba(212,112,90,0.06) 0%, transparent 55%);
+  --ch-title-size: 1.25rem;
+  --body-size:     0.85rem;
+  --body-lh:       1.9;
+}
+
+/* GRAPHITE — Near-black + emerald */
+[data-theme="graphite"] {
+  --bg-base:       #080a0e;
+  --bg-surface:    #0a0c10;
+  --bg-panel:      #080a0e;
+  --bg-elevated:   #0e1018;
+  --bg-hover:      rgba(82,196,154,0.04);
+  --border:        rgba(255,255,255,0.05);
+  --border-strong: rgba(82,196,154,0.12);
+  --text-primary:  #e8f5f0;
+  --text-body:     rgba(185,200,210,0.65);
+  --text-muted:    rgba(255,255,255,0.2);
+  --text-dim:      rgba(255,255,255,0.08);
+  --accent:        #52c49a;
+  --accent-dim:    rgba(82,196,154,0.22);
+  --accent-glow:   rgba(82,196,154,0.08);
+  --accent2:       #c49a52;
+  --accent2-dim:   rgba(196,154,82,0.22);
+  --rail-bg:       #060809;
+  --font-display:  'Literata', Georgia, serif;
+  --font-body:     'Literata', Georgia, serif;
+  --font-ui:       'DM Mono', monospace;
+  --font-deco:     'DM Mono', monospace;
+  --ic-active-bg:  rgba(82,196,154,0.08);
+  --pill-on:       rgba(82,196,154,0.22);
+  --pill-thumb:    #52c49a;
+  --tts-fill:      linear-gradient(90deg, #52c49a, #308a6a);
+  --glow:          radial-gradient(circle at 20% 50%, rgba(82,196,154,0.05) 0%, transparent 55%);
+  --ch-title-size: 1.05rem;
+  --body-size:     0.78rem;
+  --body-lh:       1.95;
+}
+
+/* ═══════════════════════════════════════════════
+   RESET & BASE
+═══════════════════════════════════════════════ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+
+body {
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  transition: background 0.45s ease, color 0.35s ease;
+}
+
+/* ═══════════════════════════════════════════════
+   APP LAYOUT
+═══════════════════════════════════════════════ */
+.app {
+  display: flex;
+  height: 100vh;
+  position: relative;
+  overflow: hidden;
+}
+.app::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: var(--glow);
+  pointer-events: none;
+  z-index: 0;
+  transition: background 0.6s ease;
+}
+
+/* ═══════════════════════════════════════════════
+   ICON RAIL
+═══════════════════════════════════════════════ */
+.rail {
+  width: 48px;
+  background: var(--rail-bg);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 0;
+  gap: 4px;
+  z-index: 10;
+  flex-shrink: 0;
+  transition: background 0.45s ease, border-color 0.3s ease;
+}
+.ic {
+  width: 32px; height: 32px;
+  border-radius: 7px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 0.15s;
+  position: relative;
+}
+.ic:hover { color: var(--text-muted); background: var(--bg-hover); }
+.ic.on {
+  background: var(--ic-active-bg);
+  color: var(--accent);
+}
+.ic.on::after {
+  content: '';
+  position: absolute;
+  right: -1px; top: 7px; bottom: 7px;
+  width: 2px;
+  background: var(--accent);
+  border-radius: 1px 0 0 1px;
+  transition: background 0.3s ease;
+}
+.ic-sep { height: 1px; width: 20px; background: var(--border); margin: 4px 0; border-radius: 1px; pointer-events: none; }
+
+/* ═══════════════════════════════════════════════
+   SIDEBAR
+═══════════════════════════════════════════════ */
+.sidebar {
+  width: 210px;
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  z-index: 10;
+  transition: background 0.45s ease, border-color 0.3s ease;
+  overflow: hidden;
+}
+.sb-head {
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid var(--border);
+  transition: border-color 0.3s ease;
+}
+.sb-book-tag {
+  font-size: 0.42rem;
+  letter-spacing: 0.18em;
+  color: var(--accent);
+  text-transform: uppercase;
+  margin-bottom: 5px;
+  transition: color 0.3s ease;
+  font-family: var(--font-deco);
+}
+.sb-book-title {
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  line-height: 1.3;
+  margin-bottom: 2px;
+  transition: color 0.3s ease, font-family 0.01s;
+}
+.sb-book-meta {
+  font-size: 0.48rem;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+}
+.sb-progress {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sb-prog-bar { flex: 1; height: 2px; background: var(--border-strong); border-radius: 1px; overflow: hidden; }
+.sb-prog-fill { height: 100%; width: 47%; background: var(--accent); border-radius: 1px; transition: background 0.3s ease; }
+.sb-prog-pct { font-size: 0.45rem; color: var(--accent); letter-spacing: 0.06em; transition: color 0.3s ease; }
+
+.ch-list { flex: 1; overflow: hidden; padding: 6px 0; }
+.ch-item {
+  padding: 7px 16px;
+  font-size: 0.5rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-left: 2px solid transparent;
+  transition: all 0.12s;
+  display: flex; gap: 7px;
+  line-height: 1.4;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ch-item:hover { color: var(--text-primary); background: var(--bg-hover); }
+.ch-item.active {
+  color: var(--text-primary);
+  border-left-color: var(--accent);
+  background: var(--accent-glow);
+}
+.ch-num { color: var(--accent-dim); min-width: 22px; font-size: 0.44rem; flex-shrink: 0; transition: color 0.3s ease; }
+.ch-item.active .ch-num { color: var(--accent); }
+
+.sb-config {
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+  transition: border-color 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.config-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 5px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.config-row:hover { background: var(--bg-hover); }
+.config-label { font-size: 0.48rem; color: var(--text-muted); letter-spacing: 0.04em; }
+/* Pill toggle */
+.pill {
+  width: 28px; height: 13px;
+  border-radius: 7px;
+  background: var(--border-strong);
+  position: relative;
+  cursor: pointer;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+.pill.on { background: var(--pill-on); }
+.pill-thumb {
+  position: absolute;
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  top: 2px;
+  transition: all 0.2s;
+  background: var(--text-muted);
+}
+.pill.off .pill-thumb { left: 2px; }
+.pill.on .pill-thumb { left: 17px; background: var(--pill-thumb); }
+
+/* ═══════════════════════════════════════════════
+   READING AREA
+═══════════════════════════════════════════════ */
+.reading-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-surface);
+  overflow: hidden;
+  position: relative;
+  z-index: 5;
+  transition: background 0.45s ease;
+}
+.reading-topbar {
+  height: 36px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 26px;
+  gap: 10px;
+  flex-shrink: 0;
+  transition: background 0.45s ease, border-color 0.3s ease;
+}
+.breadcrumb {
+  font-size: 0.49rem;
+  color: var(--text-muted);
+  letter-spacing: 0.07em;
+  display: flex; align-items: center; gap: 6px;
+  flex: 1;
+}
+.breadcrumb .sep { color: var(--text-dim); }
+.breadcrumb .cur { color: var(--accent); transition: color 0.3s ease; }
+.topbar-actions { display: flex; gap: 6px; }
+.tb-btn {
+  font-size: 0.47rem;
+  padding: 4px 10px;
+  border-radius: 3px;
+  cursor: pointer;
+  letter-spacing: 0.05em;
+  transition: all 0.15s;
+  border: 1px solid var(--border-strong);
+  color: var(--text-muted);
+  background: transparent;
+}
+.tb-btn:hover { color: var(--text-primary); border-color: var(--accent-dim); }
+.tb-btn.em {
+  border-color: var(--accent-dim);
+  color: var(--accent);
+  background: var(--accent-glow);
+}
+
+.text-area {
+  flex: 1;
+  padding: 28px 52px;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.ch-display-num {
+  font-family: var(--font-deco);
+  font-size: 3.5rem;
+  color: var(--border-strong);
+  line-height: 1;
+  margin-bottom: -8px;
+  letter-spacing: 0.05em;
+  transition: font-family 0.01s, color 0.3s ease;
+  user-select: none;
+}
+[data-theme="mercury"] .ch-display-num { font-size: 1rem; letter-spacing: 0.2em; color: var(--text-dim); }
+[data-theme="graphite"] .ch-display-num { font-size: 1rem; letter-spacing: 0.2em; color: var(--text-dim); }
+
+.ch-title {
+  font-family: var(--font-display);
+  font-size: var(--ch-title-size);
+  font-weight: 400;
+  color: rgba(255,255,255,0.6);
+  margin-bottom: 20px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+  transition: font-family 0.01s, color 0.3s ease, border-color 0.3s ease, font-size 0.3s ease;
+}
+[data-theme="folio"] .ch-title { font-style: italic; font-size: 1.3rem; }
+[data-theme="mercury"] .ch-title { font-style: italic; }
+
+.para {
+  font-family: var(--font-body);
+  font-size: var(--body-size);
+  line-height: var(--body-lh);
+  color: var(--text-body);
+  margin-bottom: 14px;
+  max-width: 620px;
+  transition: font-family 0.01s, font-size 0.3s ease, line-height 0.3s ease, color 0.3s ease;
+}
+.hl {
+  color: var(--text-primary);
+  background: var(--accent-glow);
+  border-radius: 2px;
+  padding: 0 3px;
+  transition: background 0.3s ease, color 0.3s ease;
+}
+[data-theme="folio"] .hl { background: transparent; border-bottom: 1px solid var(--accent-dim); border-radius: 0; padding: 0; font-style: italic; }
+
+/* ═══════════════════════════════════════════════
+   TTS BAR
+═══════════════════════════════════════════════ */
+.tts-bar {
+  height: 46px;
+  background: var(--bg-panel);
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  gap: 12px;
+  flex-shrink: 0;
+  transition: background 0.45s ease, border-color 0.3s ease;
+  z-index: 6;
+}
+.tts-play {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: var(--accent);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px;
+  color: var(--bg-base);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.3s ease, color 0.3s ease, transform 0.15s;
+}
+[data-theme="mercury"] .tts-play { background: transparent; border: 1.5px solid var(--accent); color: var(--accent); }
+[data-theme="graphite"] .tts-play { background: var(--accent-glow); border: 1.5px solid var(--accent-dim); color: var(--accent); }
+[data-theme="folio"] .tts-play { border-radius: 4px; }
+.tts-play:hover { transform: scale(1.1); }
+.tts-sentence {
+  flex: 1;
+  font-family: var(--font-body);
+  font-size: 0.62rem;
+  font-style: italic;
+  color: var(--text-muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  transition: font-family 0.01s, color 0.3s ease;
+}
+.tts-sentence span { color: var(--accent); transition: color 0.3s ease; }
+.tts-track {
+  width: 130px; height: 3px;
+  background: var(--border-strong);
+  border-radius: 2px;
+  position: relative;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.tts-fill { height: 100%; width: 45%; background: var(--tts-fill); border-radius: 2px; transition: background 0.3s ease; }
+.tts-thumb {
+  position: absolute;
+  top: -4px; left: 45%;
+  width: 11px; height: 11px;
+  border-radius: 50%;
+  background: var(--accent);
+  transform: translateX(-50%);
+  transition: background 0.3s ease;
+}
+.tts-info {
+  font-size: 0.47rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+/* ═══════════════════════════════════════════════
+   FLOATING VIDEO
+═══════════════════════════════════════════════ */
+.video-float {
+  position: absolute;
+  bottom: 58px;
+  right: 20px;
+  width: 220px;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 12px 50px rgba(0,0,0,0.7), 0 0 0 1px var(--border-strong);
+  z-index: 30;
+  transition: all 0.35s cubic-bezier(0.34,1.56,0.64,1), border-color 0.3s ease, background 0.45s ease;
+  background: var(--bg-elevated);
+}
+.video-float.hidden { transform: scale(0.7) translateY(20px); opacity: 0; pointer-events: none; }
+.video-float.minimized { width: 44px; height: 44px !important; border-radius: 50%; overflow: hidden; }
+
+.vid-header {
+  height: 26px;
+  display: flex; align-items: center;
+  padding: 0 8px;
+  gap: 6px;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border);
+  cursor: move;
+  transition: background 0.45s ease, border-color 0.3s ease;
+}
+.vid-dot {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: blink 2.5s ease infinite;
+  flex-shrink: 0;
+  transition: background 0.3s ease;
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+.vid-label {
+  flex: 1;
+  font-size: 0.42rem;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+.vid-header-btns { display: flex; gap: 3px; }
+.vid-hbtn {
+  width: 16px; height: 16px;
+  border-radius: 3px;
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 8px; color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.1s;
+}
+.vid-hbtn:hover { color: var(--accent); border-color: var(--accent-dim); background: var(--accent-glow); }
+
+.vid-screen {
+  aspect-ratio: 16/9;
+  background: var(--bg-base);
+  position: relative;
+  overflow: hidden;
+  transition: background 0.45s ease;
+}
+.vid-screen-gradient {
+  position: absolute; inset: 0;
+  background: var(--glow);
+  opacity: 2;
+}
+.vid-screen::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,0.65) 100%);
+}
+.vid-subtitle {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  padding: 14px 9px 7px;
+  background: linear-gradient(to top, rgba(0,0,0,0.88), transparent);
+  z-index: 2;
+  font-family: var(--font-body);
+  font-size: 0.49rem;
+  color: var(--accent);
+  line-height: 1.5;
+  transition: color 0.3s ease, font-family 0.01s;
+}
+.vid-controls {
+  display: flex;
+  gap: 3px;
+  padding: 5px 6px;
+  background: var(--bg-elevated);
+  border-top: 1px solid var(--border);
+  transition: background 0.45s ease, border-color 0.3s ease;
+}
+.vc-btn {
+  flex: 1;
+  height: 20px;
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-size: 0.42rem;
+  color: var(--text-muted);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  letter-spacing: 0.04em;
+  transition: all 0.12s;
+}
+.vc-btn:hover { border-color: var(--accent-dim); color: var(--accent); background: var(--accent-glow); }
+.vc-btn.active { border-color: var(--accent-dim); color: var(--accent); background: var(--accent-glow); }
+
+/* Graphite filmstrip */
+.vid-filmstrip {
+  display: none;
+  gap: 2px;
+  padding: 4px 5px;
+  background: var(--bg-base);
+  border-top: 1px solid var(--border);
+  transition: background 0.45s ease;
+}
+[data-theme="graphite"] .vid-filmstrip { display: flex; }
+.film-t {
+  flex: 1; height: 20px;
+  border-radius: 2px;
+  background: var(--border-strong);
+  border: 1px solid var(--border);
+  transition: all 0.12s;
+}
+.film-t.on { background: var(--accent-glow); border-color: var(--accent-dim); }
+
+/* ═══════════════════════════════════════════════
+   MUSIC PLAYER  — adapts per theme
+   Ember:    expandible bottom bar
+   Mercury:  floating pill top-right
+   Folio:    side drawer right
+   Graphite: top bar under topbar
+═══════════════════════════════════════════════ */
+
+/* Shared EQ bars */
+.eq { display: flex; align-items: flex-end; gap: 2px; height: 18px; }
+.eq-b {
+  width: 2.5px;
+  border-radius: 1px;
+  background: var(--accent);
+  opacity: 0.7;
+  animation: eq-wave var(--d) ease-in-out infinite alternate;
+  transition: background 0.3s ease;
+}
+@keyframes eq-wave { from{ height: 3px } to{ height: var(--h) } }
+
+/* EMBER bottom bar */
+.music-ember {
+  height: 0;
+  overflow: hidden;
+  transition: height 0.3s cubic-bezier(0.4,0,0.2,1);
+  background: var(--bg-panel);
+  border-top: 1px solid transparent;
+  flex-shrink: 0;
+  transition: height 0.3s cubic-bezier(0.4,0,0.2,1), background 0.45s ease, border-color 0.3s ease;
+}
+.music-ember.open { height: 70px; border-top-color: var(--border-strong); }
+.music-ember-inner {
+  height: 70px;
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.m-art {
+  width: 42px; height: 42px;
+  border-radius: 5px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+  transition: background 0.45s ease, border-color 0.3s ease;
+}
+.m-info { flex: 1; }
+.m-name { font-size: 0.56rem; color: var(--text-primary); margin-bottom: 3px; transition: color 0.3s ease; }
+.m-sub { font-size: 0.46rem; color: var(--accent); letter-spacing: 0.06em; transition: color 0.3s ease; }
+.m-controls { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.m-btn {
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  background: var(--bg-hover);
+  border: 1px solid var(--border-strong);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9px; color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.m-btn:hover { border-color: var(--accent-dim); color: var(--accent); background: var(--accent-glow); }
+.m-btn.main { background: var(--accent-glow); border-color: var(--accent-dim); color: var(--accent); }
+.m-vol {
+  width: 54px; height: 2px;
+  background: var(--border-strong);
+  border-radius: 1px;
+  position: relative;
+}
+.m-vol::after { content:''; position:absolute; left:0; top:0; width:65%; height:100%; background: var(--accent); border-radius:1px; transition: background 0.3s ease; }
+
+/* MERCURY pill */
+.music-mercury {
+  position: absolute;
+  top: 44px; right: 16px;
+  background: var(--bg-elevated);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--border-strong);
+  border-radius: 28px;
+  padding: 8px 14px;
+  display: flex; align-items: center; gap: 10px;
+  z-index: 60;
+  transition: all 0.3s cubic-bezier(0.34,1.56,0.64,1), background 0.45s ease, border-color 0.3s ease;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+  pointer-events: none;
+  opacity: 0;
+}
+.music-mercury.open { pointer-events: all; opacity: 1; }
+.music-mercury.collapsed { width: 36px; height: 36px; padding: 0; justify-content: center; border-radius: 50%; overflow: hidden; }
+.mp-icon { font-size: 13px; color: var(--accent); flex-shrink: 0; transition: color 0.3s ease; }
+.mp-name { font-size: 0.5rem; color: var(--text-primary); white-space: nowrap; transition: color 0.3s ease; }
+.mp-type { font-size: 0.44rem; color: var(--accent); letter-spacing: 0.06em; transition: color 0.3s ease; }
+.mp-close {
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: var(--bg-hover);
+  border: 1px solid var(--border-strong);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 8px; color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.1s;
+}
+.mp-close:hover { color: var(--accent); border-color: var(--accent-dim); }
+
+/* FOLIO drawer */
+.music-folio {
+  position: absolute;
+  right: 0; top: 36px; bottom: 46px;
+  width: 0;
+  overflow: hidden;
+  transition: width 0.3s cubic-bezier(0.4,0,0.2,1), background 0.45s ease;
+  background: var(--bg-panel);
+  border-left: 1px solid transparent;
+  z-index: 25;
+}
+.music-folio.open { width: 155px; border-left-color: var(--border-strong); }
+.music-folio-inner { width: 155px; height: 100%; padding: 14px 12px; display: flex; flex-direction: column; gap: 8px; }
+.mf-title { font-family: var(--font-deco); font-size: 0.48rem; letter-spacing: 0.2em; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase; }
+.genre-item {
+  padding: 7px 9px;
+  border-radius: 3px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.genre-item:hover { border-color: var(--accent-dim); background: var(--accent-glow); }
+.genre-item.active { border-color: var(--accent-dim); background: var(--accent-glow); }
+.genre-name { font-size: 0.5rem; color: var(--text-primary); margin-bottom: 2px; transition: color 0.3s ease; }
+.genre-item.active .genre-name { color: var(--accent); }
+.genre-desc { font-size: 0.42rem; color: var(--text-muted); }
+.mf-vol { display: flex; align-items: center; gap: 7px; margin-top: auto; padding-top: 8px; border-top: 1px solid var(--border); }
+.mf-vol-label { font-size: 0.44rem; color: var(--text-muted); }
+.mf-vol-bar { flex: 1; height: 2px; background: var(--border-strong); border-radius: 1px; position: relative; }
+.mf-vol-bar::after { content:''; position:absolute; left:0; top:0; width:60%; height:100%; background: var(--accent); border-radius:1px; transition: background 0.3s ease; }
+
+/* GRAPHITE top music bar */
+.music-graphite {
+  height: 0;
+  overflow: hidden;
+  transition: height 0.25s ease, background 0.45s ease;
+  background: linear-gradient(to bottom, var(--accent-glow), transparent);
+  border-bottom: 1px solid transparent;
+  flex-shrink: 0;
+}
+.music-graphite.open { height: 36px; border-bottom-color: var(--border-strong); }
+.music-graphite-inner {
+  height: 36px;
+  display: flex; align-items: center;
+  padding: 0 22px;
+  gap: 12px;
+}
+.mg-genre {
+  font-size: 0.46rem;
+  color: var(--accent);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  display: flex; align-items: center; gap: 6px;
+  flex-shrink: 0;
+  transition: color 0.3s ease;
+}
+.mg-genre::before { content:'♫'; font-size: 0.62rem; }
+.mg-track { flex: 1; height: 2px; background: var(--border-strong); border-radius: 1px; position: relative; cursor: pointer; }
+.mg-fill { width: 35%; height: 100%; background: var(--accent); border-radius: 1px; opacity: 0.6; transition: background 0.3s ease; }
+.mg-vol { width: 44px; height: 2px; background: var(--border-strong); border-radius: 1px; flex-shrink: 0; position: relative; }
+.mg-vol::after { content:''; position:absolute; left:0;top:0; width:65%; height:100%; background: var(--accent); opacity:0.5; border-radius:1px; transition: background 0.3s ease; }
+.mg-close { font-size: 0.5rem; color: var(--text-muted); cursor: pointer; flex-shrink: 0; transition: color 0.15s; }
+.mg-close:hover { color: var(--text-primary); }
+
+/* ═══════════════════════════════════════════════
+   SETTINGS PANEL
+═══════════════════════════════════════════════ */
+.settings-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0);
+  z-index: 200;
+  pointer-events: none;
+  transition: background 0.3s ease;
+}
+.settings-overlay.open {
+  background: rgba(0,0,0,0.55);
+  pointer-events: all;
+}
+
+.settings-panel {
+  position: fixed;
+  right: -460px;
+  top: 0; bottom: 0;
+  width: 420px;
+  background: var(--bg-surface);
+  border-left: 1px solid var(--border-strong);
+  z-index: 210;
+  display: flex;
+  flex-direction: column;
+  transition: right 0.4s cubic-bezier(0.34,1.2,0.64,1), background 0.45s ease, border-color 0.3s ease;
+  overflow: hidden;
+  box-shadow: -20px 0 60px rgba(0,0,0,0.6);
+}
+.settings-panel.open { right: 0; }
+
+.settings-header {
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-shrink: 0;
+  transition: border-color 0.3s ease;
+}
+.settings-title {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-weight: 400;
+  color: var(--text-primary);
+  transition: color 0.3s ease, font-family 0.01s;
+}
+.settings-subtitle {
+  font-size: 0.46rem;
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
+  margin-top: 4px;
+  text-transform: uppercase;
+}
+.settings-close {
+  width: 28px; height: 28px;
+  border-radius: 6px;
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+.settings-close:hover { color: var(--text-primary); border-color: var(--accent-dim); background: var(--accent-glow); }
+
+.settings-body {
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-width: none;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+/* ─── Section label ─── */
+.settings-section-label {
+  font-size: 0.44rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: color 0.3s ease;
+}
+.settings-section-label::after {
+  content: '';
+  flex: 1; height: 1px;
+  background: var(--border);
+}
+
+/* ─── Theme grid ─── */
+.theme-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.theme-card {
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+}
+.theme-card:hover { border-color: var(--text-muted); transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.4); }
+.theme-card.selected { border-color: var(--accent) !important; }
+.theme-card.selected::after {
+  content: '✓';
+  position: absolute;
+  top: 7px; right: 7px;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #000;
+  font-size: 9px;
+  font-weight: bold;
+  display: flex; align-items: center; justify-content: center;
+  line-height: 1;
+  text-align: center;
+  padding-top: 1px;
+}
+
+/* Mini preview inside card */
+.theme-preview {
+  height: 110px;
+  position: relative;
+  overflow: hidden;
+}
+.tp-rail { position: absolute; left: 0; top: 0; bottom: 0; width: 14px; border-right: 1px solid; display: flex; flex-direction: column; align-items: center; padding: 4px 0; gap: 3px; }
+.tp-ic { width: 8px; height: 8px; border-radius: 2px; }
+.tp-sidebar { position: absolute; left: 14px; top: 0; bottom: 0; width: 48px; border-right: 1px solid; padding: 5px 5px; }
+.tp-sb-title { height: 5px; border-radius: 1px; margin-bottom: 3px; }
+.tp-ch { height: 4px; border-radius: 1px; margin-bottom: 2px; }
+.tp-reading { position: absolute; left: 62px; right: 0; top: 0; bottom: 0; padding: 7px 8px; }
+.tp-rt { height: 6px; border-radius: 1px; margin-bottom: 6px; }
+.tp-p { height: 3px; border-radius: 1px; margin-bottom: 2.5px; }
+.tp-video { position: absolute; right: 5px; bottom: 22px; width: 48px; height: 30px; border-radius: 3px; border: 1px solid; }
+.tp-tts { position: absolute; left: 0; right: 0; bottom: 0; height: 18px; border-top: 1px solid; display: flex; align-items: center; padding: 0 5px; gap: 4px; }
+.tp-tts-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.tp-tts-bar { flex: 1; height: 2px; border-radius: 1px; }
+.tp-tts-fill { height: 100%; width: 45%; border-radius: 1px; }
+
+.theme-card-footer {
+  padding: 8px 10px;
+  border-top: 1px solid;
+}
+.tc-name {
+  font-size: 0.5rem;
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+.tc-desc { font-size: 0.43rem; }
+
+/* Ember preview */
+.tp-ember { background: #0d0b09; }
+.tp-ember .tp-rail { background: #0a0806; border-color: rgba(255,255,255,0.05); }
+.tp-ember .tp-ic { background: rgba(232,164,78,0.15); }
+.tp-ember .tp-sidebar { background: #0d0b09; border-color: rgba(255,255,255,0.05); }
+.tp-ember .tp-sb-title { background: rgba(240,232,216,0.4); }
+.tp-ember .tp-ch { background: rgba(255,255,255,0.06); }
+.tp-ember .tp-ch.a { background: rgba(232,164,78,0.2); border-left: 1.5px solid #e8a44e; }
+.tp-ember .tp-reading { background: #120f0b; }
+.tp-ember .tp-rt { background: rgba(240,232,216,0.25); }
+.tp-ember .tp-p { background: rgba(210,195,175,0.15); }
+.tp-ember .tp-video { background: #090706; border-color: rgba(232,164,78,0.25); }
+.tp-ember .tp-tts { background: #0a0806; border-color: rgba(255,255,255,0.04); }
+.tp-ember .tp-tts-dot { background: #e8a44e; }
+.tp-ember .tp-tts-bar { background: rgba(255,255,255,0.06); }
+.tp-ember .tp-tts-fill { background: #e8a44e; }
+.tp-ember + .theme-card-footer { background: #0d0b09; border-color: rgba(255,255,255,0.05); }
+.tc-ember-name { color: #e8a44e; font-family: 'DM Mono', monospace; }
+.tc-ember-desc { color: rgba(255,255,255,0.3); font-family: 'DM Mono', monospace; }
+
+/* Mercury preview */
+.tp-mercury { background: #090c12; }
+.tp-mercury .tp-rail { background: #07090e; border-color: rgba(255,255,255,0.04); }
+.tp-mercury .tp-ic { background: rgba(96,168,232,0.12); }
+.tp-mercury .tp-sidebar { background: #090c12; border-color: rgba(255,255,255,0.04); }
+.tp-mercury .tp-sb-title { background: rgba(208,232,255,0.3); }
+.tp-mercury .tp-ch { background: rgba(255,255,255,0.05); }
+.tp-mercury .tp-ch.a { background: rgba(96,168,232,0.15); border-left: 1.5px solid #60a8e8; }
+.tp-mercury .tp-reading { background: #0b0e16; }
+.tp-mercury .tp-rt { background: rgba(208,232,255,0.2); }
+.tp-mercury .tp-p { background: rgba(180,195,220,0.12); }
+.tp-mercury .tp-video { background: #060a12; border-color: rgba(96,168,232,0.25); }
+.tp-mercury .tp-tts { background: #08090e; border-color: rgba(255,255,255,0.04); }
+.tp-mercury .tp-tts-dot { background: #60a8e8; }
+.tp-mercury .tp-tts-bar { background: rgba(255,255,255,0.06); }
+.tp-mercury .tp-tts-fill { background: #60a8e8; }
+.tc-mercury-name { color: #60a8e8; font-family: 'DM Mono', monospace; }
+.tc-mercury-desc { color: rgba(255,255,255,0.3); font-family: 'DM Mono', monospace; }
+
+/* Folio preview */
+.tp-folio { background: #0c0a0a; }
+.tp-folio .tp-rail { background: #0a0808; border-color: rgba(255,255,255,0.04); }
+.tp-folio .tp-ic { background: rgba(212,112,90,0.1); }
+.tp-folio .tp-sidebar { background: #0c0a0a; border-color: rgba(255,255,255,0.04); }
+.tp-folio .tp-sb-title { background: rgba(245,236,232,0.3); }
+.tp-folio .tp-ch { background: rgba(255,255,255,0.05); }
+.tp-folio .tp-ch.a { background: rgba(212,112,90,0.12); border-left: 1.5px solid #d4705a; }
+.tp-folio .tp-reading { background: #100d0d; }
+.tp-folio .tp-rt { background: rgba(245,236,232,0.2); width: 55%; }
+.tp-folio .tp-p { background: rgba(225,210,198,0.12); }
+.tp-folio .tp-video { background: #080606; border-color: rgba(212,112,90,0.2); }
+.tp-folio .tp-tts { background: #0a0808; border-color: rgba(255,255,255,0.04); }
+.tp-folio .tp-tts-dot { background: #d4705a; border-radius: 2px; }
+.tp-folio .tp-tts-bar { background: rgba(255,255,255,0.05); }
+.tp-folio .tp-tts-fill { background: #d4705a; }
+.tc-folio-name { color: #d4705a; font-family: 'DM Mono', monospace; }
+.tc-folio-desc { color: rgba(255,255,255,0.3); font-family: 'DM Mono', monospace; }
+
+/* Graphite preview */
+.tp-graphite { background: #080a0e; }
+.tp-graphite .tp-rail { background: #060809; border-color: rgba(255,255,255,0.04); }
+.tp-graphite .tp-ic { background: rgba(82,196,154,0.08); }
+.tp-graphite .tp-sidebar { background: #080a0e; border-color: rgba(255,255,255,0.04); }
+.tp-graphite .tp-sb-title { background: rgba(232,245,240,0.25); }
+.tp-graphite .tp-ch { background: rgba(255,255,255,0.05); }
+.tp-graphite .tp-ch.a { background: rgba(82,196,154,0.1); border-left: 1.5px solid #52c49a; }
+.tp-graphite .tp-reading { background: #0a0c10; }
+.tp-graphite .tp-rt { background: rgba(232,245,240,0.18); }
+.tp-graphite .tp-p { background: rgba(185,200,210,0.1); }
+.tp-graphite .tp-video { background: #050708; border-color: rgba(82,196,154,0.18); }
+.tp-graphite .tp-tts { background: #080a0e; border-color: rgba(255,255,255,0.04); }
+.tp-graphite .tp-tts-dot { background: #52c49a; }
+.tp-graphite .tp-tts-bar { background: rgba(255,255,255,0.05); }
+.tp-graphite .tp-tts-fill { background: #52c49a; }
+.tc-graphite-name { color: #52c49a; font-family: 'DM Mono', monospace; }
+.tc-graphite-desc { color: rgba(255,255,255,0.3); font-family: 'DM Mono', monospace; }
+
+/* ─── Other settings rows ─── */
+.settings-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  transition: border-color 0.3s ease;
+}
+.settings-row:last-child { border-bottom: none; }
+.sr-left {}
+.sr-label { font-size: 0.54rem; color: var(--text-primary); transition: color 0.3s ease; }
+.sr-desc { font-size: 0.44rem; color: var(--text-muted); margin-top: 2px; }
+.sr-right {}
+
+.settings-select {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  padding: 5px 10px;
+  font-size: 0.48rem;
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  cursor: pointer;
+  transition: all 0.15s, background 0.45s ease;
+  outline: none;
+}
+.settings-select:focus { border-color: var(--accent-dim); }
+
+.settings-range {
+  -webkit-appearance: none;
+  width: 100px;
+  height: 3px;
+  background: var(--border-strong);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+.settings-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  transition: background 0.3s ease;
+}
+
+/* ─── Apply button ─── */
+.settings-footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 10px;
+  flex-shrink: 0;
+  transition: border-color 0.3s ease;
+}
+.btn-apply {
+  flex: 1;
+  height: 38px;
+  background: var(--accent);
+  color: var(--bg-base);
+  border: none;
+  border-radius: 5px;
+  font-family: var(--font-ui);
+  font-size: 0.52rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s, background 0.3s ease;
+}
+.btn-apply:hover { opacity: 0.88; transform: translateY(-1px); box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
+.btn-cancel {
+  height: 38px;
+  padding: 0 18px;
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  font-family: var(--font-ui);
+  font-size: 0.5rem;
+  cursor: pointer;
+  transition: all 0.15s, border-color 0.3s ease;
+}
+.btn-cancel:hover { color: var(--text-primary); border-color: var(--accent-dim); }
+
+/* ─── Toast ─── */
+.toast {
+  position: fixed;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 10px 20px;
+  font-size: 0.52rem;
+  color: var(--text-primary);
+  letter-spacing: 0.04em;
+  z-index: 300;
+  opacity: 0;
+  transition: all 0.3s ease;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+  white-space: nowrap;
+}
+.toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+.toast-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+
+/* ─── Transitions for major sections ─── */
+.sidebar, .rail, .reading-wrap, .tts-bar, .reading-topbar,
+.settings-panel, .vid-header, .vid-controls, .vid-filmstrip,
+.music-ember, .music-folio {
+  transition:
+    background 0.45s ease,
+    border-color 0.3s ease,
+    color 0.3s ease;
+}
+</style>
+</head>
+<body data-theme="ember">
+
+<div class="app">
+
+  <!-- ── ICON RAIL ── -->
+  <div class="rail">
+    <div class="ic on" title="Capítulos">≡</div>
+    <div class="ic" title="Buscar">⌕</div>
+    <div class="ic" title="Marcadores">🔖</div>
+    <div class="ic" title="Biblioteca">📚</div>
+    <div class="ic-sep"></div>
+    <div class="ic" id="ic-music" title="Música ambiental" onclick="toggleMusic()">♫</div>
+    <div class="ic" id="ic-video" title="Panel de video" onclick="toggleVideo()">⊞</div>
+    <div class="ic-sep"></div>
+    <div class="ic" title="Ajustes" onclick="openSettings()" style="margin-top:auto;">⚙</div>
+    <div class="ic" title="Cuenta">👤</div>
+  </div>
+
+  <!-- ── SIDEBAR ── -->
+  <div class="sidebar">
+    <div class="sb-head">
+      <div class="sb-book-tag" id="sb-tag">WEB NOVEL · EN CURSO</div>
+      <div class="sb-book-title">Shadow Slave</div>
+      <div class="sb-book-meta" style="font-size:0.47rem;color:var(--text-muted)">Guiltythree · 1 612 caps.</div>
+      <div class="sb-progress">
+        <div class="sb-prog-bar"><div class="sb-prog-fill"></div></div>
+        <div class="sb-prog-pct">47%</div>
+      </div>
+    </div>
+    <div class="ch-list">
+      <div class="ch-item"><span class="ch-num">745</span>El Maestro de Sombras</div>
+      <div class="ch-item"><span class="ch-num">746</span>Umbral Oscuro</div>
+      <div class="ch-item"><span class="ch-num">747</span>Sombras Vivas</div>
+      <div class="ch-item active"><span class="ch-num">748</span>Manifestación de Sombra</div>
+      <div class="ch-item"><span class="ch-num">749</span>El Legado Oscuro</div>
+      <div class="ch-item"><span class="ch-num">750</span>Convergencia</div>
+      <div class="ch-item"><span class="ch-num">751</span>La Brecha</div>
+    </div>
+    <div class="sb-config">
+      <div class="config-row" onclick="togglePill(this)">
+        <span class="config-label">Traducción auto</span>
+        <div class="pill on"><div class="pill-thumb"></div></div>
+      </div>
+      <div class="config-row" onclick="togglePill(this)">
+        <span class="config-label">TTS servidor local</span>
+        <div class="pill on"><div class="pill-thumb"></div></div>
+      </div>
+      <div class="config-row" onclick="togglePill(this)">
+        <span class="config-label">Revisión gramatical</span>
+        <div class="pill off"><div class="pill-thumb"></div></div>
+      </div>
+      <div class="config-row" onclick="togglePill(this)">
+        <span class="config-label">Humanizador IA</span>
+        <div class="pill off"><div class="pill-thumb"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── READING WRAP ── -->
+  <div class="reading-wrap">
+
+    <div class="reading-topbar">
+      <div class="breadcrumb">
+        <span>Shadow Slave</span>
+        <span class="sep">/</span>
+        <span class="cur">Cap. 748 · Shadow Manifestation</span>
+      </div>
+      <div class="topbar-actions">
+        <div class="tb-btn" onclick="toggleMusic()">♫ Música</div>
+        <div class="tb-btn" onclick="toggleVideo()">⊞ Video</div>
+        <div class="tb-btn em">⤓ Exportar</div>
+        <div class="tb-btn" onclick="openSettings()">⚙ Ajustes</div>
+      </div>
+    </div>
+
+    <!-- GRAPHITE top music bar -->
+    <div class="music-graphite" id="music-graphite">
+      <div class="music-graphite-inner">
+        <div class="mg-genre">Mystery Ambient</div>
+        <div class="eq" style="margin:0 4px;">
+          <div class="eq-b" style="--d:0.7s;--h:12px;height:8px;"></div>
+          <div class="eq-b" style="--d:0.5s;--h:10px;height:5px;"></div>
+          <div class="eq-b" style="--d:0.9s;--h:14px;height:9px;"></div>
+          <div class="eq-b" style="--d:0.6s;--h:9px;height:6px;"></div>
+        </div>
+        <div class="mg-track"><div class="mg-fill"></div></div>
+        <div style="font-size:0.44rem;color:var(--text-muted);">vol</div>
+        <div class="mg-vol"></div>
+        <div class="mg-close" onclick="toggleMusic()">✕</div>
+      </div>
+    </div>
+
+    <div class="text-area">
+      <div class="ch-display-num" id="ch-display-num">748</div>
+      <div class="ch-title">Shadow Manifestation</div>
+      <div class="para">Shadow Manifestation was an… interesting Ability, especially when combined with the evolved Shadow Control. It was deceptively straightforward, but held so much depth that Sunny wasn't sure that he would be able to figure out all of its potential uses in a short span of time.</div>
+      <div class="para">The fundamental function of Shadow Manifestation was rather simple — it allowed him to turn <span class="hl">shadows tangible</span>. But the devil hid in the details.</div>
+      <div class="para">Now that Sunny enjoyed authority over all shadows, and not only his own, he could manipulate their shape and even make them move according to his will. However, that facet of his Aspect had its caveats.</div>
+      <div class="para">Not all shadows were the same. Some were young, and some were ancient. Some were deep, and some were shallow. Most importantly, some belonged to inanimate objects, and some belonged to living beings.</div>
+    </div>
+
+    <!-- EMBER bottom music bar -->
+    <div class="music-ember" id="music-ember">
+      <div class="music-ember-inner">
+        <div class="m-art">🎼</div>
+        <div class="m-info">
+          <div class="m-name">Mystery Ambient — Web Audio</div>
+          <div class="m-sub">Procedural · 100% local · sin latencia</div>
+        </div>
+        <div class="eq">
+          <div class="eq-b" style="--d:0.7s;--h:18px;height:10px;"></div>
+          <div class="eq-b" style="--d:0.9s;--h:14px;height:6px;"></div>
+          <div class="eq-b" style="--d:0.6s;--h:20px;height:14px;"></div>
+          <div class="eq-b" style="--d:1.1s;--h:10px;height:8px;"></div>
+          <div class="eq-b" style="--d:0.8s;--h:16px;height:12px;"></div>
+          <div class="eq-b" style="--d:1.0s;--h:12px;height:4px;"></div>
+        </div>
+        <div class="m-controls">
+          <div class="m-btn">≪</div>
+          <div class="m-btn main">▶</div>
+          <div class="m-btn">≫</div>
+          <div class="m-vol" style="margin-left:6px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tts-bar">
+      <div class="tts-play">▶</div>
+      <div class="tts-sentence">…it allowed him to turn <span>shadows tangible</span>. But the devil hid in the details.</div>
+      <div class="tts-track">
+        <div class="tts-fill"></div>
+        <div class="tts-thumb"></div>
+      </div>
+      <div class="tts-info">Frase 42/310<br>3:42 · es-AR-Tomas</div>
+    </div>
+
+    <!-- FLOATING VIDEO -->
+    <div class="video-float" id="video-float">
+      <div class="vid-header">
+        <div class="vid-dot"></div>
+        <div class="vid-label">VIDEO EN VIVO · 1280×720</div>
+        <div class="vid-header-btns">
+          <div class="vid-hbtn" onclick="minimizeVideo()" title="Minimizar">−</div>
+          <div class="vid-hbtn" title="Pantalla completa">⤢</div>
+          <div class="vid-hbtn" onclick="toggleVideo()" title="Cerrar">✕</div>
+        </div>
+      </div>
+      <div class="vid-screen">
+        <div class="vid-screen-gradient"></div>
+        <div class="vid-subtitle">…shadows tangible. But the devil hid in the details of his newfound power over darkness.</div>
+      </div>
+      <div class="vid-filmstrip">
+        <div class="film-t"></div>
+        <div class="film-t on"></div>
+        <div class="film-t"></div>
+        <div class="film-t"></div>
+        <div class="film-t"></div>
+      </div>
+      <div class="vid-controls">
+        <div class="vc-btn active">● REC</div>
+        <div class="vc-btn">🖼 Imagen</div>
+        <div class="vc-btn">✦ Efecto</div>
+        <div class="vc-btn">⤓ MP4</div>
+      </div>
+    </div>
+
+    <!-- MERCURY pill -->
+    <div class="music-mercury" id="music-mercury">
+      <div class="mp-icon">♫</div>
+      <div>
+        <div class="mp-name">Mystery Ambient</div>
+        <div class="mp-type">Web Audio · Procedural</div>
+      </div>
+      <div class="eq" style="margin:0 4px;">
+        <div class="eq-b" style="--d:0.7s;--h:12px;height:6px;"></div>
+        <div class="eq-b" style="--d:0.5s;--h:14px;height:10px;"></div>
+        <div class="eq-b" style="--d:0.9s;--h:10px;height:4px;"></div>
+        <div class="eq-b" style="--d:0.6s;--h:16px;height:8px;"></div>
+      </div>
+      <div class="mp-close" onclick="toggleMusic()">✕</div>
+    </div>
+
+    <!-- FOLIO drawer -->
+    <div class="music-folio" id="music-folio">
+      <div class="music-folio-inner">
+        <div class="mf-title">Música Ambiental</div>
+        <div class="genre-item active"><div class="genre-name">Mystery</div><div class="genre-desc">Osciladores + pulso</div></div>
+        <div class="genre-item"><div class="genre-name">Suspense</div><div class="genre-desc">Tremolo + heartbeat</div></div>
+        <div class="genre-item"><div class="genre-name">Epic</div><div class="genre-desc">Bronces + percusión</div></div>
+        <div class="genre-item"><div class="genre-name">Drama</div><div class="genre-desc">Pads suaves + sweep</div></div>
+        <div class="genre-item"><div class="genre-name">Horror</div><div class="genre-desc">Disonancia + ruido</div></div>
+        <div class="mf-vol">
+          <span class="mf-vol-label">Vol</span>
+          <div class="mf-vol-bar"></div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /reading-wrap -->
+
+</div><!-- /app -->
+
+
+<!-- ═══════════════════════════════════════════════
+     SETTINGS PANEL
+═══════════════════════════════════════════════ -->
+<div class="settings-overlay" id="settings-overlay" onclick="closeSettingsOverlay(event)">
+  <div class="settings-panel" id="settings-panel">
+
+    <div class="settings-header">
+      <div>
+        <div class="settings-title">Ajustes</div>
+        <div class="settings-subtitle">Visualización & Preferencias</div>
+      </div>
+      <div class="settings-close" onclick="closeSettings()">✕</div>
+    </div>
+
+    <div class="settings-body">
+
+      <!-- THEME PICKER -->
+      <div>
+        <div class="settings-section-label">Tema visual</div>
+        <div class="theme-grid">
+
+          <!-- EMBER -->
+          <div class="theme-card selected" id="card-ember" onclick="selectTheme('ember')">
+            <div class="theme-preview tp-ember">
+              <div class="tp-rail">
+                <div class="tp-ic"></div><div class="tp-ic"></div><div class="tp-ic"></div>
+              </div>
+              <div class="tp-sidebar">
+                <div class="tp-sb-title"></div>
+                <div class="tp-ch"></div><div class="tp-ch a"></div><div class="tp-ch"></div><div class="tp-ch"></div>
+              </div>
+              <div class="tp-reading">
+                <div class="tp-rt" style="width:70%"></div>
+                <div class="tp-p" style="width:95%"></div><div class="tp-p" style="width:88%"></div>
+                <div class="tp-p" style="width:92%"></div><div class="tp-p" style="width:75%"></div>
+              </div>
+              <div class="tp-video"></div>
+              <div class="tp-tts">
+                <div class="tp-tts-dot"></div>
+                <div class="tp-tts-bar"><div class="tp-tts-fill"></div></div>
+              </div>
+            </div>
+            <div class="theme-card-footer" style="background:#0d0b09;border-color:rgba(255,255,255,0.05);">
+              <div class="tc-name tc-ember-name">01 · Ember</div>
+              <div class="tc-desc tc-ember-desc">Charcoal & Amber · Warm</div>
+            </div>
+          </div>
+
+          <!-- MERCURY -->
+          <div class="theme-card" id="card-mercury" onclick="selectTheme('mercury')">
+            <div class="theme-preview tp-mercury">
+              <div class="tp-rail">
+                <div class="tp-ic"></div><div class="tp-ic"></div><div class="tp-ic"></div>
+              </div>
+              <div class="tp-sidebar">
+                <div class="tp-sb-title"></div>
+                <div class="tp-ch"></div><div class="tp-ch a"></div><div class="tp-ch"></div><div class="tp-ch"></div>
+              </div>
+              <div class="tp-reading">
+                <div class="tp-rt" style="width:65%"></div>
+                <div class="tp-p" style="width:95%"></div><div class="tp-p" style="width:82%"></div>
+                <div class="tp-p" style="width:90%"></div><div class="tp-p" style="width:70%"></div>
+              </div>
+              <div class="tp-video"></div>
+              <div class="tp-tts">
+                <div class="tp-tts-dot" style="border-radius:50%;width:8px;height:8px;border:1.5px solid #60a8e8;background:transparent;"></div>
+                <div class="tp-tts-bar"><div class="tp-tts-fill"></div></div>
+              </div>
+            </div>
+            <div class="theme-card-footer" style="background:#090c12;border-color:rgba(255,255,255,0.05);">
+              <div class="tc-name tc-mercury-name">02 · Mercury</div>
+              <div class="tc-desc tc-mercury-desc">Slate & Electric · Tech</div>
+            </div>
+          </div>
+
+          <!-- FOLIO -->
+          <div class="theme-card" id="card-folio" onclick="selectTheme('folio')">
+            <div class="theme-preview tp-folio">
+              <div class="tp-rail">
+                <div class="tp-ic"></div><div class="tp-ic"></div><div class="tp-ic"></div>
+              </div>
+              <div class="tp-sidebar">
+                <div class="tp-sb-title"></div>
+                <div class="tp-ch"></div><div class="tp-ch a"></div><div class="tp-ch"></div><div class="tp-ch"></div>
+              </div>
+              <div class="tp-reading">
+                <div class="tp-rt" style="width:55%"></div>
+                <div class="tp-p" style="width:95%"></div><div class="tp-p" style="width:86%"></div>
+                <div class="tp-p" style="width:92%"></div><div class="tp-p" style="width:68%"></div>
+              </div>
+              <div class="tp-video"></div>
+              <div class="tp-tts">
+                <div class="tp-tts-dot" style="border-radius:2px;"></div>
+                <div class="tp-tts-bar"><div class="tp-tts-fill"></div></div>
+              </div>
+            </div>
+            <div class="theme-card-footer" style="background:#0c0a0a;border-color:rgba(255,255,255,0.05);">
+              <div class="tc-name tc-folio-name">03 · Folio</div>
+              <div class="tc-desc tc-folio-desc">Ink & Coral · Editorial</div>
+            </div>
+          </div>
+
+          <!-- GRAPHITE -->
+          <div class="theme-card" id="card-graphite" onclick="selectTheme('graphite')">
+            <div class="theme-preview tp-graphite">
+              <div class="tp-rail">
+                <div class="tp-ic"></div><div class="tp-ic"></div><div class="tp-ic"></div>
+              </div>
+              <div class="tp-sidebar">
+                <div class="tp-sb-title"></div>
+                <div class="tp-ch"></div><div class="tp-ch a"></div><div class="tp-ch"></div><div class="tp-ch"></div>
+              </div>
+              <div class="tp-reading">
+                <div class="tp-rt" style="width:68%"></div>
+                <div class="tp-p" style="width:95%"></div><div class="tp-p" style="width:80%"></div>
+                <div class="tp-p" style="width:90%"></div><div class="tp-p" style="width:72%"></div>
+              </div>
+              <div class="tp-video"></div>
+              <div class="tp-tts">
+                <div class="tp-tts-dot"></div>
+                <div class="tp-tts-bar"><div class="tp-tts-fill"></div></div>
+              </div>
+            </div>
+            <div class="theme-card-footer" style="background:#080a0e;border-color:rgba(255,255,255,0.05);">
+              <div class="tc-name tc-graphite-name">04 · Graphite</div>
+              <div class="tc-desc tc-graphite-desc">Near-black & Emerald · Minimal</div>
+            </div>
+          </div>
+
+        </div><!-- /theme-grid -->
+      </div>
+
+      <!-- TIPOGRAFÍA -->
+      <div>
+        <div class="settings-section-label">Tipografía de lectura</div>
+        <div class="settings-row">
+          <div class="sr-left">
+            <div class="sr-label">Fuente del cuerpo</div>
+            <div class="sr-desc">Sólo afecta el texto de los capítulos</div>
+          </div>
+          <div class="sr-right">
+            <select class="settings-select">
+              <option>Literata (recomendada)</option>
+              <option>Cormorant Garamond</option>
+              <option>Crimson Pro</option>
+              <option>Georgia</option>
+            </select>
+          </div>
+        </div>
+        <div class="settings-row">
+          <div class="sr-left">
+            <div class="sr-label">Tamaño de fuente</div>
+            <div class="sr-desc">Escala base del texto</div>
+          </div>
+          <div class="sr-right">
+            <input type="range" class="settings-range" min="80" max="130" value="100">
+          </div>
+        </div>
+        <div class="settings-row">
+          <div class="sr-left">
+            <div class="sr-label">Altura de línea</div>
+            <div class="sr-desc">Interlineado del texto</div>
+          </div>
+          <div class="sr-right">
+            <input type="range" class="settings-range" min="60" max="120" value="90">
+          </div>
+        </div>
+        <div class="settings-row">
+          <div class="sr-left">
+            <div class="sr-label">Ancho de columna</div>
+            <div class="sr-desc">Máximo del área de lectura</div>
+          </div>
+          <div class="sr-right">
+            <select class="settings-select">
+              <option>Estrecho (560px)</option>
+              <option selected>Normal (640px)</option>
+              <option>Amplio (760px)</option>
+              <option>Completo</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- TTS -->
+      <div>
+        <div class="settings-section-label">TTS & Audio</div>
+        <div class="settings-row">
+          <div class="sr-left">
+            <div class="sr-label">Motor TTS</div>
+          </div>
+          <div class="sr-right">
+            <select class="settings-select">
+              <option>edge-tts (local)</option>
+              <option>SpeechSynthesis (browser)</option>
+            </select>
+          </div>
+        </div>
+        <div class="settings-row">
+          <div class="sr-left">
+            <div class="sr-label">Velocidad</div>
+          </div>
+          <div class="sr-right">
+            <input type="range" class="settings-range" min="50" max="200" value="110">
+          </div>
+        </div>
+        <div class="settings-row">
+          <div class="sr-left">
+            <div class="sr-label">Voz activa</div>
+          </div>
+          <div class="sr-right">
+            <select class="settings-select">
+              <option>es-AR-TomasNeural</option>
+              <option>es-AR-ElenaNeural</option>
+              <option>es-ES-AlvaroNeural</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- VIDEO -->
+      <div>
+        <div class="settings-section-label">Video & Exportación</div>
+        <div class="settings-row">
+          <div class="sr-left">
+            <div class="sr-label">Resolución de video</div>
+          </div>
+          <div class="sr-right">
+            <select class="settings-select">
+              <option>1920×1080</option>
+              <option selected>1280×720</option>
+              <option>854×480</option>
+            </select>
+          </div>
+        </div>
+        <div class="settings-row">
+          <div class="sr-left">
+            <div class="sr-label">Proveedor de imágenes</div>
+          </div>
+          <div class="sr-right">
+            <select class="settings-select">
+              <option>Pixabay</option>
+              <option>Pexels</option>
+              <option>Unsplash</option>
+              <option>Openverse</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /settings-body -->
+
+    <div class="settings-footer">
+      <button class="btn-cancel" onclick="closeSettings()">Cancelar</button>
+      <button class="btn-apply" onclick="applySettings()">Aplicar cambios</button>
+    </div>
+
+  </div>
+</div>
+
+
+<!-- TOAST -->
+<div class="toast" id="toast">
+  <div class="toast-dot"></div>
+  <span id="toast-msg">Tema aplicado</span>
+</div>
+
+
+<script>
+/* ── STATE ── */
+let currentTheme   = 'ember';
+let pendingTheme   = 'ember';
+let videoVisible   = true;
+let videoMinimized = false;
+let musicOpen      = false;
+
+/* ── THEME TOKENS for instant preview ── */
+const THEMES = {
+  ember:    { label:'01 · Ember',    desc:'Charcoal & Amber aplicado' },
+  mercury:  { label:'02 · Mercury',  desc:'Slate & Electric aplicado' },
+  folio:    { label:'03 · Folio',    desc:'Ink & Coral aplicado' },
+  graphite: { label:'04 · Graphite', desc:'Graphite & Emerald aplicado' },
+};
+
+/* ── SETTINGS PANEL ── */
+function openSettings() {
+  document.getElementById('settings-overlay').classList.add('open');
+  document.getElementById('settings-panel').classList.add('open');
+  pendingTheme = currentTheme;
+}
+function closeSettings() {
+  document.getElementById('settings-overlay').classList.remove('open');
+  document.getElementById('settings-panel').classList.remove('open');
+  // revert pending to current if cancelled
+  if (pendingTheme !== currentTheme) {
+    selectTheme(currentTheme, false);
+  }
+}
+function closeSettingsOverlay(e) {
+  if (e.target === document.getElementById('settings-overlay')) closeSettings();
+}
+
+/* ── THEME SELECTION ── */
+function selectTheme(theme, preview = true) {
+  pendingTheme = theme;
+  // update cards
+  document.querySelectorAll('.theme-card').forEach(c => c.classList.remove('selected'));
+  document.getElementById('card-' + theme).classList.add('selected');
+  // live preview while panel is open
+  if (preview) applyThemeToDOM(theme);
+}
+
+function applyThemeToDOM(theme) {
+  document.body.setAttribute('data-theme', theme);
+  // update music visibility per theme
+  syncMusicUI(theme, musicOpen);
+}
+
+/* ── APPLY BUTTON ── */
+function applySettings() {
+  currentTheme = pendingTheme;
+  applyThemeToDOM(currentTheme);
+  // save to localStorage
+  try { localStorage.setItem('reader-theme', currentTheme); } catch(e){}
+  closeSettings();
+  showToast('✓  ' + THEMES[currentTheme].desc);
+}
+
+/* ── MUSIC ── */
+function toggleMusic() {
+  musicOpen = !musicOpen;
+  syncMusicUI(document.body.getAttribute('data-theme'), musicOpen);
+  document.getElementById('ic-music').classList.toggle('on', musicOpen);
+}
+
+function syncMusicUI(theme, open) {
+  // hide all
+  document.getElementById('music-ember').classList.remove('open');
+  document.getElementById('music-mercury').classList.remove('open');
+  document.getElementById('music-folio').classList.remove('open');
+  document.getElementById('music-graphite').classList.remove('open');
+
+  if (!open) return;
+
+  if (theme === 'ember')    document.getElementById('music-ember').classList.add('open');
+  if (theme === 'mercury')  document.getElementById('music-mercury').classList.add('open');
+  if (theme === 'folio')    document.getElementById('music-folio').classList.add('open');
+  if (theme === 'graphite') document.getElementById('music-graphite').classList.add('open');
+}
+
+/* ── VIDEO ── */
+function toggleVideo() {
+  videoVisible = !videoVisible;
+  videoMinimized = false;
+  const vf = document.getElementById('video-float');
+  if (videoVisible) {
+    vf.classList.remove('hidden', 'minimized');
+  } else {
+    vf.classList.add('hidden');
+    vf.classList.remove('minimized');
+  }
+  document.getElementById('ic-video').classList.toggle('on', videoVisible);
+}
+function minimizeVideo() {
+  if (!videoVisible) return;
+  videoMinimized = !videoMinimized;
+  document.getElementById('video-float').classList.toggle('minimized', videoMinimized);
+}
+
+/* ── PILL TOGGLES (sidebar) ── */
+function togglePill(row) {
+  const pill = row.querySelector('.pill');
+  if (!pill) return;
+  pill.classList.toggle('on');
+  pill.classList.toggle('off');
+}
+
+/* ── CHAPTER CLICK ── */
+document.querySelectorAll('.ch-item').forEach(ch => {
+  ch.addEventListener('click', () => {
+    document.querySelectorAll('.ch-item').forEach(c => c.classList.remove('active'));
+    ch.classList.add('active');
+  });
+});
+
+/* ── TOAST ── */
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  const m = document.getElementById('toast-msg');
+  m.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+/* ── LOAD SAVED THEME ── */
+(function init() {
+  let saved;
+  try { saved = localStorage.getItem('reader-theme'); } catch(e) {}
+  if (saved && THEMES[saved]) {
+    currentTheme = pendingTheme = saved;
+    applyThemeToDOM(saved);
+    document.querySelectorAll('.theme-card').forEach(c => c.classList.remove('selected'));
+    document.getElementById('card-' + saved).classList.add('selected');
+  }
+  document.getElementById('ic-video').classList.add('on');
+})();
+
+/* ── KEYBOARD ESC ── */
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeSettings();
+  if (e.key === 'Enter' && document.getElementById('settings-panel').classList.contains('open')) {
+    applySettings();
+  }
+});
+</script>
+</body>
+</html>

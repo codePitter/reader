@@ -610,8 +610,13 @@ function iniciarTTS(fraseInicial = 0) {
     const contenido = document.getElementById('texto-contenido');
     const texto = contenido.textContent.trim();
 
-    if (!texto || texto === 'Aquí aparecerá el contenido del capítulo seleccionado...') {
-        mostrarNotificacion('⚠ No hay texto para leer');
+    const _placeholders = [
+        'Aquí aparecerá el contenido del capítulo seleccionado',
+        'Carga un archivo EPUB',
+        'Selecciona un capítulo'
+    ];
+    if (!texto || texto.length < 30 || _placeholders.some(p => texto.startsWith(p))) {
+        mostrarNotificacion('⚠ No hay texto para leer. Carga un EPUB y selecciona un capítulo.');
         return;
     }
 
@@ -663,7 +668,7 @@ function iniciarTTS(fraseInicial = 0) {
             detectarGeneroConIA();
         }
     }
-    if (typeof abrirvideo === 'function') {
+    if (typeof abrirvideo === 'function' && !window._noAutoVideo) {
         abrirvideo();
     }
 

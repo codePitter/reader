@@ -58,6 +58,9 @@ document.getElementById('epub-file').addEventListener('change', async function (
     _epubFilename = file.name;
     if (typeof cargarReemplazosParaArchivo === 'function') cargarReemplazosParaArchivo(file.name);
 
+    // ── voice-roles: nuevo libro cargado — resetear análisis de personajes ──
+    if (typeof voiceRolesOnEpubLoad === 'function') voiceRolesOnEpubLoad();
+
     try {
         document.getElementById('file-name').textContent = 'Cargando...';
         const arrayBuffer = await file.arrayBuffer();
@@ -226,6 +229,16 @@ document.getElementById('epub-file').addEventListener('change', async function (
         document.getElementById('chapter-selector').style.display = 'block';
         document.getElementById('file-name').textContent = `${file.name} (${archivosOrdenados.length} capítulos)`;
         mostrarNotificacion('✓ EPUB cargado correctamente');
+
+        // ── Actualizar sidebar: título del libro + metadata ──
+        const _tituloLibro = file.name.replace(/\.[^.]+$/, '');
+        if (typeof actualizarSidebarLibro === 'function') {
+            actualizarSidebarLibro(_tituloLibro, archivosOrdenados.length, 0);
+        }
+        // Forzar render de la lista de capítulos en el sidebar nuevo
+        if (typeof renderChListMirror === 'function') {
+            setTimeout(renderChListMirror, 50);
+        }
 
         if (archivosOrdenados.length > 0) {
             // Hook de progreso: permite mostrar "¿continuar?" antes de abrir cap 1
@@ -527,6 +540,13 @@ async function cargarCapitulo(ruta, _cancelToken) {
 
         renderizarTextoEnContenedor(document.getElementById('texto-contenido'), textoCompleto);
         actualizarEstadisticas();
+
+        // ── voice-roles: capítulo listo — analizar personajes/oraciones en background ──
+        // Es async pero NO necesita await: aplica heurísticas inmediato y lanza IA en BG.
+        {
+            const _vrRuta = document.getElementById('chapters')?.value;
+            if (typeof voiceRolesOnCapituloListo === 'function') voiceRolesOnCapituloListo(_vrRuta);
+        }
 
         // Hook de progreso/marcadores: capítulo completamente cargado y renderizado
         if (typeof onCapituloCargado === 'function') onCapituloCargado(ruta);
