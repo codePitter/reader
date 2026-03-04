@@ -32,7 +32,7 @@
             <div class="ic" id="ic-video" onclick="toggleVideo()" title="Video flotante">⊞</div>
             <div class="ic" id="ic-rec" onclick="toggleGrabacion()" title="Grabar" style="display:none">⏺</div>
             <div class="ic" onclick="openSettings()" title="Ajustes" style="margin-top:auto;">⚙</div>
-            <div class="ic" id="ic-cuenta" onclick="if(typeof abrirModalAuth==='function')abrirModalAuth()" title="Cuenta">
+            <div class="ic" id="ic-cuenta" onclick="_cuentaRailClick()" title="Cuenta">
                 <span class="material-symbols-outlined" id="ic-cuenta-symbol">account_circle</span>
                 <img id="ic-cuenta-avatar" class="ic-cuenta-avatar" src="" alt="" style="display:none" referrerpolicy="no-referrer">
             </div>
@@ -40,8 +40,26 @@
 
         <!-- ── SIDEBAR ── -->
         <div class="sidebar" id="sidebar">
-            <!-- Slot para Mis Libros (library.js inyecta aquí) -->
-            <div id="sb-mis-libros-slot"></div>
+            <!-- ── MIS LIBROS — sección colapsable (biblioteca.js inyecta contenido aquí) ── -->
+            <div class="sb-section" id="sb-section-mis-libros">
+                <div class="sb-section-hdr" onclick="this.closest('.sb-section').classList.toggle('open')">
+                    <span class="sb-section-ico">📚</span>
+                    <span class="sb-section-title">Mis libros</span>
+                    <span class="sb-section-arrow">▶</span>
+                </div>
+                <div class="sb-section-body">
+                    <div id="sb-mis-libros-slot"></div>
+                </div>
+            </div>
+
+            <!-- ── LIBRO ACTIVO — sección colapsable ── -->
+            <div class="sb-section" id="sb-section-libro">
+                <div class="sb-section-hdr" onclick="this.closest('.sb-section').classList.toggle('open')">
+                    <span class="sb-section-ico">📖</span>
+                    <span class="sb-section-title">Libro activo</span>
+                    <span class="sb-section-arrow">▶</span>
+                </div>
+                <div class="sb-section-body">
             <div class="sb-head">
                 <div class="sb-book-tag" id="sb-book-tag">LIBRO</div>
                 <div class="sb-book-title" id="sb-book-title">TotalReader</div>
@@ -53,6 +71,17 @@
                 <input type="text" id="chapter-search" placeholder="🔍 Buscar capítulo..."
                        oninput="filtrarCapitulos(this.value)" class="sb-search">
             </div>
+                </div>
+            </div>
+
+            <!-- ── CAPÍTULOS — sección colapsable ── -->
+            <div class="sb-section sb-section-xl" id="sb-section-capitulos">
+                <div class="sb-section-hdr" onclick="this.closest('.sb-section').classList.toggle('open')">
+                    <span class="sb-section-ico">≡</span>
+                    <span class="sb-section-title">Capítulos</span>
+                    <span class="sb-section-arrow">▶</span>
+                </div>
+                <div class="sb-section-body">
             <div class="ch-list" id="ch-list-new"></div>
             <!-- Capítulo activo compacto (visible cuando lista está contraída) -->
             <div class="ch-active-preview" id="ch-active-preview" onclick="toggleChapterList()">
@@ -63,6 +92,8 @@
             <div id="sb-marcadores-slot"></div>
             <div class="sb-leer-wrap" id="sb-leer-wrap" style="display:none;">
                 <button id="btn-leer-capitulo" type="button" onclick="aplicarConfiguracion()" class="btn-leer">▶ Leer capítulo</button>
+            </div>
+                </div>
             </div>
 
             <!-- ── TTS — sección colapsable ── -->
@@ -146,7 +177,7 @@
             </div>
 
             <!-- ── AJUSTES — sección colapsable ── -->
-            <div class="sb-section" id="sb-section-config" style="margin-top:auto;">
+            <div class="sb-section" id="sb-section-config">
                 <div class="sb-section-hdr" onclick="this.closest('.sb-section').classList.toggle('open')">
                     <span class="sb-section-ico">⚙</span>
                     <span class="sb-section-title">Ajustes de reproducción</span>
@@ -166,7 +197,7 @@
                             <span class="config-label">Revisión gramatical</span>
                             <div class="pill off" id="pill-grammar"><div class="pill-thumb"></div></div>
                         </div>
-                        <div class="config-row" onclick="togglePillRow(this,'tts_humanizer_activo',function(){if(typeof toggleTTSHumanizer==='function')toggleTTSHumanizer();})">
+                        <div class="config-row" onclick="togglePillRow(this,'toggle_tts_humanizer',function(){if(typeof toggleTTSHumanizer==='function')toggleTTSHumanizer();})">
                             <span class="config-label">Humanizador IA</span>
                             <div class="pill off" id="pill-humanizer"><div class="pill-thumb"></div></div>
                         </div>
@@ -638,8 +669,13 @@
             <div class="settings-body">
 
                 <!-- TEMA VISUAL -->
+                <div class="sp-section" id="sp-sec-tema">
+                    <div class="sp-section-hdr" onclick="this.closest('.sp-section').classList.toggle('open')">
+                        <span class="sp-section-title">Tema visual</span>
+                        <span class="sp-section-arrow">▶</span>
+                    </div>
+                    <div class="sp-section-body"><div class="sp-section-body-inner">
                 <div id="settings-tema-section">
-                    <div class="settings-section-label">Tema visual</div>
                     <div class="theme-grid">
                         <div class="theme-card selected" id="card-ember" onclick="selectTheme('ember')">
                             <div class="theme-preview tp-ember">
@@ -695,10 +731,17 @@
                         </div>
                     </div>
                 </div>
+                    </div></div><!-- /sp-section-body sp-sec-tema -->
+                </div><!-- /sp-sec-tema -->
 
                 <!-- TTS & AUDIO -->
+                <div class="sp-section" id="sp-sec-tts">
+                    <div class="sp-section-hdr" onclick="this.closest('.sp-section').classList.toggle('open')">
+                        <span class="sp-section-title">TTS &amp; Audio</span>
+                        <span class="sp-section-arrow">▶</span>
+                    </div>
+                    <div class="sp-section-body"><div class="sp-section-body-inner">
                 <div>
-                    <div class="settings-section-label">TTS &amp; Audio</div>
                     <div class="settings-row">
                         <div><div class="sr-label">Velocidad</div></div>
                         <div style="display:flex;align-items:center;gap:8px;">
@@ -744,15 +787,22 @@
                         </div>
                     </div>
                 </div>
+                    </div></div><!-- /sp-section-body sp-sec-tts -->
+                </div><!-- /sp-sec-tts -->
 
                 <!-- LECTURA -->
+                <div class="sp-section" id="sp-sec-lectura">
+                    <div class="sp-section-hdr" onclick="this.closest('.sp-section').classList.toggle('open')">
+                        <span class="sp-section-title">Lectura</span>
+                        <span class="sp-section-arrow">▶</span>
+                    </div>
+                    <div class="sp-section-body"><div class="sp-section-body-inner">
                 <div>
-                    <div class="settings-section-label">Lectura</div>
                     <div class="settings-row">
                         <div><div class="sr-label">Idioma destino</div></div>
                         <div>
                             <select class="settings-select" id="translation-lang-select-settings"
-                                    onchange="cambiarIdiomaTraduccion(this.value);document.getElementById('translation-lang-select').value=this.value"></select>
+                                    onchange="cambiarIdiomaTraduccion(this.value);var h=document.getElementById('translation-lang-select');if(h)h.value=this.value"></select>
                         </div>
                     </div>
                     <div class="settings-row">
@@ -768,10 +818,17 @@
                         </div>
                     </div>
                 </div>
+                    </div></div><!-- /sp-section-body sp-sec-lectura -->
+                </div><!-- /sp-sec-lectura -->
 
                 <!-- API KEYS -->
+                <div class="sp-section" id="sp-sec-apikeys">
+                    <div class="sp-section-hdr" onclick="this.closest('.sp-section').classList.toggle('open')">
+                        <span class="sp-section-title">API Keys &amp; Proveedores</span>
+                        <span class="sp-section-arrow">▶</span>
+                    </div>
+                    <div class="sp-section-body"><div class="sp-section-body-inner">
                 <div id="settings-api-section">
-                    <div class="settings-section-label">API Keys &amp; Proveedores</div>
                     <div class="ajuste-seccion" id="acc-humanizer">
                         <button type="button" class="ajuste-acc-btn" onclick="toggleAjusteAcc('acc-humanizer')">
                             <span class="ajuste-acc-titulo">Humanizador IA</span>
@@ -944,10 +1001,17 @@
                         </div>
                     </div>
                 </div>
+                    </div></div><!-- /sp-section-body sp-sec-apikeys -->
+                </div><!-- /sp-sec-apikeys -->
 
                 <!-- REEMPLAZOS -->
+                <div class="sp-section" id="sp-sec-reemplazos">
+                    <div class="sp-section-hdr" onclick="this.closest('.sp-section').classList.toggle('open')">
+                        <span class="sp-section-title">Reemplazos automáticos</span>
+                        <span class="sp-section-arrow">▶</span>
+                    </div>
+                    <div class="sp-section-body"><div class="sp-section-body-inner">
                 <div id="settings-reemplazar-section">
-                    <div class="settings-section-label">Reemplazos automáticos</div>
                     <div style="margin-bottom:10px;padding:8px 12px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:6px;">
                         <div style="font-size:0.55rem;color:var(--text-muted);margin-bottom:2px;text-transform:uppercase;letter-spacing:0.05em;">Libro activo</div>
                         <div id="ajustes-archivo-activo" style="font-size:0.62rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Sin archivo cargado</div>
@@ -974,6 +1038,9 @@
                     <button type="button" onclick="togglePanelOtrosLibros()" style="width:100%;margin-top:14px;background:none;border:1px solid var(--border);border-radius:6px;color:var(--text-muted);font-family:var(--font-ui);font-size:0.62rem;font-weight:600;padding:7px 0;cursor:pointer;letter-spacing:0.03em;transition:color 0.2s,border-color 0.2s;">Ver reemplazos de otros libros</button>
                     <div id="panel-otros-libros" style="display:none;margin-top:10px;max-height:260px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--border) transparent;"></div>
                 </div>
+
+                    </div></div><!-- /sp-section-body sp-sec-reemplazos -->
+                </div><!-- /sp-sec-reemplazos -->
 
             </div><!-- /settings-body -->
             <div class="settings-footer">

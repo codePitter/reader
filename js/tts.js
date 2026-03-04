@@ -901,3 +901,39 @@ async function _avanzarSiguienteCapituloAuto() {
     window._navegacionIntencionada = true;
     await cargarCapitulo(siguienteRuta);
 }
+
+// ── Restauración silenciosa de preferencias TTS desde uStorage ───────────
+// Llamar en auth:ready (después de uSetUser) para re-aplicar el prefijo correcto
+// sin disparar toasts ni verificaciones de servidor.
+window._applyStoredTTSPrefs = function () {
+    var savedVoice = uGet('edge_tts_voice');
+    if (savedVoice) {
+        _edgeTtsVoice = savedVoice;
+        var sel = document.getElementById('edge-voice-select');
+        if (sel) sel.value = savedVoice;
+        var selSb = document.getElementById('sb-edge-voice-select');
+        if (selSb) selSb.value = savedVoice;
+        var selSp = document.getElementById('sp-edge-voice');
+        if (selSp) selSp.value = savedVoice;
+    }
+    var savedLive = uGet('tts_servidor_live');
+    if (savedLive !== null) {
+        _usarServidorLive = savedLive === 'true';
+    }
+    _sincronizarBtnServidorLive();
+    // Sincronizar también la pill del sidebar nuevo
+    var pill = document.getElementById('pill-tts-local');
+    if (pill) {
+        pill.classList.toggle('on',  _usarServidorLive);
+        pill.classList.toggle('off', !_usarServidorLive);
+    }
+    // Sincronizar los botones Browser/Edge del sidebar TTS
+    if (typeof window._sbTtsSetEngine === 'function') {
+        window._sbTtsSetEngine(_usarServidorLive ? 'edge' : 'browser');
+    }
+    // Sincronizar voz Edge en el settings panel
+    if (savedVoice) {
+        var spEdge = document.getElementById('sp-edge-voice');
+        if (spEdge) spEdge.value = savedVoice;
+    }
+};

@@ -344,6 +344,7 @@ function _actualizarRailCuenta(user) {
         var name      = getUserDisplayName();
         var avatarUrl = getUserAvatarUrl();
         railIc.title  = name;
+        railIc.onclick = function (e) { e.stopPropagation(); _toggleCuentaRailMenu(); };
         if (avatarUrl && railAvatar) {
             railAvatar.referrerPolicy = 'no-referrer';
             railAvatar.src            = avatarUrl;
@@ -353,11 +354,147 @@ function _actualizarRailCuenta(user) {
             if (railAvatar) railAvatar.style.display = 'none';
             if (railSymbol) railSymbol.style.display = '';
         }
+        _ensureCuentaRailMenu(user);
     } else {
-        railIc.title = 'Cuenta';
+        railIc.title   = 'Cuenta';
+        railIc.onclick = function () { if (typeof abrirModalAuth === 'function') abrirModalAuth(); };
         if (railAvatar) railAvatar.style.display = 'none';
         if (railSymbol) railSymbol.style.display = '';
+        // Ocultar menú si estaba abierto
+        var m = document.getElementById('ic-cuenta-menu');
+        if (m) m.style.display = 'none';
     }
+}
+
+// ── Menú desplegable del rail icon ─────────────────────────
+function _ensureCuentaRailMenu(user) {
+    if (!document.getElementById('ic-cuenta-menu')) {
+        var menu = document.createElement('div');
+        menu.id        = 'ic-cuenta-menu';
+        menu.className = 'ic-cuenta-menu';
+        menu.style.display = 'none';
+        menu.innerHTML =
+            '<div class="ic-menu-name"  id="ic-menu-name"></div>' +
+            '<div class="ic-menu-email" id="ic-menu-email"></div>' +
+            '<div class="ic-menu-divider"></div>' +
+            '<button class="ic-menu-btn ic-menu-btn--danger" onclick="' +
+                'document.getElementById(\'ic-cuenta-menu\').style.display=\'none\';' +
+                'if(typeof cerrarSesion===\'function\')cerrarSesion();">' +
+                'Cerrar sesión' +
+            '</button>';
+        document.body.appendChild(menu);
+
+        // Cerrar al clic fuera
+        document.addEventListener('click', function (e) {
+            var m  = document.getElementById('ic-cuenta-menu');
+            var ic = document.getElementById('ic-cuenta');
+            if (m && ic && !ic.contains(e.target) && !m.contains(e.target)) {
+                m.style.display = 'none';
+            }
+        });
+
+        _injectCuentaMenuCSS();
+    }
+
+    // Actualizar datos del usuario
+    var nameEl  = document.getElementById('ic-menu-name');
+    var emailEl = document.getElementById('ic-menu-email');
+    if (nameEl)  nameEl.textContent  = (typeof getUserDisplayName === 'function') ? getUserDisplayName() : '';
+    if (emailEl) emailEl.textContent = (user && user.email) ? user.email : '';
+}
+
+function _toggleCuentaRailMenu() {
+    var menu = document.getElementById('ic-cuenta-menu');
+    if (!menu) return;
+    var isOpen = menu.style.display !== 'none' && menu.style.display !== '';
+    if (isOpen) {
+        menu.style.display = 'none';
+        return;
+    }
+    // Posicionar a la derecha del rail icon, clampeado dentro del viewport
+    var ic   = document.getElementById('ic-cuenta');
+    var rect = ic ? ic.getBoundingClientRect() : { right: 48, top: 0, bottom: 40 };
+    var menuH = 120; // estimado mínimo del menú
+    var top   = rect.top;
+    var maxTop = window.innerHeight - menuH - 8;
+    if (top > maxTop) top = maxTop;
+    if (top < 8) top = 8;
+    menu.style.left = (rect.right + 10) + 'px';
+    menu.style.top  = top + 'px';
+    menu.style.display = 'block';
+}
+
+// Handler global para el onclick del HTML (ic-cuenta puede llamarlo directamente)
+window._cuentaRailClick = function () {
+    if (typeof getAuthUser === 'function' && getAuthUser()) {
+        _toggleCuentaRailMenu();
+    } else {
+        if (typeof abrirModalAuth === 'function') abrirModalAuth();
+    }
+};
+
+function _injectCuentaMenuCSS() {
+    if (document.getElementById('ic-cuenta-menu-style')) return;
+    var style = document.createElement('style');
+    style.id = 'ic-cuenta-menu-style';
+    style.textContent = [
+        '.ic-cuenta-menu {',
+        '  position: fixed;',
+        '  z-index: 20000;',
+        '  background: var(--bg-surface, #1a1a1a);',
+        '  border: 1px solid var(--border-strong, rgba(255,255,255,0.12));',
+        '  border-radius: 10px;',
+        '  min-width: 210px;',
+        '  box-shadow: 4px 8px 28px rgba(0,0,0,0.55);',
+        '  overflow: hidden;',
+        '  padding: 4px 0;',
+        '  animation: icMenuFade 0.14s ease;',
+        '}',
+        '@keyframes icMenuFade {',
+        '  from { opacity:0; transform:translateX(-6px); }',
+        '  to   { opacity:1; transform:translateX(0); }',
+        '}',
+        '.ic-menu-name {',
+        '  padding: 10px 14px 2px;',
+        '  font-size: 0.68rem;',
+        '  font-weight: 700;',
+        '  color: var(--text, #e8e0d0);',
+        '  font-family: "DM Mono", monospace;',
+        '  white-space: nowrap;',
+        '  overflow: hidden;',
+        '  text-overflow: ellipsis;',
+        '}',
+        '.ic-menu-email {',
+        '  padding: 1px 14px 10px;',
+        '  font-size: 0.58rem;',
+        '  color: var(--text-dim, #888);',
+        '  font-family: "DM Mono", monospace;',
+        '  word-break: break-all;',
+        '}',
+        '.ic-menu-divider {',
+        '  height: 1px;',
+        '  background: var(--border, rgba(255,255,255,0.08));',
+        '  margin: 2px 0;',
+        '}',
+        '.ic-menu-btn {',
+        '  display: block;',
+        '  width: 100%;',
+        '  padding: 9px 14px;',
+        '  background: none;',
+        '  border: none;',
+        '  text-align: left;',
+        '  font-family: "DM Mono", monospace;',
+        '  font-size: 0.63rem;',
+        '  font-weight: 600;',
+        '  letter-spacing: 0.03em;',
+        '  cursor: pointer;',
+        '  color: var(--text-muted, #aaa);',
+        '  transition: background 0.12s, color 0.12s;',
+        '}',
+        '.ic-menu-btn:hover { background: var(--surface2, rgba(255,255,255,0.06)); }',
+        '.ic-menu-btn--danger:hover { color: #e07070; }',
+    ].join('\n');
+    document.head.appendChild(style);
 }
 
 function actualizarAuthUI(user) {

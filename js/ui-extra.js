@@ -127,9 +127,24 @@
         var oculto = vf.classList.contains('hidden');
         vf.classList.toggle('hidden', !oculto);
         if (ic) ic.classList.toggle('on', oculto);
+        // Persistir estado
+        try { if (typeof uSet === 'function') uSet('video_float_visible', oculto ? 'true' : 'false'); } catch(e) {}
         // Arrancar el loop de render cuando se hace visible
         if (oculto && typeof _startFloatLoop === 'function') _startFloatLoop();
     };
+
+    // Restaurar visibilidad del float al cargar (respeta preferencia guardada)
+    document.addEventListener('DOMContentLoaded', function () {
+        var vf = document.getElementById('video-float');
+        var ic = document.getElementById('ic-video');
+        if (!vf) return;
+        var saved = (typeof uGet === 'function') ? uGet('video_float_visible') : null;
+        // Default: visible (true) si nunca se guardó
+        var visible = saved !== 'false';
+        vf.classList.toggle('hidden', !visible);
+        if (ic) ic.classList.toggle('on', visible);
+        if (visible && typeof _startFloatLoop === 'function') _startFloatLoop();
+    });
 
     // ── Indicador estado servidor TTS ─────────────────────────
     window._actualizarEstadoServidor = function (online) {
@@ -289,28 +304,27 @@
     // ══════════════════════════════════════════════════════════
     // CONTROLES DE LECTURA — visibilidad hover/paused
     // ══════════════════════════════════════════════════════════
+
+    // Helper compartido: true si el TTS está activo en este momento.
+    // Definido a nivel de módulo para que todos los listeners puedan usarlo.
+    function _isPlaying() {
+        var bp = document.getElementById('btn-play');
+        if (!bp) return false;
+        var t = bp.textContent || bp.innerText || '';
+        return t.trim() === '⏸' || bp.classList.contains('pause');
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
         var rc = document.getElementById('reading-controls');
         if (!rc) return;
-
-        // Lee si TTS está activo mirando el botón play nativo
-        function _isPlaying() {
-            var bp = document.getElementById('btn-play');
-            if (!bp) return false;
-            var t = bp.textContent || bp.innerText || '';
-            return t.trim() === '⏸' || bp.classList.contains('pause');
-        }
 
         function _syncRc() {
             var playing = _isPlaying();
             var btn = document.getElementById('rc-play');
             if (btn) btn.textContent = playing ? '⏸' : '▶';
-            // Cuando reproduce: ocultar inmediatamente y NO añadir rc-mouse-active
-            // (solo se muestran al hacer hover sobre los botones — via CSS :hover)
-            // Cuando parado: siempre visible
             if (playing) {
                 rc.classList.remove('rc-visible');
-                rc.classList.remove('rc-mouse-active'); // limpiar si quedaba activo
+                rc.classList.remove('rc-mouse-active');
             } else {
                 rc.classList.add('rc-visible');
             }
@@ -677,6 +691,38 @@
         _syncDockBtn(false);
         if (_vfDockAnimFrame) { cancelAnimationFrame(_vfDockAnimFrame); _vfDockAnimFrame = null; }
         if (_vfDockSyncTimer) { clearInterval(_vfDockSyncTimer); _vfDockSyncTimer = null; }
+
+        // ── Reiniciar loop de render del float ──────────────────
+        // El loop fue cancelado por el dock. Necesitamos esperar a que:
+        //   a) el float ya no tenga transform/opacity overrides
+        //   b) el layout haya recalculado dimensiones reales del canvas
+        // Hacemos dos intentos: uno rápido (layout pass) y uno de respaldo (150ms).
+        function _reiniciarLoopFloat() {
+            var fc = document.getElementById('vid-float-canvas');
+            if (fc) {
+                var screen = fc.parentElement;
+                if (screen) {
+                    var W = screen.clientWidth, H = screen.clientHeight;
+                    if (W > 0 && H > 0) {
+                        fc.width  = W;
+                        fc.height = H;
+                        // Limpiar canvas para evitar artefactos residuales del dock
+                        var ctx = fc.getContext('2d');
+                        if (ctx) { ctx.clearRect(0, 0, W, H); }
+                    }
+                }
+            }
+            if (typeof _stopFloatLoop  === 'function') _stopFloatLoop();
+            if (typeof _startFloatLoop === 'function') _startFloatLoop();
+        }
+
+        // Intento 1 — tras el primer layout pass (~1 frame)
+        requestAnimationFrame(function () {
+            requestAnimationFrame(_reiniciarLoopFloat);
+        });
+        // Intento 2 — respaldo para máquinas lentas o cuando el rAF del dock-DnD
+        // aún no terminó de reubicar el float cuando corre el primer intento
+        setTimeout(_reiniciarLoopFloat, 200);
     };
 
     // ══════════════════════════════════════════════════════════

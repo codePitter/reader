@@ -97,15 +97,9 @@ document.addEventListener("DOMContentLoaded", function () {
 // Migrado desde index.html (script inline)
 // ═══════════════════════════════════════
 
-function toggleAjusteAcc(id) {
-    const el = document.getElementById(id);
-    if (!el) return;
-    const isOpen = el.classList.contains('open');
-    el.closest('.ajustes-panel').querySelectorAll('.ajuste-seccion.open').forEach(s => {
-        if (s !== el) s.classList.remove('open');
-    });
-    el.classList.toggle('open', !isOpen);
-}
+// toggleAjusteAcc está definida en settings-bridge.js (carga antes que init.js).
+// Esta versión fue eliminada — hacía el.closest('.ajustes-panel') que retornaba
+// null en el nuevo slide-in panel, crasheando en todos los acordeones de ajustes.
 
 function abrirAjusteAcc(id) {
     const el = document.getElementById(id);
@@ -545,15 +539,49 @@ document.addEventListener('auth:ready', (e) => {
     // ── Sincronizar pills del sidebar nuevo ──
     if (typeof syncSidebarPills === 'function') syncSidebarPills();
 
-    // Sincronizar btn-tts-servidor-live
-    const savedLocal = uGet('tts_servidor_live');
-    if (savedLocal !== null && typeof _sincronizarBtnServidorLive === 'function') {
-        const debeEstarActivo = savedLocal === 'true';
-        const btn = document.getElementById('btn-tts-servidor-live');
-        const btnActivo = btn && btn.classList.contains('active');
-        if (debeEstarActivo !== btnActivo && typeof toggleServidorLive === 'function') {
-            toggleServidorLive();
+    // ── Sincronizar provider selects del settings panel ──
+    // _sincronizarInputsApiKeys vive en ui.js y ahora corre con
+    // prefijo user_XXXX_ → rellena los selects con los datos reales.
+    if (typeof _sincronizarInputsApiKeys === 'function') {
+        _sincronizarInputsApiKeys();
+    }
+
+    // ── Sincronizar sliders visibles del sidebar (sb-tts-slider) ──
+    // _restaurarToggles() actualiza #rate-control (control oculto) pero los
+    // sliders visibles que el usuario ve (.sb-tts-slider) quedan en 1.0 porque
+    // son elementos separados sin binding inverso. Hay que sincronizarlos aquí.
+    setTimeout(() => {
+        const rateControl  = document.getElementById('rate-control');
+        const pitchControl = document.getElementById('pitch-control');
+        const sbSliders    = document.querySelectorAll('.sb-tts-slider');
+        // sbSliders[0] = Rate, sbSliders[1] = Tono
+        if (sbSliders[0] && rateControl) {
+            sbSliders[0].value = rateControl.value;
+            const lbl0 = sbSliders[0].nextElementSibling;
+            if (lbl0 && lbl0.classList.contains('sb-tts-val')) {
+                lbl0.textContent = parseFloat(rateControl.value).toFixed(1) + '×';
+            }
         }
+        if (sbSliders[1] && pitchControl) {
+            sbSliders[1].value = pitchControl.value;
+            const lbl1 = sbSliders[1].nextElementSibling;
+            if (lbl1 && lbl1.classList.contains('sb-tts-val')) {
+                lbl1.textContent = parseFloat(pitchControl.value).toFixed(1) + '×';
+            }
+        }
+        // Aplicar volumen al engine
+        const volumeControl = document.getElementById('volume-control');
+        if (volumeControl) {
+            const vol = parseFloat(volumeControl.value) / 100;
+            if (typeof window._masterVolume !== 'undefined') window._masterVolume = vol;
+        }
+    }, 0);
+
+    // Re-aplicar preferencias TTS desde storage con el prefijo correcto.
+    // _applyStoredTTSPrefs() (tts.js) es silenciosa: no dispara toasts ni llama
+    // verificarServidorTTS(). Evita la acumulación de toasts al cargar la página.
+    if (typeof window._applyStoredTTSPrefs === 'function') {
+        window._applyStoredTTSPrefs();
     }
 
     _registrarListenersPrefs();
@@ -565,12 +593,12 @@ document.addEventListener('auth:ready', (e) => {
 function _restaurarVoces() {
     const edgeVoice = uGet('edge_tts_voice');
     if (edgeVoice) {
-        if (typeof setEdgeTtsVoice === 'function') {
-            setEdgeTtsVoice(edgeVoice);
-        } else {
-            const sel = document.getElementById('edge-voice-select');
+        // Actualizar selects directamente — sin llamar setEdgeTtsVoice() que muestra un toast
+        if (typeof _edgeTtsVoice !== 'undefined') window._edgeTtsVoiceRestore = edgeVoice; // hint para tts.js si necesita
+        ['edge-voice-select', 'sb-edge-voice-select', 'sp-edge-voice'].forEach(id => {
+            const sel = document.getElementById(id);
             if (sel) sel.value = edgeVoice;
-        }
+        });
     }
     const voiceIdx = uGet('tts_voice_idx');
     if (voiceIdx !== null) {

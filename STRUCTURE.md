@@ -84,6 +84,181 @@ Notes & recent changes:
 - **2026-03-03 — batch 2** (`js/progress.js`):
   - Resume modal now has a "Cancelar" (✕) button → `fallbackCargar()`.
   - "Continuar" sets `window._noAutoVideo = true` (600 ms) to block auto-open of cinematic video mode.
+- **2026-03-04 — batch 15** (`js/tts.js` · `js/init.js` · `js/settings-bridge.js` · `index.html` · `style.css`) — Fix almacenamiento con sesión + secciones colapsables en sidebar y modal de ajustes:
+
+  ### Bug 1 — Toasts redundantes en auth:ready (almacenamiento)
+  - `init.js auth:ready` llamaba `toggleServidorLive()` para restaurar el estado TTS local → disparaba `verificarServidorTTS()` + toast "✓ TTS Local activado" en cada recarga si el usuario lo tenía activo
+  - `_restaurarVoces()` llamaba `setEdgeTtsVoice()` → mostraba "✓ Voz: XNeural" en cada recarga
+  - Fix: `tts.js` expone `window._applyStoredTTSPrefs()` — restaura `_edgeTtsVoice` y `_usarServidorLive` desde uStorage + llama `_sincronizarBtnServidorLive()` sin toasts ni verificación de servidor
+  - `init.js` auth:ready usa `_applyStoredTTSPrefs()` en lugar de `toggleServidorLive()`
+  - `init.js _restaurarVoces()`: actualiza los selects de voz directamente (sin `setEdgeTtsVoice`, sin toast)
+
+  ### Bug 2 — Proveedores no aplicados a módulos en auth:ready
+  - `_syncProviderSelects()` actualizaba el DOM de los selects pero NO llamaba las funciones de módulo (`cambiarProveedorHumanizer`, `cambiarProveedorTraduccion`, etc.)
+  - Las variables internas de módulo quedaban en defaults hasta que el usuario abría el settings panel
+  - Fix: `settings-bridge.js auth:ready` agrega un `setTimeout(0)` que llama `cambiarProveedorHumanizer/Universo/Traduccion/Musica` con el valor guardado, y `_activarProv` para el proveedor de imágenes del popup video
+
+  ### Feature — Secciones colapsables en sidebar izquierdo
+  - `index.html` sidebar: el contenido de `sb-head` (libro activo) y la lista de capítulos ahora están envueltos en `.sb-section.open#sb-section-libro` y `.sb-section.sb-section-xl.open#sb-section-capitulos` respectivamente
+  - Ambas secciones arrancan abiertas (`class="sb-section open"`)
+  - `style.css`: añadida regla `.sb-section.sb-section-xl.open .sb-section-body { max-height: 60vh }` para secciones con contenido de altura variable
+
+  ### Feature — Secciones colapsables en modal de ajustes (panel derecho)
+  - `index.html` settings-panel: cada sección ("Tema visual", "TTS & Audio", "Lectura", "API Keys & Proveedores", "Reemplazos automáticos") envuelta en `.sp-section` con `.sp-section-hdr` / `.sp-section-body`
+  - "Tema visual" y "TTS & Audio" arrancan abiertas; las demás cerradas
+  - `style.css`: añadidas clases `.sp-section`, `.sp-section-hdr`, `.sp-section-title`, `.sp-section-arrow`, `.sp-section-body`, `.sp-section-body-inner` con el mismo patrón de animación que `.sb-section`
+  - Los `settings-section-label` originales (con línea horizontal) se eliminaron de esas secciones y se reemplazaron por los headers `.sp-section-hdr`
+
+  **Clases CSS nuevas:**
+  | Clase | Descripción |
+  |---|---|
+  | `.sp-section` | Sección colapsable del settings panel |
+  | `.sp-section.open` | Estado expandido |
+  | `.sp-section-hdr` | Cabecera clicable con cursor:pointer |
+  | `.sp-section-title` | Label en DM Mono uppercase accent |
+  | `.sp-section-arrow` | Chevron que rota 90° al abrir |
+  | `.sp-section-body` | Cuerpo con max-height 0 → 1200px |
+  | `.sp-section-body-inner` | Padding-bottom interno |
+  | `.sb-section.sb-section-xl` | Override max-height 60vh para secciones altas |
+
+- **2026-03-04 — batch 14** (`js/settings-bridge.js` · `js/init.js` · `js/auth-ui.js` · `index.html`) — Análisis quirúrgico definitivo del sistema de persistencia + menú de sesión en rail icon:
+
+  ### Diagnóstico raíz (post análisis de ustorage.js)
+
+  Con `ustorage.js` confirmado, el fallo es **estructural por timing de prefijo**:
+
+  ```
+  Página carga
+  ├─ _currentPrefix = 'guest'
+  ├─ DOMContentLoaded (todos los módulos)
+  │   ├─ settings-bridge: uGet('tts_rate') → busca 'guest_tts_rate' → NULL (datos en 'user_XXXX_tts_rate')
+  │   ├─ settings-bridge: syncSelect('universe_provider') → NULL → select queda en default
+  │   └─ todos los selects y sliders quedan en valores HTML default
+  ├─ Supabase resuelve sesión
+  │   └─ auth.js: uSetUser(id) → migra guest_ → user_XXXX_, cambia prefijo
+  └─ auth:ready dispara
+      ├─ init.js: _restaurarToggles() → ahora sí uGet('tts_rate') = 'user_XXXX_tts_rate' ✓
+      └─ NADIE llamaba _syncProviderSelects ni _sincronizarInputsApiKeys → selects siguen en default ✗
+  ```
+
+  **Bugs concretos corregidos en batch 14:**
+
+  **Bug A — Clave humanizer: mismatch HTML vs _PILL_MAP vs init.js** (el más grave)
+  - HTML: `togglePillRow(el, 'tts_humanizer_activo', cb)` → guarda como `user_XXXX_tts_humanizer_activo`
+  - `_PILL_MAP` y `init.js _PREFS_TOGGLES` usaban `toggle_tts_humanizer` → lectura siempre NULL
+  - Además: batch 13 cambió `_PILL_MAP` sin cambiar el HTML → pill dejó de funcionar visualmente
+  - Fix: **index.html** cambiado a `toggle_tts_humanizer`, `_PILL_MAP` ya tenía la clave correcta
+
+  **Bug B — DOMContentLoaded no tiene datos de usuarios autenticados**
+  - Los datos están bajo `user_XXXX_` pero DOMContentLoaded corre con prefijo `guest`
+  - Fix: `settings-bridge.js` ahora expone `window._syncProviderSelects()` y la llama en un nuevo listener `auth:ready`, que corre DESPUÉS de que `uSetUser()` haya cambiado el prefijo
+
+  **Bug C — `openSettings()` nunca llamaba `_sincronizarInputsApiKeys()`**
+  - Los provider selects (`ajustes-humanizer-provider`, etc.) viven en `#settings-panel`
+  - `_sincronizarInputsApiKeys()` (ui.js) los rellena con uGet() pero solo la llamaba `abrirAjustes()` (modal obsoleto con `display:none !important`)
+  - Fix: `settings-bridge.js` añade `MutationObserver` sobre `#settings-panel` → cuando recibe clase `open` llama `_sincronizarInputsApiKeys()` + `_syncProviderSelects()` + `_syncSettingsPanelSliders()`
+
+  **Bug D — sb-tts-sliders (visibles) no se sincronizan tras auth:ready**
+  - `init.js _restaurarToggles()` actualiza `#rate-control` (control oculto) ✓
+  - Pero los `.sb-tts-slider` del sidebar son elementos independientes sin binding inverso
+  - Fix: `init.js auth:ready` añade `setTimeout(0)` que sincroniza `sbSliders[0/1]` con `rate-control/pitch-control` incluyendo los `.sb-tts-val` labels
+
+  **Feature: Menú de sesión en rail icon**
+  - `auth-ui.js _actualizarRailCuenta(user)` ahora cambia el `onclick` de `#ic-cuenta` según estado
+  - Si hay sesión activa: `onclick = _toggleCuentaRailMenu()`
+  - Si no hay sesión: `onclick = abrirModalAuth()`
+  - Función `_ensureCuentaRailMenu(user)`: inyecta `#ic-cuenta-menu` con nombre, email y botón "Cerrar sesión"
+  - Menú posicionado con `getBoundingClientRect()` a la derecha del rail icon, `position: fixed`, z-index 20000
+  - CSS inyectado dinámicamente via `_injectCuentaMenuCSS()` con animación `icMenuFade`
+  - `window._cuentaRailClick` expuesta como global para el `onclick` de index.html
+
+  **Tabla de claves canónicas (post batch 14):**
+  | Preferencia | Clave uStorage | Módulo que guarda | Módulo que lee |
+  |---|---|---|---|
+  | Humanizer pill | `toggle_tts_humanizer` | settings-bridge / init.js | init.js, settings-bridge |
+  | Proveedor universo | `universe_provider` | settings-bridge | ui.js |
+  | Proveedor traducción | `translation_provider` | settings-bridge | ui.js |
+  | Proveedor imágenes IA | `img_provider` | settings-bridge | ui.js |
+  | TTS rate | `tts_rate` | tts.js + settings-bridge | init.js + settings-bridge |
+  | TTS pitch | `tts_pitch` | tts.js + settings-bridge | init.js + settings-bridge |
+  | TTS volume | `tts_volume` | tts.js + settings-bridge | init.js + settings-bridge |
+
+- **2026-03-04 — batch 13** (`js/settings-bridge.js` · `js/init.js`) — Análisis completo del sistema de guardado/carga de preferencias + corrección de bugs críticos:
+
+  ### Análisis del sistema de persistencia
+
+  #### Arquitectura real (post-análisis)
+  El sistema usa `ustorage.js` como wrapper de `localStorage` con prefijo `uid_<userId>_` cuando hay sesión Supabase activa, y prefijo `local_` en modo anónimo. Las preferencias se guardan inmediatamente (no hay botón "Guardar global"), excepto las que pasan por `applySettings()` del panel.
+
+  Hay **tres capas** de UI que leen/escriben preferencias, a menudo con claves distintas para el mismo dato:
+  - `tts.js` — guarda via listeners de `input` en `rate-control`, `pitch-control`, `volume-control`, `voice-select`, `edge-voice-select`
+  - `init.js` — restaura en `_restaurarToggles()` / `_restaurarVoces()`, escucha `auth:ready`
+  - `settings-bridge.js` — guarda via `togglePillRow()` y `cambiarProveedor*Ajustes()`, sincroniza pills en `syncSidebarPills()`
+
+  #### Bugs encontrados y corregidos
+
+  **Bug crítico A — Mismatch de clave: Humanizer pill**
+  - `settings-bridge.js` `_PILL_MAP` guardaba con clave `tts_humanizer_activo`
+  - `init.js` `_PREFS_TOGGLES` y `_restaurarToggles()` leían `toggle_tts_humanizer`
+  - Resultado: el estado del pill humanizador nunca se restauraba tras recargar
+  - Fix: `_PILL_MAP` cambiado a `toggle_tts_humanizer` para coincidir con `init.js`
+
+  **Bug crítico B — Mismatch de claves: Proveedores (3 claves)**
+  | `settings-bridge.js` guardaba | `ui.js _sincronizarInputsApiKeys` leía | Estado |
+  |---|---|---|
+  | `universo_provider` | `universe_provider` | ❌ nunca restauraba |
+  | `traduccion_provider` | `translation_provider` | ❌ nunca restauraba |
+  | `imgia_provider` | `img_provider` | ❌ nunca restauraba |
+  - Fix: `settings-bridge.js` actualizado a las claves canónicas que lee `ui.js`
+  - `syncSelect()` en DOMContentLoaded también corregido con las mismas claves
+
+  **Bug C — Sidebar sliders (sb-tts-slider) no reflejan valores restaurados**
+  - `ui-extra.js` DOMContentLoaded se registra ANTES que `init.js` y copia los sliders ocultos (aún en default 1.0)
+  - Luego `init.js` restaura los sliders ocultos (`rate-control`, `pitch-control`) desde uStorage, pero los sliders visibles del sidebar ya fueron copiados con el valor incorrecto
+  - Fix en `init.js` `_restaurarToggles()`: añadido `setTimeout(0)` que sincroniza `sb-tts-slider[0]` (rate) y `sb-tts-slider[1]` (pitch) + sus labels `.sb-tts-val` después del restore
+
+  **Bug D — Settings panel sp-* sliders siempre muestran defaults al abrir**
+  - Los sliders del settings panel (`sp-rate`, `sp-pitch`, `sp-vol`, `sp-edge-voice`) siempre aparecen con valor 1.0 / defaults cuando el panel se abre
+  - `_sincronizarInputsApiKeys()` (llamada al abrir el VIEJO modal) no sincronizaba estos sliders
+  - `openSettings()` en `theme.js` (no disponible) también podría no hacerlo
+  - Fix en `settings-bridge.js`: MutationObserver sobre `#settings-panel` que detecta la adición de clase `open` y ejecuta `_syncSpSliders()` — copia valores de `rate-control`, `pitch-control`, `volume-control`, `edge-voice-select`, `voice-select` a sus equivalentes del settings panel
+
+  #### Flujo de guardado correcto (estado post-batch 13)
+  ```
+  GUARDAR:
+  TTS rate/pitch/vol → tts.js input listener → uSet('tts_rate'/'tts_pitch'/'tts_volume')
+  TTS edge voice     → tts.js setEdgeTtsVoice() → uSet('edge_tts_voice')
+  TTS browser voice  → tts.js change listener → uSet('tts_voice_idx')
+  Pills sidebar      → settings-bridge.js togglePillRow() → uSet(canonical_key)
+  Proveedores        → settings-bridge.js cambiarProveedor*Ajustes() → uSet(canonical_key)
+
+  RESTAURAR (orden de ejecución en DOMContentLoaded):
+  1. settings-bridge.js DOMContentLoaded → syncSelect() rellena selects de proveedores
+  2. ui-extra.js DOMContentLoaded       → _sbTtsSetEngine() + copia sliders (valor aún default)
+  3. init.js DOMContentLoaded           → _restaurarToggles() restaura sliders + syncTimeout→sb-sliders
+                                        → _registrarListenersPrefs() registra listeners
+
+  RESTAURAR (auth:ready — después de resolver sesión Supabase):
+  4. init.js auth:ready → _restaurarToggles() + _restaurarVoces() con prefijo correcto
+  5. settings-bridge.js auth:ready → syncSidebarPills() (vía init.js que lo llama)
+  ```
+
+  #### Preferencias que NO se guardan automáticamente (aún sin fix)
+  - **Ancho de columna** (`texto-contenido.style.maxWidth`): el select del settings panel modifica el DOM pero no persiste en uStorage
+  - **Posición X/Y del video float**: no se guarda entre sesiones
+  - **Estado dock del video float** (`_vfDocked`): no persiste al recargar
+
+- **2026-03-04 — batch 12** (`js/ui-extra.js` · `js/settings-bridge.js` · `SETTINGS-MAP.md`):
+  - **Bug 1 — Video float canvas negro tras desacoplar**: `_undockVideoFloat()` reemplaza el `setTimeout(80ms)` por un doble intento más robusto: primero `rAF → rAF` (layout pass) y luego `setTimeout(200ms)` de respaldo. Ambos llaman a `_reiniciarLoopFloat()` que hace `clearRect` + resize del canvas + `_stopFloatLoop` + `_startFloatLoop`. Esto garantiza que el canvas no quede negro en máquinas lentas ni cuando el rAF del dock-DnD aún está en vuelo.
+  - **Bug 2 — Preferencias no restauradas al recargar**: `settings-bridge.js` DOMContentLoaded ahora restaura sliders (`rate-control`, `pitch-control`, `volume-control`) desde uStorage con `restoreSlider()` + `dispatchEvent('input')` para propagar a labels y variables. También persiste y restaura `browser_voice` (voz del navegador), esperando el evento `voiceschanged`. Los sliders ya tenían `_bindSliderPersist` (guardado), ahora también tienen restauración.
+  - **Bug 3 — Toast de confirmación al cambiar preferencia**: Todos los cambios de preferencia ahora emiten `showToast()`: pills (`togglePillRow`), motor TTS (botones Browser/Edge), voz Edge/Navegador, y todos los selects de proveedores (`cambiarProveedorHumanizerAjustes`, `...UniversoAjustes`, `...TraduccionAjustes`, `...MusicaAjustes`, `...ImgSearchAjustes`, `...ImgIADesdeAjustes`).
+  - **SETTINGS-MAP.md creado**: Documento que mapea todas las preferencias del usuario con su clave uStorage, tipo, default, módulo que guarda y módulo que restaura. Incluye sección de claves pendientes de implementar.
+
+- **2026-03-03 — batch 11** (`js/init.js` · `js/settings-bridge.js` · `js/ui-extra.js`) — Fix toggleAjusteAcc · Pills persistencia · Float loop al desacoplar · TTS sliders:
+  - `js/init.js` — Eliminada la función `toggleAjusteAcc` que sobreescribía la versión correcta de `settings-bridge.js` (init.js carga después, causaba crash de `querySelectorAll` sobre `null` en todos los acordeones del settings panel).
+  - `js/settings-bridge.js` — Añadidas `window.togglePillRow(rowEl, storageKey, callback)` y `window.syncSidebarPills()`. `togglePillRow` alterna la clase `.on`/`.off` de la pill, persiste en uStorage y sincroniza el checkbox oculto. `syncSidebarPills` restaura el estado visual de todas las pills desde uStorage; se llama en DOMContentLoaded y en `auth:ready`. También añadido `_bindSliderPersist` para guardar `tts_rate`, `tts_pitch`, `tts_volume` en uStorage al mover los sliders `rate-control`/`pitch-control`/`volume-control`.
+  - `js/ui-extra.js` — `_undockVideoFloat()`: añadida llamada a `_startFloatLoop()` con `setTimeout(..., 50)` al desacoplar el float del dock, que causaba que el canvas quedara negro (el loop había sido cancelado por el dock y nunca se reiniciaba).
+
 - **2026-03-03 — batch 10** (`style.css` · `js/ui-extra.js`) — Settings z-index supremo · Reading controls inteligentes · Jerarquía z-index final · Avatar rail fix:
   - `style.css` — `.settings-overlay` z-index: 10000, `.settings-panel` z-index: 10001 (por encima de todo incluido `#vf-sidebar-dock`). Jerarquía final: `text-area < video-float (9997) < vf-sidebar-dock (9998) < settings-overlay (10000) < settings-panel (10001)`. `.video-float` corregido a 9997. `#ic-cuenta { overflow:hidden }` + `.ic-cuenta-avatar` 24×24px border-radius:50%.
   - `js/ui-extra.js` — `_syncRc()`: cuando reproduciéndose ahora también remueve `rc-mouse-active` inmediatamente. Listener `mousemove` en text-area: guarda con `if (_isPlaying()) return` → cuando reproduce, los controles solo aparecen al hacer `:hover` sobre los botones mismos (CSS), no con cualquier movimiento del ratón.
@@ -452,6 +627,129 @@ Todos los custom properties definidos en `:root` y cada `[data-theme]`. Celda va
 ---
 
 ## Utility Classes
+
+Clases de un solo selector con rol de helper, estado, layout o prefijo de componente (`tp-`, `vr-`, `vsb-`, `vfd-`, etc.).
+
+| Clase | Propiedades clave |
+|---|---|
+| `.ajuste-label` | font-size: 0.57rem; color: var(--text-dim) |
+| `.ajuste-row` | display: flex; gap: 6px |
+| `.ambient-collapse-btn` | font-size: 0.6rem; color: var(--text-dim) |
+| `.ambient-vol-icon` | font-size: 0.75rem; color: var(--text-dim) |
+| `.ambient-vol-row` | display: flex; align-items: center |
+| `.btn-full` | width: 100% |
+| `.btn-secondary` | background: var(--surface2); color: var(--text-muted) |
+| `.config-label` | font-size: 0.48rem; color: var(--text-muted) |
+| `.config-row` | display: flex; justify-content: space-between |
+| `.ic-sep` | height: 1px; width: 20px |
+| `.img-galeria-grid` | display: grid; grid-template-columns: repeat(3, 1fr) |
+| `.img-key-row` | display: flex; gap: 4px |
+| `.img-loading` | display: flex; flex-direction: column |
+| `.img-prov-dot` | width: 8px; height: 8px |
+| `.mf-title` | font-family: var(--font-deco); font-size: 0.48rem |
+| `.mf-vol` | display: flex; align-items: center |
+| `.mf-vol-bar` | flex: 1; appearance: none |
+| `.mf-vol-label` | font-size: 0.44rem; color: var(--text-muted) |
+| `.modal-row` | display: flex; align-items: center |
+| `.mp-icon` | font-size: 13px; color: var(--accent) |
+| `.mp-name` | font-size: 0.5rem; color: var(--text-primary) |
+| `.mp-type` | font-size: 0.44rem; color: var(--accent) |
+| `.pill` | width: 28px; height: 13px |
+| `.pill-thumb` | position: absolute; width: 9px |
+| `.progress-wrap` | flex-shrink: 0; padding: 0 28px |
+| `.sb-leer-wrap` | padding: 8px 12px; flex-shrink: 0 |
+| `.sb-prog-bar` | flex: 1; height: 2px |
+| `.sb-tts-engine-row` | display: flex; gap: 5px |
+| `.sb-tts-label` | font-size: 0.43rem; letter-spacing: 0.06em |
+| `.sb-tts-rate-row` | display: flex; align-items: center |
+| `.section-label` | font-size: 0.6rem; letter-spacing: 0.12em |
+| `.server-dot` | width: 6px; height: 6px |
+| `.settings-row` | display: flex; justify-content: space-between |
+| `.settings-section-label` | font-size: 0.44rem; letter-spacing: 0.15em |
+| `.slider-label` | display: flex; justify-content: space-between |
+| `.slider-row` | margin-bottom: 10px |
+| `.sr-desc` | font-size: 0.44rem; color: var(--text-muted) |
+| `.sr-label` | font-size: 0.54rem; color: var(--text-primary) |
+| `.stats-bar` | display: flex; gap: 24px |
+| `.theme-grid` | display: grid; grid-template-columns: 1fr 1fr |
+| `.theme-opt-dot` | width: 10px; height: 10px |
+| `.toggle-row` | display: flex; align-items: center |
+| `.top-bar` | display: flex; align-items: center |
+| `.tp-ch` | height: 4px; border-radius: 1px |
+| `.tp-ember` | background: #0d0b09 |
+| `.tp-folio` | background: #0c0a0a |
+| `.tp-graphite` | background: #080a0e |
+| `.tp-ic` | width: 8px; height: 8px |
+| `.tp-mercury` | background: #090c12 |
+| `.tp-p` | height: 3px; border-radius: 1px |
+| `.tp-rail` | position: absolute; left: 0 |
+| `.tp-reading` | position: absolute; left: 62px |
+| `.tp-rt` | height: 6px; border-radius: 1px |
+| `.tp-sb-title` | height: 5px; border-radius: 1px |
+| `.tp-sidebar` | position: absolute; left: 14px |
+| `.tp-tts` | position: absolute; left: 0 |
+| `.tp-tts-bar` | flex: 1; height: 2px |
+| `.tp-tts-dot` | width: 8px; height: 8px |
+| `.tp-tts-fill` | height: 100%; width: 45% |
+| `.tp-video` | position: absolute; right: 5px |
+| `.tts-bar` | background: var(--bg-panel); border-top: 1px solid var(--border) |
+| `.tts-bar-slider` | display: flex; align-items: center |
+| `.tts-bar-title` | font-size: 0.6rem; color: var(--text-dim) |
+| `.tts-bar-voice--server` | border-color: rgba(200,169,110,.4); color: var(--accent) |
+| `.tts-btn-grid` | display: grid; grid-template-columns: 1fr 1fr |
+| `.tts-control-bar-sliders` | display: flex; align-items: center |
+| `.tts-controls-row` | display: flex; align-items: center |
+| `.tts-progress-row` | width: 100%; padding: 0 |
+| `.tts-status-bar` | display: flex; align-items: center |
+| `.vfd-controls` | display: flex; justify-content: center |
+| `.vfd-eq` | display: flex; align-items: flex-end |
+| `.vfd-gbtn-detect` | grid-column: 1 / -1 |
+| `.vfd-genres` | display: grid; grid-template-columns: 1fr 1fr |
+| `.vfd-live-dot` | width: 7px; height: 7px |
+| `.vfd-live-label` | font-family: 'DM Mono', monospace; font-size: 0.48rem |
+| `.vfd-music` | flex: 1; display: flex |
+| `.vfd-music-hdr` | display: flex; align-items: center |
+| `.vfd-play-row` | display: flex; gap: 5px |
+| `.vfd-screen` | width: 100%; aspect-ratio: 16 / 9 |
+| `.vfd-topbar` | display: flex; align-items: center |
+| `.vfd-track-genre` | font-family: 'DM Mono', monospace; font-size: 0.48rem |
+| `.vfd-track-info` | flex: 1; min-width: 0 |
+| `.vfd-track-name` | font-family: 'DM Mono', monospace; font-size: 0.56rem |
+| `.vfd-vol-lbl` | font-family: 'DM Mono', monospace; font-size: 0.46rem |
+| `.vfd-vol-pct` | font-family: 'DM Mono', monospace; font-size: 0.47rem |
+| `.vfd-vol-row` | display: flex; align-items: center |
+| `.vfd-vol-slider` | flex: 1; appearance: none |
+| `.vid-dot` | width: 5px; height: 5px |
+| `.vid-label` | flex: 1; font-size: 0.42rem |
+| `.voice-roles-label` | font-family: 'DM Mono', monospace; font-size: 0.65rem |
+| `.voice-roles-row` | display: flex; align-items: center |
+| `.vr-btn-reanalyze` | background: none; border: 1px solid var(--border, #444) |
+| `.vr-header` | display: flex; align-items: center |
+| `.vr-label` | font-family: 'DM Mono', monospace; font-size: 0.62rem |
+| `.vr-row` | display: flex; align-items: center |
+| `.vr-section-label` | font-family: 'DM Mono', monospace; font-size: 0.56rem |
+| `.vr-status` | font-family: 'DM Mono', monospace; font-size: 0.58rem |
+| `.vr-title` | font-family: 'DM Mono', monospace; font-size: 0.62rem |
+| `.vsb-btn-row` | display: flex; gap: 5px |
+| `.vsb-color-custom` | width: 22px; height: 22px |
+| `.vsb-color-panel` | display: flex; flex-direction: row |
+| `.vsb-color-row` | display: flex; align-items: center |
+| `.vsb-color-swatch` | display: block; width: 20px |
+| `.vsb-color-tiny` | width: 26px; height: 22px |
+| `.vsb-divider` | width: 100%; height: 1px |
+| `.vsb-micro-lbl` | font-family: 'DM Mono', monospace; font-size: 0.48rem |
+| `.vsb-mini-lbl` | font-family: 'DM Mono', monospace; font-size: 0.56rem |
+| `.vsb-panel` | width: 0; overflow: hidden |
+| `.vsb-playback-row` | display: flex; gap: 4px |
+| `.vsb-range` | flex: 1; min-width: 0 |
+| `.vsb-range-lbl` | font-family: 'DM Mono', monospace; font-size: 0.52rem |
+| `.vsb-range-row` | display: flex; align-items: center |
+| `.vsb-row` | display: flex; align-items: center |
+| `.vsb-size-row` | display: flex; align-items: center |
+| `.vsb-stroke-colors-row` | display: flex; align-items: center |
+| `.vsb-stroke-type-row` | display: flex; gap: 4px |
+| `.vsb-swatch` | width: 18px; height: 18px |
+| `.vsb-tab-line` | display: block; width: 7px |
 
 Clases de un solo selector con rol de helper, estado, layout o prefijo de componente (`tp-`, `vr-`, `vsb-`, `vfd-`, etc.).
 

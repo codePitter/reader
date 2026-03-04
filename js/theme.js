@@ -269,6 +269,15 @@
             if (typeof uSet === 'function') uSet(storageKey, String(isNowOn));
             else localStorage.setItem(storageKey, String(isNowOn));
         } catch (e) {}
+        // Sincronizar checkboxes ocultos que algunos módulos necesitan leer
+        var _CB_MAP = {
+            'toggle_auto_translate': 'auto-translate',
+            'grammar_review_activo': 'grammar-review',
+            'toggle_tts_humanizer':  'tts-humanizer',
+            'toggle_auto_next':      'auto-next-chapter'
+        };
+        var cbId = _CB_MAP[storageKey];
+        if (cbId) { var cb = document.getElementById(cbId); if (cb) cb.checked = isNowOn; }
         if (typeof callback === 'function') callback();
         if (typeof marcarCambioPendiente === 'function') marcarCambioPendiente();
     };
@@ -329,9 +338,9 @@
         var get = (typeof uGet === 'function') ? uGet : function (k) { return localStorage.getItem(k); };
         var map = {
             'pill-translate': get('toggle_auto_translate') === 'true',
-            'pill-tts-local': get('tts_servidor_live') === 'true',
+            'pill-tts-local': get('tts_servidor_live')     === 'true',
             'pill-grammar':   get('grammar_review_activo') === 'true',
-            'pill-humanizer': get('tts_humanizer_activo') === 'true',
+            'pill-humanizer': get('toggle_tts_humanizer')  === 'true',
             'pill-autonext':  get('toggle_auto_next') !== 'false'
         };
         Object.keys(map).forEach(function (id) {
@@ -341,6 +350,11 @@
             pill.classList.toggle('on',  isOn);
             pill.classList.toggle('off', !isOn);
         });
+        // Sincronizar los botones de motor TTS del sidebar (Browser / Edge)
+        var live = get('tts_servidor_live') === 'true';
+        if (typeof window._sbTtsSetEngine === 'function') {
+            window._sbTtsSetEngine(live ? 'edge' : 'browser');
+        }
     };
 
     // ── TOAST APILABLE ──
@@ -451,6 +465,23 @@
 
     // ── Boot ──
     document.addEventListener('DOMContentLoaded', init);
+
+    // ── Restaurar tema cuando el usuario autenticado esté listo ──
+    // init() corre en DOMContentLoaded con prefijo 'guest' — si el usuario está
+    // autenticado, su tema se guarda bajo 'user_XXXX_reader-theme' y no se encuentra.
+    // auth:ready dispara después de uSetUser() → re-leer con el prefijo correcto.
+    document.addEventListener('auth:ready', function () {
+        var saved;
+        try { saved = (typeof uGet === 'function') ? uGet('reader-theme') : localStorage.getItem('reader-theme'); } catch (e) {}
+        if (saved && THEMES[saved]) {
+            _currentTheme = _pendingTheme = saved;
+            applyThemeDOM(_currentTheme);
+            _updateThemeCards(_currentTheme);
+        }
+    });
+
+    // Exponer init para que init.js pueda llamarlo explícitamente si es necesario
+    window.initTheme = init;
 
     // Exponer estado
     window._getThemeState = function () {

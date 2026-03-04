@@ -51,20 +51,19 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!sidebar) return;
 
     const panel = document.createElement('div');
-    panel.className = 'sidebar-section';
+    panel.className = 'sb-section';
     panel.id = 'lg-section';
     panel.innerHTML = `
         <!-- ── Encabezado colapsable ── -->
-        <div class="section-label collapsible-label"
-             onclick="lgTogglePanel()"
-             style="cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px;">
-            <span style="font-size:0.8rem;">🔍</span>
-            Buscar libros
-            <span id="lg-arrow" style="margin-left:auto;font-size:0.7rem;color:var(--text-dim);">▶</span>
+        <div class="sb-section-hdr" onclick="lgTogglePanel()">
+            <span class="sb-section-ico">🔍</span>
+            <span class="sb-section-title">Buscar libros</span>
+            <span class="sb-section-arrow" id="lg-arrow">▶</span>
         </div>
 
         <!-- ── Cuerpo (colapsado por defecto) ── -->
-        <div id="lg-body" style="display:none;">
+        <div class="sb-section-body" id="lg-body">
+            <div style="padding: 0 12px 12px;">
 
             <!-- Barra de búsqueda -->
             <div style="display:flex;gap:4px;margin-bottom:6px;">
@@ -145,7 +144,8 @@ document.addEventListener('DOMContentLoaded', () => {
                                font-size:0.6rem;padding:3px 8px;cursor:pointer;">▶</button>
             </div>
 
-        </div><!-- /#lg-body -->
+            </div><!-- /inner padding -->
+        </div><!-- /.sb-section-body / #lg-body -->
     `;
 
     // Insertar en el slot dedicado del nuevo sidebar (sb-mis-libros-slot),
@@ -260,10 +260,11 @@ document.addEventListener('DOMContentLoaded', () => {
 // ═══════════════════════════════════════════════════════════════
 
 function lgTogglePanel() {
+    const section = document.getElementById('lg-section');
+    if (!section) return;
     _lgOpen = !_lgOpen;
-    const body = document.getElementById('lg-body');
+    section.classList.toggle('open', _lgOpen);
     const arrow = document.getElementById('lg-arrow');
-    if (body) body.style.display = _lgOpen ? 'block' : 'none';
     if (arrow) arrow.textContent = _lgOpen ? '▼' : '▶';
 }
 
@@ -703,9 +704,6 @@ window._lgFetch = lgFetch;
 window.abrirBiblioteca = function () {
     const panel = document.getElementById('lg-section');
     if (!panel) return;
-    lgTogglePanel();
-    // Si el panel está oculto (slot colapsado) asegurarse de que sea visible
-    panel.style.display = '';
-    // Hacer scroll suave al panel
+    if (!_lgOpen) lgTogglePanel();
     setTimeout(() => panel.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
 };
