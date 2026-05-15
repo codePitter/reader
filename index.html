@@ -21,12 +21,14 @@
         <div class="rail">
             <div class="ic" id="ic-toggle-sidebar" onclick="toggleSidebarPanel()" title="Expandir panel"><span class="material-symbols-outlined">left_panel_open</span></div>
             <div class="ic-sep"></div>
-            <div class="ic" id="ic-biblioteca" onclick="if(!_togglePanelRail(this)) toggleBibliotecaRail();" title="Biblioteca"><span class="material-symbols-outlined">newsstand</span></div>            
+            <div class="ic" id="ic-biblioteca" onclick="_sbRailToggle('ic-biblioteca','sb-section-mis-libros')" title="Biblioteca"><span class="material-symbols-outlined">newsstand</span></div>
             <div class="ic" onclick="document.getElementById('epub-file').click()" title="Abrir archivo"><span class="material-symbols-outlined">folder_open</span></div>
                 <input type="file" id="epub-file" accept=".epub,.txt,.html,.htm,.pdf,.fb2,.fb3,.docx,.rtf,.odt,.mobi,.prc,.azw3,.azw,.cbz,.cbr" style="display:none">
-            <div class="ic" onclick="_togglePanelRail(this); if(typeof abrirBuscador==='function') abrirBuscador();" title="Buscar">⌕</div>
-            <div class="ic on" id="ic-chapters" onclick="if(!_togglePanelRail(this)) toggleChapterList();" title="Capítulos">≡</div>
-            <div class="ic" onclick="_togglePanelRail(this); if(typeof abrirMarcadores==='function') abrirMarcadores();" title="Marcadores">🔖</div>
+            <div class="ic" id="ic-buscar" onclick="_sbBuscarToggle()" title="Buscar">⌕</div>
+            <div class="ic" id="ic-chapters" onclick="_sbRailToggle('ic-chapters','sb-section-capitulos')" title="Capítulos">☰</div>
+            <div class="ic" id="ic-marcadores" onclick="_sbRailToggle('ic-marcadores','sb-section-marcadores')" title="Marcadores"><span class="material-symbols-outlined">
+bookmark_flag
+</span></div>
             <div class="ic-sep"></div>
             <div class="ic" id="ic-music" onclick="toggleMusic()" title="Música ambiental">♫</div>
             <div class="ic" id="ic-video" onclick="toggleVideo()" title="Video flotante">⊞</div>
@@ -42,8 +44,8 @@
         <div class="sidebar" id="sidebar">
             <!-- ── MIS LIBROS — sección colapsable (biblioteca.js inyecta contenido aquí) ── -->
             <div class="sb-section" id="sb-section-mis-libros">
-                <div class="sb-section-hdr" onclick="this.closest('.sb-section').classList.toggle('open')">
-                    <span class="sb-section-ico">📚</span>
+                <div class="sb-section-hdr" onclick="_sbSectionToggle('ic-biblioteca','sb-section-mis-libros')">
+                    <span class="sb-section-ico"><span class="material-symbols-outlined">newsstand</span></span>
                     <span class="sb-section-title">Mis libros</span>
                     <span class="sb-section-arrow">▶</span>
                 </div>
@@ -76,23 +78,34 @@
 
             <!-- ── CAPÍTULOS — sección colapsable ── -->
             <div class="sb-section sb-section-xl" id="sb-section-capitulos">
-                <div class="sb-section-hdr" onclick="this.closest('.sb-section').classList.toggle('open')">
-                    <span class="sb-section-ico">≡</span>
+                <div class="sb-section-hdr" onclick="_sbSectionToggle('ic-chapters','sb-section-capitulos')">
+                    <span class="sb-section-ico">☰</span>
                     <span class="sb-section-title">Capítulos</span>
                     <span class="sb-section-arrow">▶</span>
                 </div>
                 <div class="sb-section-body">
-            <div class="ch-list" id="ch-list-new"></div>
-            <!-- Capítulo activo compacto (visible cuando lista está contraída) -->
-            <div class="ch-active-preview" id="ch-active-preview" onclick="toggleChapterList()">
-                <span class="ch-num">▶</span>
-                <span id="ch-preview-title">— sin capítulo —</span>
+                    <div class="ch-list" id="ch-list-new"></div>
+                    <div class="ch-active-preview" id="ch-active-preview" onclick="_sbSectionToggle('ic-chapters','sb-section-capitulos')">
+                        <span class="ch-num">▶</span>
+                        <span id="ch-preview-title">— sin capítulo —</span>
+                    </div>
+                    <div class="sb-leer-wrap" id="sb-leer-wrap" style="display:none;">
+                        <button id="btn-leer-capitulo" type="button" onclick="aplicarConfiguracion()" class="btn-leer">▶ Leer capítulo</button>
+                    </div>
+                </div>
             </div>
-            <!-- Slot para Marcadores (bookmarks.js inyecta aquí) -->
-            <div id="sb-marcadores-slot"></div>
-            <div class="sb-leer-wrap" id="sb-leer-wrap" style="display:none;">
-                <button id="btn-leer-capitulo" type="button" onclick="aplicarConfiguracion()" class="btn-leer">▶ Leer capítulo</button>
-            </div>
+
+            <!-- ── MARCADORES — sección colapsable (bookmarks.js inyecta en #sb-marcadores-slot) ── -->
+            <div class="sb-section" id="sb-section-marcadores">
+                <div class="sb-section-hdr" onclick="_sbSectionToggle('ic-marcadores','sb-section-marcadores')">
+                    <span class="sb-section-ico"><span class="material-symbols-outlined">
+bookmark_flag
+</span></span>
+                    <span class="sb-section-title">Marcadores</span>
+                    <span class="sb-section-arrow">▶</span>
+                </div>
+                <div class="sb-section-body">
+                    <div id="sb-marcadores-slot"></div>
                 </div>
             </div>
 

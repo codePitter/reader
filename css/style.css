@@ -88,6 +88,8 @@ html {
     --ch-title-size: 1.05rem;
     --body-size:     0.85rem;
     --body-lh:       1.85;
+    --nav-chrome:    rgba(255,255,255,0.58);
+    --nav-hover:     rgba(255,255,255,0.82);
 }
 
 /* ── Themes from themes.css: ember · mercury · folio · graphite ── */
@@ -134,6 +136,8 @@ html {
   --bg:            #0d0b09;
   --text:          #f0e8d8;
   --surface2:      #181410;
+  --nav-chrome:    rgba(240,220,185,0.58);
+  --nav-hover:     rgba(240,220,185,0.85);
 }
 
 /* ── MERCURY: Slate + electric blue ── */
@@ -171,6 +175,8 @@ html {
   --bg:            #090c12;
   --text:          #d0e8ff;
   --surface2:      #0f1220;
+  --nav-chrome:    rgba(180,210,245,0.58);
+  --nav-hover:     rgba(180,210,245,0.85);
 }
 
 /* ── FOLIO: Ink + coral ── */
@@ -208,6 +214,8 @@ html {
   --bg:            #0c0a0a;
   --text:          #f5ece8;
   --surface2:      #181212;
+  --nav-chrome:    rgba(235,215,205,0.58);
+  --nav-hover:     rgba(235,215,205,0.85);
 }
 
 /* ── GRAPHITE: Near-black + emerald ── */
@@ -245,6 +253,8 @@ html {
   --bg:            #080a0e;
   --text:          #e8f5f0;
   --surface2:      #0e1018;
+  --nav-chrome:    rgba(195,230,215,0.58);
+  --nav-hover:     rgba(195,230,215,0.85);
 }
 
 
@@ -261,6 +271,8 @@ html {
     --text: #dce8f0;
     --text-muted: #6a7888;
     --text-dim: #3a4858;
+    --nav-chrome: rgba(180,210,240,0.58);
+    --nav-hover:  rgba(180,210,240,0.85);
 }
 
 
@@ -277,6 +289,8 @@ html {
     --text: #e8dcd8;
     --text-muted: #887068;
     --text-dim: #584540;
+    --nav-chrome: rgba(232,210,200,0.58);
+    --nav-hover:  rgba(232,210,200,0.85);
 }
 
 
@@ -293,6 +307,8 @@ html {
     --text: #d8e8e0;
     --text-muted: #688070;
     --text-dim: #3a5048;
+    --nav-chrome: rgba(190,230,215,0.58);
+    --nav-hover:  rgba(190,230,215,0.85);
 }
 
 
@@ -310,6 +326,8 @@ html {
     --sidebar-w: 300px;
     --bg-base: #080809;
     --text-primary: #e6eef8;
+    --nav-chrome: rgba(200,218,240,0.58);
+    --nav-hover:  rgba(200,218,240,0.85);
 }
 
 /* ── MINIMAL: light, sober ── */
@@ -330,6 +348,8 @@ html {
     --bg-elevated: #f5f5f5;
     --text-primary: #111827;
     --rail-bg: #f5f5f5;
+    --nav-chrome: rgba(17,24,39,0.55);
+    --nav-hover:  rgba(17,24,39,0.80);
 }
 
 /* ── LIGHT: Warm paper · amber accent ── */
@@ -392,6 +412,8 @@ html {
   --surface2:      #e8e0d0;
   --text:          #1e1912;
   --sidebar-w:     300px;
+  --nav-chrome:    rgba(30,25,18,0.55);
+  --nav-hover:     rgba(30,25,18,0.80);
 }
 
 /* Light: overrides específicos para componentes que no responden a tokens ── */
@@ -566,13 +588,13 @@ body {
   border-radius: 7px;
   display: flex; align-items: center; justify-content: center;
   font-size: 14px;
-  color: var(--text-dim);
+  color: var(--nav-chrome);
   cursor: pointer;
   transition: all 0.15s;
   position: relative;
   user-select: none;
 }
-.ic:hover { color: var(--text-muted); background: var(--bg-hover); }
+.ic:hover { color: var(--nav-hover); background: var(--bg-hover); }
 .ic.on {
   background: var(--ic-active-bg);
   color: var(--accent);
@@ -582,9 +604,10 @@ body {
   position: absolute;
   right: -1px; top: 7px; bottom: 7px;
   width: 2px;
-  background: none;
+  background: var(--accent);
   border-radius: 1px 0 0 1px;
   transition: background 0.3s ease;
+  opacity: 0.7;
 }
 .ic-sep {
   height: 1px; width: 20px;
@@ -776,36 +799,63 @@ body {
   border-top: 1px solid var(--border);
   flex-shrink: 0;
   transition: border-color 0.3s ease;
+  position: relative;
 }
+
+/* ── Header: el icono ocupa un slot de 32px (= ancho del .ic del rail)
+      Padding izquierdo 8px deja el icono centrado respecto al rail ── */
 .sb-section-hdr {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
+  gap: 0;
+  padding: 0 10px 0 0;
   cursor: pointer;
   user-select: none;
-  transition: background 0.12s;
+  border-left: 2px solid transparent;
+  transition: background 0.12s, border-left-color 0.2s ease;
+  min-height: 34px;
 }
 .sb-section-hdr:hover { background: var(--bg-hover); }
+
+/* Icono: mismo tamaño de cuadro que .ic del rail (32px) */
 .sb-section-ico {
-  font-size: 0.65rem;
-  color: var(--accent-dim);
+  width: 42px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  color: var(--nav-chrome);
   flex-shrink: 0;
   line-height: 1;
+  transition: color 0.18s ease;
 }
+.sb-section-hdr:hover .sb-section-ico {
+  color: var(--nav-hover);
+}
+
 .sb-section-title {
   font-family: 'DM Mono', monospace;
   font-size: 0.44rem;
-  letter-spacing: 0.13em;
+  letter-spacing: 0.11em;
   text-transform: uppercase;
-  color: var(--text-muted);
+  color: var(--nav-chrome);
   flex: 1;
+  transition: color 0.18s ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
+.sb-section-hdr:hover .sb-section-title {
+  color: var(--nav-hover);
+}
+
 .sb-section-arrow {
-  font-size: 0.5rem;
-  color: var(--text-dim);
-  transition: transform 0.2s ease;
+  font-size: 0.42rem;
+  color: var(--nav-chrome);
+  transition: transform 0.2s ease, color 0.2s ease;
   display: inline-block;
+  flex-shrink: 0;
 }
 .sb-section.open .sb-section-arrow { transform: rotate(90deg); }
 .sb-section-body {
@@ -817,24 +867,39 @@ body {
 /* Secciones con contenido dinámico alto (lista de capítulos, etc.) */
 .sb-section.sb-section-xl.open .sb-section-body { max-height: 60vh; }
 
+/* ── Estado abierto: barra izquierda + icono accent ─────────────────── */
+.sb-section.open > .sb-section-hdr {
+  border-left-color: var(--accent-dim);
+}
+.sb-section.open > .sb-section-hdr .sb-section-ico {
+  color: var(--accent);
+}
+.sb-section.open > .sb-section-hdr .sb-section-title {
+  color: var(--nav-hover);
+}
+.sb-section.open > .sb-section-hdr .sb-section-arrow {
+  color: var(--accent-dim);
+}
+
 /* Config rápida (pills) */
 .sb-config {
   padding: 6px 12px 10px;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 3px;
 }
 .config-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 5px 6px;
+  padding: 6px 7px;
   border-radius: 4px;
   cursor: pointer;
   transition: background 0.1s;
+  gap: 8px;
 }
 .config-row:hover { background: var(--bg-hover); }
-.config-label { font-size: 0.48rem; color: var(--text-muted); letter-spacing: 0.04em; }
+.config-label { font-size: 0.48rem; color: var(--text-muted); letter-spacing: 0.04em; flex: 1; transition: color 0.2s; }
 
 /* ── TTS section inside sidebar ── */
 .sb-tts {
@@ -877,6 +942,7 @@ body {
   color: var(--accent);
   border-color: var(--accent-dim, rgba(200,169,110,0.55));
   background: var(--accent-glow, rgba(200,169,110,0.1));
+  box-shadow: inset 0 0 0 1px var(--accent-dim);
 }
 .sb-tts-select {
   width: 100%;
@@ -925,25 +991,26 @@ body {
 
 /* Pill toggle */
 .pill {
-  width: 28px; height: 13px;
+  width: 30px; height: 14px;
   border-radius: 7px;
   background: var(--border-strong);
   position: relative;
   cursor: pointer;
   transition: background 0.2s;
   flex-shrink: 0;
+  border: 1px solid var(--border);
 }
-.pill.on { background: var(--pill-on); }
+.pill.on { background: var(--pill-on); border-color: var(--accent-dim); }
 .pill-thumb {
   position: absolute;
-  width: 9px; height: 9px;
+  width: 10px; height: 10px;
   border-radius: 50%;
-  top: 2px;
+  top: 1px;
   transition: all 0.2s;
   background: var(--text-muted);
 }
-.pill.off .pill-thumb { left: 2px; }
-.pill.on .pill-thumb { left: 17px; background: var(--pill-thumb); }
+.pill.off .pill-thumb { left: 1px; }
+.pill.on .pill-thumb { left: 18px; background: var(--pill-thumb); box-shadow: 0 0 4px var(--accent-dim); }
 
 /* ════════════════════════════════
    READING WRAP
@@ -1730,6 +1797,17 @@ body {
 }
 #sb-mis-libros-slot > * {
   padding: 0 4px;
+}
+
+/* ── Marcadores: bookmarks.js inyecta contenido en #sb-marcadores-slot.
+   La sección ya tiene su propio sb-section-hdr, así que cualquier
+   .section-label o .sidebar-section que inyecte bookmarks.js se suprime. */
+#sb-marcadores-slot .section-label {
+  display: none !important;
+}
+#sb-marcadores-slot .sidebar-section {
+  padding: 0;
+  border: none;
 }
 
 
@@ -6582,6 +6660,14 @@ input[type="text"] {
     font-size: 18px;
     font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 20;
     line-height: 1;
+}
+
+/* ── Material Symbol dentro de section ico (hereda color del padre) ── */
+.sb-section-ico .material-symbols-outlined {
+    font-size: 16px;
+    font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 20;
+    line-height: 1;
+    color: inherit;
 }
 
 /* ── Sidebar: contraer lista capítulos ── */

@@ -34,7 +34,162 @@
     _notifPatch();  // Ejecutar inmediatamente y también tras DOMContentLoaded
     document.addEventListener('DOMContentLoaded', _notifPatch);
 
-    // ── Acordeón de ajustes (API Keys & Proveedores) ─────────
+    // ── Panel de sidebar vinculado al rail ──────────────────────────────────────
+    // Comportamiento:
+    //   • Sidebar colapsado  → 1er clic: expandir + abrir sección + scroll alineado
+    //   • Sidebar abierto + misma sección activa → colapsar sidebar + cerrar secciones
+    //   • Sidebar abierto + sección distinta → cambiar sección + scroll alineado
+
+    var _activeSbRailId = null;
+
+    // Cierra todas las secciones del sidebar (usada al colapsar)
+    function _sbCloseAllSections() {
+        document.querySelectorAll('#sidebar .sb-section.open').forEach(function (s) {
+            s.classList.remove('open');
+        });
+    }
+
+    window._sbRailToggle = function (icId, sectionId) {
+        var app     = document.querySelector('.app');
+        var sidebar = document.getElementById('sidebar');
+        if (!app || !sidebar) return;
+
+        var collapsed  = app.classList.contains('sidebar-collapsed');
+        var sameButton = _activeSbRailId === icId;
+
+        if (collapsed) {
+            // 1er clic: expandir → todas las secciones ya están cerradas (se cierran al colapsar)
+            app.classList.remove('sidebar-collapsed');
+            _sbSyncToggleIcon(false);
+            _activeSbRailId = icId;
+            _sbOpenSection(sectionId, icId);
+
+        } else if (sameButton) {
+            // 2do clic mismo botón: colapsar sidebar + cerrar secciones
+            _sbCloseAllSections();
+            app.classList.add('sidebar-collapsed');
+            _sbSyncToggleIcon(true);
+            _activeSbRailId = null;
+
+        } else {
+            // Botón diferente: cambiar sección (sin colapsar)
+            _activeSbRailId = icId;
+            _sbOpenSection(sectionId, icId);
+        }
+    };
+
+    // Usado por los sb-section-hdr internos del sidebar.
+    // Solo abre/cierra la sección — nunca colapsa el sidebar.
+    window._sbSectionToggle = function (icId, sectionId) {
+        var section = document.getElementById(sectionId);
+        if (!section) return;
+
+        var isOpen = section.classList.contains('open');
+        if (isOpen) {
+            section.classList.remove('open');
+            // Si este era el botón activo, limpiar tracking pero NO colapsar
+            if (_activeSbRailId === icId) _activeSbRailId = null;
+        } else {
+            _activeSbRailId = icId;
+            _sbOpenSection(sectionId, icId);
+        }
+    };
+
+    // Abre una sección y hace scroll para alinear su header con el botón del rail.
+    // No toca otras secciones — cada sección se puede abrir/cerrar independientemente.
+    function _sbOpenSection(sectionId, icId) {
+        var section = document.getElementById(sectionId);
+        if (!section) return;
+
+        section.classList.add('open');
+
+        // Esperar a que la transición del sidebar (220ms) termine antes de medir.
+        // offsetTop de la sección es estable porque las otras secciones ya estaban cerradas.
+        setTimeout(function () {
+            var sidebar = document.getElementById('sidebar');
+            if (!sidebar) return;
+
+            var scrollTarget = 0;
+
+            if (icId) {
+                var icBtn = document.getElementById(icId);
+                if (icBtn) {
+                    // Fórmula: sección debe aparecer en el mismo Y que el botón del rail.
+                    // scrollTop = offsetTop_sección − (top_botón_rail − top_sidebar)
+                    var icTop = icBtn.getBoundingClientRect().top;
+                    var sbTop = sidebar.getBoundingClientRect().top;
+                    scrollTarget = Math.max(0, section.offsetTop - (icTop - sbTop));
+                }
+            }
+
+            sidebar.scrollTo({ top: scrollTarget, behavior: 'smooth' });
+        }, 250);
+    }
+
+    // Sincroniza el ícono del botón mostrar/ocultar sidebar
+    function _sbSyncToggleIcon(isCollapsed) {
+        var btn  = document.getElementById('ic-toggle-sidebar');
+        var icon = btn && btn.querySelector('.material-symbols-outlined');
+        if (icon) icon.textContent = isCollapsed ? 'left_panel_open' : 'left_panel_close';
+    }
+
+    // Buscar: abre sidebar + sección capítulos + foco en campo de búsqueda
+    window._sbBuscarToggle = function () {
+        var app     = document.querySelector('.app');
+        var sidebar = document.getElementById('sidebar');
+        if (!app || !sidebar) return;
+
+        var collapsed  = app.classList.contains('sidebar-collapsed');
+        var sameButton = _activeSbRailId === 'ic-buscar';
+
+        if (collapsed) {
+            app.classList.remove('sidebar-collapsed');
+            _sbSyncToggleIcon(false);
+            _activeSbRailId = 'ic-buscar';
+            _sbOpenSection('sb-section-capitulos', 'ic-buscar');
+            _sbFocusSearch();
+        } else if (sameButton) {
+            _sbCloseAllSections();
+            app.classList.add('sidebar-collapsed');
+            _sbSyncToggleIcon(true);
+            _activeSbRailId = null;
+        } else {
+            _activeSbRailId = 'ic-buscar';
+            _sbOpenSection('sb-section-capitulos', 'ic-buscar');
+            _sbFocusSearch();
+        }
+    };
+
+    function _sbFocusSearch() {
+        setTimeout(function () {
+            var input = document.getElementById('chapter-search');
+            if (input) { input.focus(); input.select(); }
+            else if (typeof abrirBuscador === 'function') abrirBuscador();
+        }, 80);
+    }
+
+    // Parchear ic-toggle-sidebar: limpiar secciones + tracking al colapsar
+    document.addEventListener('DOMContentLoaded', function () {
+        var btn = document.getElementById('ic-toggle-sidebar');
+        if (!btn) return;
+        btn.onclick = function () {
+            var app = document.querySelector('.app');
+            if (!app) return;
+            var willCollapse = !app.classList.contains('sidebar-collapsed');
+            if (willCollapse) {
+                _sbCloseAllSections();
+                _activeSbRailId = null;
+            }
+            if (typeof toggleSidebarPanel === 'function') {
+                toggleSidebarPanel();
+            } else {
+                app.classList.toggle('sidebar-collapsed');
+                _sbSyncToggleIcon(app.classList.contains('sidebar-collapsed'));
+            }
+        };
+    });
+
+
     // Esta función no estaba definida en ningún módulo JS cargado.
     // Se define aquí porque init-extra.js es el último archivo de UI
     // que carga antes de init.js, garantizando que esté disponible

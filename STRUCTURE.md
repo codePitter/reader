@@ -84,6 +84,118 @@ Notes & recent changes:
 - **2026-03-03 — batch 2** (`js/progress.js`):
   - Resume modal now has a "Cancelar" (✕) button → `fallbackCargar()`.
   - "Continuar" sets `window._noAutoVideo = true` (600 ms) to block auto-open of cinematic video mode.
+- **2026-03-05 — batch 20** (`index.html` · `js/init-extra.js` · `style.css`) — Headers sidebar no colapsan + colores #lg-body:
+
+  ### Problemas corregidos
+  1. **Headers internos colapsaban el sidebar**: los `onclick` de `sb-section-hdr` llamaban a `_sbRailToggle()` que contiene lógica de colapso del sidebar. Al hacer click en un header con el mismo `icId` que `_activeSbRailId`, colapsaba el sidebar en vez de solo cerrar la sección.
+  2. **Texto oscuro en `#lg-body` / `#sb-mis-libros-slot-inner`**: contenido inyectado por `biblioteca.js` con colores legacy que no respondían a los tokens del tema.
+
+  ### Cambios en `js/init-extra.js`
+  - Nueva función `window._sbSectionToggle(icId, sectionId)`: solo abre/cierra la sección. Si ya está abierta → `classList.remove('open')` + limpia tracking. Si está cerrada → `_sbOpenSection()`. **Nunca colapsa el sidebar.**
+  - `_sbRailToggle()` sin cambios — sigue siendo el handler del rail (colapsa en 2do clic).
+
+  ### Cambios en `index.html`
+  - `sb-section-mis-libros` hdr onclick: `_sbRailToggle` → `_sbSectionToggle`
+  - `sb-section-capitulos` hdr onclick: `_sbRailToggle` → `_sbSectionToggle`
+  - `sb-section-marcadores` hdr onclick: `_sbRailToggle` → `_sbSectionToggle`
+  - `#ch-active-preview` onclick: `_sbRailToggle` → `_sbSectionToggle`
+
+  ### Cambios en `style.css`
+  - Nuevo bloque CSS para `#lg-body`, `#sb-mis-libros-slot-inner` y sus hijos: normaliza `color` a `--nav-chrome`, hover a `--nav-hover`, títulos a `--text-primary`, inputs a tokens del tema.
+
+  **Funciones nuevas:**
+  | Función | Comportamiento |
+  |---|---|
+  | `window._sbSectionToggle(icId, sectionId)` | Toggle de sección sin colapsar sidebar |
+
+- **2026-03-04 — batch 18** (`index.html` · `style.css` · `js/init-extra.js`) — Alineación ícono rail↔sidebar + búsqueda funcional:
+
+  ### Problemas corregidos
+  1. **Íconos no coincidían** entre rail y sección del sidebar:
+     - "Mis libros" icon: `📚` → `<span class="material-symbols-outlined">newsstand</span>` (igual que rail `ic-biblioteca`)
+     - "Capítulos" icon: `≡` → `☰` (igual que rail `ic-chapters`)
+  2. **Desincronización `_activeSbRailId`**: los `onclick` de section headers usaban `this.closest('.sb-section').classList.toggle('open')` → no notificaban al sistema de tracking. Secciones con rail button ahora usan `_sbRailToggle(icId, sectionId)` en el header.
+  3. **`ic-buscar` roto**: mezclaba `_sbRailToggle` + `abrirBuscador`, causando que el segundo clic colapsara el sidebar antes de que la búsqueda pudiera activarse. Reemplazado por `_sbBuscarToggle()` dedicada.
+
+  ### Cambios en `index.html`
+  - `sb-section-mis-libros` hdr onclick: → `_sbRailToggle('ic-biblioteca','sb-section-mis-libros')`
+  - `sb-section-capitulos` hdr onclick: → `_sbRailToggle('ic-chapters','sb-section-capitulos')`
+  - `ic-buscar` onclick: → `_sbBuscarToggle()`
+  - `ic-marcadores` onclick: removida llamada a `abrirMarcadores` (marcadores viven dentro de `sb-section-capitulos` que ya se abre)
+
+  ### Cambios en `style.css`
+  - `.sb-section-ico .material-symbols-outlined`: nueva regla, `font-size: 16px`, `color: inherit`
+
+  ### Cambios en `js/init-extra.js`
+  - `window._sbBuscarToggle()`: abre sidebar si colapsado + sección capítulos + foco en `#chapter-search` con 80ms delay; segundo clic colapsa.
+  - `_sbFocusSearch()`: helper que enfoca `#chapter-search` o llama `abrirBuscador()` como fallback.
+  - `_sbOpenSection()`: acepta tercer parámetro `icId`; calcula scrollTop tal que el header de la sección quede alineado verticalmente con el centro del ícono del rail.
+  - `_sbRailToggle()`: pasa `icId` a `_sbOpenSection()` para scroll alineado.
+
+- **2026-03-04 — batch 17** (`style.css` · `index.html` · `js/init-extra.js`) — Alineación visual sidebar↔rail + toggle de sidebar desde botones del rail:
+
+  ### `style.css`
+  - `.sb-section-hdr`: rediseñado con `padding: 0 10px 0 0` y `min-height: 34px` (altura igual al área de toque del rail icon).
+  - `.sb-section-ico`: nuevo modelo — `width: 42px; height: 34px; display: flex; align-items/justify-content: center` — el slot del icono tiene ancho fijo equivalente al rail (48px sidebar border + borde = alineación óptica con `.ic`).
+  - Colores por defecto reducidos a `var(--text-dim)` para que el sidebar sea discreto cuando está colapsado y solo resalte cuando la sección está abierta.
+  - Eliminados los bloques `:has()` de batch 16 (`sb-section:has(.pill.on)`, `config-row:has(.pill.on)`) — estados activo/inactivo de features removidos per request.
+  - `.sb-section.open > .sb-section-hdr .sb-section-ico`: color `var(--accent)` en estado abierto.
+  - `.sb-section.open > .sb-section-hdr .sb-section-title`: color `var(--text-muted)`.
+
+  ### `index.html`
+  - Removida clase `.on` de `#ic-chapters`.
+  - Añadido `id="ic-buscar"` e `id="ic-marcadores"` a los botones del rail que no tenían ID.
+  - `onclick` de ic-biblioteca, ic-buscar, ic-chapters, ic-marcadores: reemplazados por `_sbRailToggle(icId, sectionId)`.
+  - `ch-active-preview` onclick: cambiado de `toggleChapterList()` → `_sbRailToggle('ic-chapters','sb-section-capitulos')`.
+
+  ### `js/init-extra.js`
+  - Añadidas funciones `window._sbRailToggle(icId, sectionId)`, `_sbOpenSection(sectionId, collapseOthers)`, `_sbSyncToggleIcon(isCollapsed)`.
+  - Lógica: sidebar colapsado + click → expandir + abrir sección; mismo botón con sidebar abierto → colapsar; botón diferente → cambiar sección.
+  - IIFE de patch en `ic-toggle-sidebar.onclick` para limpiar `_activeSbRailId` cuando el botón dedicado colapsa el sidebar y proveer fallback si `toggleSidebarPanel` no existe.
+  - Variable módulo `_activeSbRailId` trackea qué botón del rail "abrió" el sidebar.
+
+  **Clases/IDs nuevos:**
+  | Elemento | Cambio |
+  |---|---|
+  | `#ic-buscar` | ID añadido al rail button Buscar |
+  | `#ic-marcadores` | ID añadido al rail button Marcadores |
+  | `window._sbRailToggle` | nueva función global |
+  | `_activeSbRailId` | variable de módulo en init-extra.js |
+
+- **2026-03-04 — batch 16** (`style.css` · `index.html`) — Rediseño visual del sidebar: jerarquía, estados activo/inactivo y coherencia rail↔secciones:
+
+  ### Mejoras en `style.css`
+  - `.sb-section-hdr`: añadida `border-left: 2px solid transparent` + transición. La barra izquierda se activa en estado abierto o con features activas.
+  - `.sb-section.open > .sb-section-hdr`: `border-left-color: var(--accent-dim)` + `sb-section-title` más legible.
+  - `.sb-section:has(.pill.on) > .sb-section-hdr .sb-section-ico`: icono en `var(--accent)` cuando hay features activas en la sección — CSS puro sin JS.
+  - `.sb-section:has(.pill.on):not(.open) > .sb-section-hdr`: borde izquierdo prominente (`var(--accent)`) cuando la sección está colapsada pero tiene features ON, para indicar actividad sin expandirla.
+  - `.config-row:has(.pill.on)`: fondo `var(--accent-glow)` + `config-label` más brillante cuando la feature está activa.
+  - `.sb-tts-engine-btn.active`: añadido `box-shadow: inset 0 0 0 1px var(--accent-dim)` para mayor énfasis.
+  - `.pill`: aumentado a 30×14 px + `border: 1px solid var(--border)`. Estado ON: `border-color: var(--accent-dim)` + thumb con `box-shadow`.
+  - `.ic.on::after`: cambiado `background: none` → `background: var(--accent)` (indicador visual de icono activo en el rail).
+  - `.sb-section`: añadido `position: relative` para futuros pseudo-elementos.
+  - `.sb-section-title`: aumentado de `0.44rem` a `0.46rem`.
+  - `.sb-section-ico`, `.sb-section-arrow`: añadidas transiciones de color.
+
+  ### Mejoras en `index.html`
+  - `sb-section-hdr` de cada sección: añadidos IDs (`sb-hdr-mis-libros`, `sb-hdr-libro`, `sb-hdr-capitulos`, `sb-hdr-tts`, `sb-hdr-config`) para targeting desde JS.
+  - Icono de "Capítulos": cambiado de `≡` → `☰` para mejor legibilidad a tamaño pequeño.
+  - Sin cambios a scripts inline; toda la lógica permanece en los archivos JS.
+
+  **Clases CSS nuevas/modificadas:**
+  | Selector | Cambio |
+  |---|---|
+  | `.sb-section` | + `position: relative` |
+  | `.sb-section-hdr` | + `border-left: 2px solid transparent`, transición |
+  | `.sb-section.open > .sb-section-hdr` | `border-left-color: var(--accent-dim)` |
+  | `.sb-section:has(.pill.on) > .sb-section-hdr .sb-section-ico` | `color: var(--accent)` |
+  | `.sb-section:has(.pill.on):not(.open) > .sb-section-hdr` | `border-left-color: var(--accent)` |
+  | `.config-row:has(.pill.on)` | `background: var(--accent-glow)` |
+  | `.config-row:has(.pill.on) .config-label` | `color: var(--text-primary)` |
+  | `.ic.on::after` | `background: var(--accent)` (antes `none`) |
+  | `.pill` | 30×14px, border, thumb con box-shadow |
+  | `.sb-tts-engine-btn.active` | + `box-shadow: inset` |
+
 - **2026-03-04 — batch 15** (`js/tts.js` · `js/init.js` · `js/settings-bridge.js` · `index.html` · `style.css`) — Fix almacenamiento con sesión + secciones colapsables en sidebar y modal de ajustes:
 
   ### Bug 1 — Toasts redundantes en auth:ready (almacenamiento)
