@@ -7199,3 +7199,6 @@ input[type="text"] {
 .music-provider-opt:hover { background: var(--bg-hover); color: var(--text); }
 .music-provider-opt.active { color: var(--accent2); background: var(--accent-glow); }
 .music-provider-divider { height: 1px; background: var(--border); margin: 4px 0; }
+
+/* Ajuste tamaño icono mute */
+#ar-mute { font-size: 0.7rem; }

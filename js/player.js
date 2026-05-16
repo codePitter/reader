@@ -1,35 +1,50 @@
 // ─── AMBIENT MUSIC ENGINE — Web Audio API Procedural Generation ───
 // Genera música ambiental 100% en el navegador sin URLs externas
 
-// ─── AMBIENT MUSIC ENGINE — Web Audio API Procedural Generation ───
-// Genera música ambiental 100% en el navegador sin URLs externas
-
 let ambientCtx = null;
 let ambientNodes = [];
 let ambientPlaying = false;
 let ambientGenre = null;
 let ambientGainNode = null;
 let ambientVolume = 0.15;
-let musicProvider = uGet('music_provider') || 'freesound';
-let PIXABAY_MUSIC_KEY = uGet('pixabay_music_key') || '';
-let JAMENDO_API_KEY = uGet('jamendo_api_key') || '';
+
+// ─── PROVEEDORES DE MÚSICA ─────────────────────────────────────────
+let musicProvider = 'freesound';
+let PIXABAY_MUSIC_KEY = '';
+let JAMENDO_API_KEY = '';
 
 // Mapeo de proveedores a funciones de búsqueda
+// IMPORTANTE: se define ANTES del IIFE que lo referencia
 const MUSIC_PROVIDERS = {
-    freesound: { name: 'Freesound', needsKey: true, search: buscarEnFreesound },
-    pixabay: { name: 'Pixabay Music', needsKey: false, search: buscarEnPixabayMusic },
-    ccmixter: { name: 'ccMixter', needsKey: false, search: buscarEnCcMixter },
-    jamendo: { name: 'Jamendo', needsKey: true, search: buscarEnJamendo },
-    local: { name: 'Generador local', needsKey: false, search: null }
+    freesound: { name: 'Freesound', needsKey: true, search: null },   // se parchea abajo
+    pixabay:   { name: 'Pixabay Music', needsKey: false, search: null },
+    ccmixter:  { name: 'ccMixter', needsKey: false, search: null },
+    jamendo:   { name: 'Jamendo', needsKey: true, search: null },
+    local:     { name: 'Generador local', needsKey: false, search: null }
 };
 
+// Cargar preferencias guardadas
+(function initMusicProvider() {
+    const saved = uGet('music_provider');
+    if (saved && MUSIC_PROVIDERS[saved]) musicProvider = saved;
+    PIXABAY_MUSIC_KEY = uGet('pixabay_music_key') || '';
+    JAMENDO_API_KEY   = uGet('jamendo_api_key')   || '';
+})();
+
+function _getCacheKey() {
+    return (typeof aiDetectedUniverse !== 'undefined' && aiDetectedUniverse)
+        ? `__universe__${aiDetectedUniverse}`
+        : ambientGenre || 'default';
+}
+
 function cambiarProveedorMusica(provider) {
+    if (!MUSIC_PROVIDERS[provider]) return;
     musicProvider = provider;
     uSet('music_provider', provider);
     // Limpiar caché para forzar nueva búsqueda
-    const cacheKey = getCacheKey();
-    delete _lastFreesoundResults[cacheKey];
-    if (ambientPlaying) {
+    const cacheKey = _getCacheKey();
+    if (_lastFreesoundResults) delete _lastFreesoundResults[cacheKey];
+    if (ambientPlaying && ambientGenre) {
         stopAmbient();
         playAmbient(ambientGenre);
     }
@@ -37,7 +52,9 @@ function cambiarProveedorMusica(provider) {
     document.querySelectorAll('.music-provider-opt').forEach(opt => {
         opt.classList.toggle('active', opt.dataset.provider === provider);
     });
-    mostrarNotificacion(`🎵 Motor cambiado a: ${MUSIC_PROVIDERS[provider]?.name || provider}`);
+    if (typeof mostrarNotificacion === 'function') {
+        mostrarNotificacion(`🎵 Motor cambiado a: ${MUSIC_PROVIDERS[provider]?.name || provider}`);
+    }
 }
 
 function getAudioCtx() {
@@ -462,19 +479,32 @@ const GENRE_LABELS = {
     horror: 'Horror oscuro', adventure: 'Aventura épica'
 };
 
-// ── PIXABAY MUSIC API (sin key)
+// ── PIXABAY MUSIC API (opcional: funciona sin key, pero con límites) ────
 async function buscarEnPixabayMusic(genre) {
-    const url = `https://pixabay.com/api/music/?key=${PIXABAY_MUSIC_KEY}&q=${encodeURIComponent(genre)}&per_page=10`;
+    const keyParam = PIXABAY_MUSIC_KEY ? `key=${PIXABAY_MUSIC_KEY}&` : '';
+    const url = `https://pixabay.com/api/music/?${keyParam}q=${encodeURIComponent(genre)}&per_page=10`;
     try {
         const res = await fetch(url);
-        if (!res.ok) return null;
+        if (!res.ok) {
+            if ((res.status === 401 || res.status === 400) && PIXABAY_MUSIC_KEY) {
+                // Reintentar sin key
+                const fbRes = await fetch(`https://pixabay.com/api/music/?q=${encodeURIComponent(genre)}&per_page=5`);
+                if (!fbRes.ok) return null;
+                const fbData = await fbRes.json();
+                if (fbData.hits && fbData.hits.length) {
+                    return fbData.hits.map(track => ({
+                        url: track.audio, name: track.title,
+                        duration: track.duration, rating: 3.5
+                    }));
+                }
+            }
+            return null;
+        }
         const data = await res.json();
         if (data.hits && data.hits.length) {
             return data.hits.map(track => ({
-                url: track.audio,
-                name: track.title,
-                duration: track.duration,
-                rating: 3.5
+                url: track.audio, name: track.title,
+                duration: track.duration, rating: 3.5
             }));
         }
     } catch(e) { console.warn('Pixabay Music falló:', e); }
@@ -650,7 +680,7 @@ function analizarTextoDetallado(texto) {
     };
 
     // ── Boost del universo detectado ──
-    if (aiDetectedUniverse) {
+    if (typeof aiDetectedUniverse !== 'undefined' && aiDetectedUniverse) {
         const univConfig = UNIVERSE_CONFIG[aiDetectedUniverse];
         const boost = univConfig?.ambient?.genreBoost;
         if (boost) {
@@ -690,13 +720,13 @@ function limpiarCacheAmbiental() {
 async function buscarMusica(genre) {
     const provider = MUSIC_PROVIDERS[musicProvider];
     if (!provider || !provider.search) {
-        // Fallback a generador local
-        return null;
+        return null; // usar generador local
     }
     try {
         const results = await provider.search(genre);
         if (results && results.length) {
-            _lastFreesoundResults[getCacheKey()] = results;
+            if (!window._lastFreesoundResults) window._lastFreesoundResults = {};
+            _lastFreesoundResults[_getCacheKey()] = results;
             return results;
         }
     } catch(e) {
@@ -833,36 +863,43 @@ async function selectGenre(genre) {
 
 async function playAmbient(genre) {
     const g = genre || ambientGenre;
-    console.log(`🎵 [Player] playAmbient("${g}") — key Freesound: ${freesoundApiKey ? '✓ presente' : '✗ ausente'}`);
+    console.log(`🎵 [Player] playAmbient("${g}") — proveedor: ${musicProvider}`);
 
-    // Try Freesound first if key is available
-    if (freesoundApiKey) {
-        const track = await buscarEnFreesound(g, null);
-        if (track) {
-            console.log(`🎵 [Player] Reproduciendo desde Freesound: "${track.name}"`);
-            freesoundAudio = new Audio(track.url);
-            freesoundAudio.loop = false;
-            freesoundAudio.volume = ambientVolume;
-            freesoundAudio.crossOrigin = 'anonymous';
-            // Auto-avanzar al siguiente track al terminar
-            freesoundAudio.onended = () => {
-                console.log('🎵 [Player] Track terminado — cargando siguiente automáticamente');
-                siguienteTrack();
-            };
-            freesoundAudio.play().then(() => {
-                ambientPlaying = true;
-                document.getElementById('ambient-play-btn').textContent = '⏸';
-                document.getElementById('ambient-eq').classList.add('playing');
-                document.getElementById('ambient-track-name').textContent = track.name;
-                document.getElementById('ambient-track-genre').textContent = '♪ Freesound CC0';
-                document.getElementById('ambient-player').classList.add('ambient-playing');
-            }).catch((err) => {
-                console.warn(`🎵 [Player] Audio.play() falló (${err.message}) — fallback a local`);
-                playAmbientLocal(g);
-            });
-            return;
+    // Intentar con el proveedor activo (excepto 'local')
+    if (musicProvider !== 'local') {
+        const results = await buscarMusica(g);
+        if (results && results.length) {
+            const track = _weightedPickByRating(results);
+            if (track && track.url) {
+                console.log(`🎵 [Player] Reproduciendo desde ${musicProvider}: "${track.name}"`);
+                if (freesoundAudio) {
+                    freesoundAudio.pause();
+                    freesoundAudio.src = '';
+                }
+                freesoundAudio = new Audio(track.url);
+                freesoundAudio.loop = false;
+                freesoundAudio.volume = ambientVolume;
+                freesoundAudio.crossOrigin = 'anonymous';
+                freesoundAudio.onended = () => {
+                    console.log('🎵 [Player] Track terminado — cargando siguiente automáticamente');
+                    siguienteTrack();
+                };
+                freesoundAudio.play().then(() => {
+                    ambientPlaying = true;
+                    document.getElementById('ambient-play-btn').textContent = '⏸';
+                    document.getElementById('ambient-eq').classList.add('playing');
+                    document.getElementById('ambient-track-name').textContent = track.name;
+                    document.getElementById('ambient-track-genre').textContent = `♪ ${MUSIC_PROVIDERS[musicProvider]?.name || 'Música'}`;
+                    document.getElementById('ambient-player').classList.add('ambient-playing');
+                    _syncReaderMusicUI();
+                }).catch((err) => {
+                    console.warn(`🎵 [Player] Audio.play() falló (${err.message}) — fallback a local`);
+                    playAmbientLocal(g);
+                });
+                return;
+            }
         }
-        console.warn(`🎵 [Player] Freesound no devolvió tracks — fallback a generador local`);
+        console.warn(`🎵 [Player] Proveedor ${musicProvider} no devolvió tracks — fallback a generador local`);
     }
     // Fallback: procedural
     playAmbientLocal(g);
@@ -887,6 +924,7 @@ function playAmbientLocal(genre) {
     document.getElementById('ambient-track-name').textContent = GENRE_LABELS[genre];
     document.getElementById('ambient-track-genre').textContent = '♪ generado localmente';
     document.getElementById('ambient-player').classList.add('ambient-playing');
+    _syncReaderMusicUI();
     console.log(`🎵 [Player] Generador local activo — ${ambientNodes.length} nodos de audio`);
 }
 
@@ -912,6 +950,29 @@ function stopAmbient() {
     document.getElementById('ambient-play-btn').textContent = '▶';
     document.getElementById('ambient-eq').classList.remove('playing');
     document.getElementById('ambient-player').classList.remove('ambient-playing');
+    // Sincronizar UI del reader mode
+    _syncReaderMusicUI();
+}
+
+// ── Sincroniza el reproductor del modo lectura con el estado real del player ──
+function _syncReaderMusicUI() {
+    const arPlay      = document.getElementById('ar-play');
+    const arEq        = document.getElementById('ar-eq');
+    const arTrackName = document.getElementById('ar-track-name');
+    const arTrackGenre= document.getElementById('ar-track-genre');
+    const arMute      = document.getElementById('ar-mute');
+    const arLoop      = document.getElementById('ar-loop');
+    const mainPlay    = document.getElementById('ambient-play-btn');
+    const mainEq      = document.getElementById('ambient-eq');
+    const mainTrackName  = document.getElementById('ambient-track-name');
+    const mainTrackGenre = document.getElementById('ambient-track-genre');
+
+    if (arPlay      && mainPlay)       arPlay.textContent      = mainPlay.textContent;
+    if (arEq        && mainEq)         arEq.classList.toggle('playing', mainEq.classList.contains('playing'));
+    if (arTrackName && mainTrackName)  arTrackName.textContent = mainTrackName.textContent;
+    if (arTrackGenre&& mainTrackGenre) arTrackGenre.textContent= mainTrackGenre.textContent;
+    if (arMute) arMute.textContent = (typeof _ambientMuted !== 'undefined' && _ambientMuted) ? '🔇' : '🔊';
+    if (arLoop) arLoop.style.color = (typeof window._ambientLoopOn !== 'undefined' && window._ambientLoopOn) ? 'var(--accent)' : '';
 }
 
 function toggleAmbientPlay() {
@@ -949,6 +1010,7 @@ function toggleAmbientPlay() {
             playAmbient(ambientGenre);
         }
     }
+    _syncReaderMusicUI();
 }
 
 async function siguienteTrack() {
@@ -1000,7 +1062,11 @@ async function siguienteTrack() {
     // Sincronizar UI del modo video si está activo
     if (typeof _syncAmbientBtn === 'function') _syncAmbientBtn();
     if (typeof _actualizarMusicLabel === 'function') _actualizarMusicLabel();
+    _syncReaderMusicUI();
 }
+
+function musicNextTrack() { siguienteTrack(); }
+function musicPrevTrack() { siguienteTrack(); }
 
 function setAmbientVolume(val) {
     ambientVolume = val / 100;
@@ -1058,7 +1124,7 @@ async function selectGenreWithAnalysis(genre, secondary, confidence, intensity, 
     document.getElementById('ambient-track-name').textContent = '⏳ Buscando en Freesound...';
 
     // Mostrar label del universo si está activo
-    const univLabel = aiDetectedUniverse
+    const univLabel = (typeof aiDetectedUniverse !== 'undefined' && aiDetectedUniverse)
         ? UNIVERSE_CONFIG[aiDetectedUniverse]?.ambient?.label || aiDetectedUniverse
         : null;
     const genreDisplay = univLabel
@@ -1067,10 +1133,17 @@ async function selectGenreWithAnalysis(genre, secondary, confidence, intensity, 
     document.getElementById('ambient-track-genre').textContent = genreDisplay;
 
     await playAmbient(genre);
+    _syncReaderMusicUI();
 }
 
+// ─── Parchear referencias de búsqueda en MUSIC_PROVIDERS ───────────
+// Se hace aquí porque las funciones se declaran después del objeto
+MUSIC_PROVIDERS.freesound.search = buscarEnFreesound;
+MUSIC_PROVIDERS.pixabay.search   = buscarEnPixabayMusic;
+MUSIC_PROVIDERS.ccmixter.search  = buscarEnCcMixter;
+MUSIC_PROVIDERS.jamendo.search   = buscarEnJamendo;
+
 // ─── POLYFILLS ───
-// roundRect polyfill for browsers that don't support it
 // roundRect polyfill for browsers that don't support it
 if (!CanvasRenderingContext2D.prototype.roundRect) {
     CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {

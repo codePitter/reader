@@ -787,26 +787,90 @@
 
 })();
 
+// ══════════════════════════════════════════════════════════
+// SELECTOR DE PROVEEDORES DE MÚSICA (READER MODE)
+// ══════════════════════════════════════════════════════════
+
 window._toggleMusicProviderMenu = function() {
     const menu = document.getElementById('music-provider-menu');
     if (!menu) return;
     const isVisible = menu.style.display === 'block';
     menu.style.display = isVisible ? 'none' : 'block';
+
     // Actualizar estado visual de opciones
+    const currentProvider = typeof musicProvider !== 'undefined' ? musicProvider : 'freesound';
     document.querySelectorAll('.music-provider-opt').forEach(opt => {
-        opt.classList.toggle('active', opt.dataset.provider === musicProvider);
+        opt.classList.toggle('active', opt.dataset.provider === currentProvider);
     });
+
     // Mostrar/ocultar panel de key según proveedor activo
-    const needsKey = MUSIC_PROVIDERS[musicProvider]?.needsKey;
+    const MUSIC_PROVIDERS_NEEDS_KEY = { freesound: true, jamendo: true, pixabay: false, ccmixter: false, local: false };
+    const needsKey = MUSIC_PROVIDERS_NEEDS_KEY[currentProvider] || false;
     const keyPanel = document.getElementById('provider-key-panel');
-    if (keyPanel) keyPanel.style.display = needsKey ? 'block' : 'none';
+    if (keyPanel) {
+        keyPanel.style.display = needsKey ? 'block' : 'none';
+        // Pre-cargar key existente (enmascarada)
+        const keyInput = document.getElementById('provider-api-key');
+        if (keyInput) {
+            let existingKey = '';
+            if (currentProvider === 'freesound') existingKey = uGet('freesound_api_key') || '';
+            if (currentProvider === 'jamendo')   existingKey = uGet('jamendo_api_key')   || '';
+            keyInput.value       = existingKey ? '••••••••' : '';
+            keyInput.placeholder = existingKey ? 'Key ya guardada' : 'Pegar API key';
+        }
+    }
 };
+
+window.guardarProviderApiKey = function() {
+    const keyInput = document.getElementById('provider-api-key');
+    if (!keyInput) return;
+    const key = keyInput.value.trim();
+    if (!key || key === '••••••••') {
+        if (typeof mostrarNotificacion === 'function') mostrarNotificacion('⚠ Ingresa una API key');
+        return;
+    }
+
+    const currentProvider = typeof musicProvider !== 'undefined' ? musicProvider : 'freesound';
+    if (currentProvider === 'freesound') {
+        uSet('freesound_api_key', key);
+        window.freesoundApiKey = key;
+        if (typeof mostrarNotificacion === 'function') mostrarNotificacion('✓ Freesound API key guardada');
+    } else if (currentProvider === 'jamendo') {
+        uSet('jamendo_api_key', key);
+        window.JAMENDO_API_KEY = key;
+        if (typeof mostrarNotificacion === 'function') mostrarNotificacion('✓ Jamendo API key guardada');
+    }
+
+    keyInput.value = '';
+    // Cerrar el menú después de guardar
+    const menu = document.getElementById('music-provider-menu');
+    if (menu) menu.style.display = 'none';
+};
+
+// Registrar proveedor al hacer clic en una opción del menú
+document.addEventListener('click', function(e) {
+    const opt = e.target.closest('.music-provider-opt');
+    if (opt && opt.dataset.provider) {
+        if (typeof cambiarProveedorMusica === 'function') {
+            cambiarProveedorMusica(opt.dataset.provider);
+        }
+        // Actualizar estado visual inmediatamente
+        document.querySelectorAll('.music-provider-opt').forEach(o => {
+            o.classList.toggle('active', o.dataset.provider === opt.dataset.provider);
+        });
+    }
+});
 
 // Cerrar menú al hacer clic fuera
 document.addEventListener('click', function(e) {
     const menu = document.getElementById('music-provider-menu');
-    const btn = document.getElementById('ar-music-provider-btn');
+    const btn  = document.getElementById('ar-music-provider-btn');
     if (menu && btn && !btn.contains(e.target) && !menu.contains(e.target)) {
         menu.style.display = 'none';
     }
 });
+
+// Sincronizar UI del reader mode periódicamente
+setInterval(function() {
+    if (typeof _syncReaderMusicUI === 'function') _syncReaderMusicUI();
+}, 500);
