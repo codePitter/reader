@@ -9,28 +9,25 @@ let ambientGainNode = null;
 let ambientVolume = 0.15;
 
 // ─── PROVEEDORES DE MÚSICA ─────────────────────────────────────────
-let musicProvider = 'jamendo';
-let PIXABAY_MUSIC_KEY = ''; // conservado por compatibilidad pero no expuesto en UI
+let musicProvider = 'freesound';
+let PIXABAY_MUSIC_KEY = '';
 let JAMENDO_API_KEY = '';
 
 // Mapeo de proveedores a funciones de búsqueda
 // IMPORTANTE: se define ANTES del IIFE que lo referencia
 const MUSIC_PROVIDERS = {
-    jamendo:   { name: 'Jamendo', needsKey: true, search: null },      // motor predeterminado
-    freesound: { name: 'Freesound', needsKey: true, search: null },    // se parchea abajo
+    freesound: { name: 'Freesound', needsKey: true, search: null },   // se parchea abajo
+    pixabay:   { name: 'Pixabay Music', needsKey: false, search: null },
     ccmixter:  { name: 'ccMixter', needsKey: false, search: null },
+    jamendo:   { name: 'Jamendo', needsKey: true, search: null },
     local:     { name: 'Generador local', needsKey: false, search: null }
 };
 
 // Cargar preferencias guardadas
 (function initMusicProvider() {
     const saved = uGet('music_provider');
-    // Si tenía pixabay guardado o no hay preferencia, usar jamendo como predeterminado
-    if (saved && MUSIC_PROVIDERS[saved] && saved !== 'pixabay') {
-        musicProvider = saved;
-    } else {
-        musicProvider = 'jamendo';
-    }
+    if (saved && MUSIC_PROVIDERS[saved]) musicProvider = saved;
+    PIXABAY_MUSIC_KEY = uGet('pixabay_music_key') || '';
     JAMENDO_API_KEY   = uGet('jamendo_api_key')   || '';
 })();
 
@@ -753,9 +750,8 @@ async function buscarEnFreesound(genre, subtono) {
     // Servir desde caché si hay al menos 1 track disponible
     if (_lastFreesoundResults[cacheKey] && _lastFreesoundResults[cacheKey].length > 0) {
         const pool = _lastFreesoundResults[cacheKey];
-        const pick = _weightedPickByRating(pool);
-        console.log(`🎵 [Freesound] Sirviendo desde caché (${pool.length} tracks) → "${pick.name}" (${Math.round(pick.duration)}s, ★${pick.rating?.toFixed(1) ?? '?'})`);
-        return pick;
+        console.log(`🎵 [Freesound] Sirviendo desde caché (${pool.length} tracks)`);
+        return pool;
     }
 
     // Elegir query que no haya fallado antes; si todas fallaron, limpiar historial y reintentar
@@ -801,8 +797,8 @@ async function buscarEnFreesound(genre, subtono) {
 
             _lastFreesoundResults[cacheKey] = good;
             const pick = _weightedPickByRating(good);
-            console.log(`🎵 [Freesound] ✓ Track elegido → "${pick.name}" (${Math.round(pick.duration)}s, ★${pick.rating?.toFixed(1) ?? '?'})`);
-            return pick;
+            console.log(`🎵 [Freesound] ✓ Pool listo: ${good.length} tracks — mejor candidato: "${pick.name}" (${Math.round(pick.duration)}s, ★${pick.rating?.toFixed(1) ?? '?'})`);
+            return good;
         } else {
             console.warn(`🎵 [Freesound] Sin resultados para "${queryFinal}" — marcando como fallida`);
             window._freesoundFailedQueries.add(queryFinal);
@@ -851,14 +847,15 @@ async function selectGenre(genre) {
     await playAmbient(genre);
 }
 
-// ── Orden de cascada: Jamendo → Freesound → ccMixter → local ──
-// Si el proveedor elegido falla o no tiene key, se prueban los siguientes hasta caer en local
-const _PROVIDER_CASCADE = ['jamendo', 'freesound', 'ccmixter'];
+// ── Orden de cascada: si el proveedor elegido falla, se prueban los siguientes ──
+// Solo se intenta un proveedor si tiene key disponible (donde aplica)
+const _PROVIDER_CASCADE = ['freesound', 'jamendo', 'pixabay', 'ccmixter'];
 
 function _providerHasKey(provider) {
     if (provider === 'freesound') return !!freesoundApiKey;
     if (provider === 'jamendo')   return !!JAMENDO_API_KEY;
-    return true; // ccmixter/local: no necesitan key
+    if (provider === 'pixabay')   return !!PIXABAY_MUSIC_KEY;
+    return true; // ccmixter/local: no necesitan key (aunque ccmixter siempre falla)
 }
 
 async function _buscarConCascada(genre) {
@@ -1171,9 +1168,10 @@ async function selectGenreWithAnalysis(genre, secondary, confidence, intensity, 
 
 // ─── Parchear referencias de búsqueda en MUSIC_PROVIDERS ───────────
 // Se hace aquí porque las funciones se declaran después del objeto
-MUSIC_PROVIDERS.jamendo.search   = buscarEnJamendo;
 MUSIC_PROVIDERS.freesound.search = buscarEnFreesound;
+MUSIC_PROVIDERS.pixabay.search   = buscarEnPixabayMusic;
 MUSIC_PROVIDERS.ccmixter.search  = buscarEnCcMixter;
+MUSIC_PROVIDERS.jamendo.search   = buscarEnJamendo;
 
 // ─── POLYFILLS ───
 // roundRect polyfill for browsers that don't support it
