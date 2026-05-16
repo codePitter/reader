@@ -6639,21 +6639,70 @@ input[type="text"] {
 [data-theme="light"] .tb-theme-toggle { color: #8a3e08; }
 
 .server-dot {
-    width: 6px;
-    height: 6px;
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
-    background: rgba(255,255,255,0.12);
-    box-shadow: 0 0 0 0 transparent;
-    transition: background 0.4s ease, box-shadow 0.4s ease;
+    background: #94a3b8;
     flex-shrink: 0;
+    position: relative;
+    transition: background 0.4s ease, box-shadow 0.4s ease;
 }
+
+/* ── ONLINE: verde con ripple tipo radar ── */
 .server-dot.online {
     background: #4ade80;
-    box-shadow: 0 0 6px rgba(74,222,128,0.6);
-    animation: server-pulse 2.5s ease infinite;
+    box-shadow: 0 0 6px 1px rgba(74,222,128,0.7);
 }
-.server-dot.offline { background: #f87171; }
-@keyframes server-pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+.server-dot.online::before {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: 50%;
+    border: 2px solid rgba(74,222,128,0.8);
+    animation: server-ripple 2s ease-out infinite;
+}
+.server-dot.online::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: 50%;
+    border: 2px solid rgba(74,222,128,0.5);
+    animation: server-ripple 2s ease-out 0.7s infinite;
+}
+
+/* ── OFFLINE: rojo apagado, sin animación, aspecto "muerto" ── */
+.server-dot.offline {
+    background: #f87171;
+    box-shadow: none;
+    opacity: 0.75;
+}
+.server-dot.offline::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: 50%;
+    border: 1.5px solid rgba(248,113,113,0.45);
+}
+
+/* ── Contenedor: borde con tint según estado ── */
+.tb-server-status:has(.server-dot.online) {
+    border-color: rgba(74,222,128,0.35);
+    color: var(--text);
+}
+.tb-server-status:has(.server-dot.offline) {
+    border-color: rgba(248,113,113,0.35);
+    color: #f87171;
+}
+
+@keyframes server-ripple {
+    0%   { transform: scale(1);   opacity: 0.8; }
+    100% { transform: scale(2.6); opacity: 0;   }
+}
+
+/* compat: navegadores sin :has() no pierden funcionalidad, solo el borde */
+@supports not (selector(:has(*))) {
+    .server-dot.online { box-shadow: 0 0 8px 2px rgba(74,222,128,0.7); }
+}
 
 /* ── Material Symbol en rail ── */
 .ic .material-symbols-outlined {
