@@ -44,35 +44,49 @@ function setAzureConfig(key, region) {
 // La subscription key queda en localStorage — solo apto para uso personal.
 async function generarAudioAzure(texto, { silencioso = false } = {}) {
     if (!_azureTtsKey) {
-        if (!silencioso) mostrarNotificacion('⚠ Configurá la API Key de Azure en Ajustes → TTS');
+        if (!silencioso) mostrarNotificacion('⚠ Ingresá la API Key de Azure en Ajustes → TTS');
         return null;
     }
     try {
         const textoNorm = _normalizarTextoTTS(texto);
-        const voice     = _azureTtsVoice || 'es-CO-SalomeNeural';
-        // Escapar caracteres reservados en SSML
+        const voice = _azureTtsVoice || 'es-CO-SalomeNeural';
         const ssml = `<speak version="1.0" xml:lang="es"><voice name="${voice}">`
             + textoNorm.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
             + `</voice></speak>`;
 
+        // Paso 1: obtener token efímero — este endpoint sí tiene CORS para navegadores
+        const tokenRes = await fetch(
+            `https://${_azureTtsRegion}.api.cognitive.microsoft.com/sts/v1.0/issueToken`,
+            { method: 'POST', headers: { 'Ocp-Apim-Subscription-Key': _azureTtsKey } }
+        );
+        if (!tokenRes.ok) {
+            const msg = await tokenRes.text().catch(() => tokenRes.status);
+            throw new Error(`Token ${tokenRes.status}: ${msg}`);
+        }
+        const token = await tokenRes.text();
+
+        // Paso 2: síntesis con Bearer token (evita el header custom que causa CORS preflight)
         const audioRes = await fetch(
             `https://${_azureTtsRegion}.tts.speech.microsoft.com/cognitiveservices/v1`,
             {
-                method : 'POST',
+                method: 'POST',
                 headers: {
-                    'Ocp-Apim-Subscription-Key' : _azureTtsKey,
+                    'Authorization'             : `Bearer ${token}`,
                     'Content-Type'              : 'application/ssml+xml',
                     'X-Microsoft-OutputFormat'  : 'audio-24khz-48kbitrate-mono-mp3'
                 },
                 body: ssml
             }
         );
-        if (!audioRes.ok) throw new Error(`Azure HTTP ${audioRes.status}`);
+        if (!audioRes.ok) {
+            const msg = await audioRes.text().catch(() => audioRes.status);
+            throw new Error(`TTS ${audioRes.status}: ${msg}`);
+        }
         const blob = await audioRes.blob();
         return URL.createObjectURL(blob);
     } catch (error) {
         console.error('[Azure TTS] Error:', error);
-        if (!silencioso) mostrarNotificacion('⚠️ Error Azure TTS: ' + error.message);
+        if (!silencioso) mostrarNotificacion('⚠ Azure: ' + error.message);
         return null;
     }
 }
