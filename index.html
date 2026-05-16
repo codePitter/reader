@@ -9,7 +9,6 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&icon_names=account_circle,bookmark_flag,folder_open,left_panel_close,left_panel_open,newsstand,settings" />
     <!-- style.css primero — layout.css lo sobreescribe donde sea necesario -->
     <link rel="stylesheet" href="css/style.css">
-    <link rel="stylesheet" href="css/mobile.css">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📚</text></svg>">
 </head>
 <body data-theme="ember">
@@ -128,6 +127,9 @@ bookmark_flag
                             <div class="sb-tts-engine-btn" id="sb-tts-btn-edge"
                                  onclick="_sbTtsSetEngine('edge')"
                                  title="Edge TTS vía servidor local">🖥 Edge TTS</div>
+                            <div class="sb-tts-engine-btn" id="sb-tts-btn-azure"
+                                 onclick="_sbTtsSetEngine('azure')"
+                                 title="Azure TTS — voz Salomé en nube, funciona en celular sin servidor">☁ Azure</div>
                         </div>
 
                         <!-- Voces del navegador -->
@@ -169,6 +171,44 @@ bookmark_flag
                                     <option value="es-US-AlonsoNeural">Alonso — ♂</option>
                                     <option value="es-US-PalomaNeural">Paloma — ♀</option>
                                 </optgroup>
+                            </select>
+                        </div>
+
+                        <!-- Voces Azure TTS -->
+                        <div id="sb-tts-azure-panel" style="display:none;">
+                            <div class="sb-tts-label">Voz Azure TTS</div>
+                            <select class="sb-tts-select" id="sb-azure-voice-select"
+                                    onchange="setAzureTtsVoice(this.value)">
+                                <optgroup label="🇨🇴 Colombia">
+                                    <option value="es-CO-SalomeNeural" selected>Salomé — ♀ ⭐</option>
+                                    <option value="es-CO-GonzaloNeural">Gonzalo — ♂</option>
+                                </optgroup>
+                                <optgroup label="🇦🇷 Argentina">
+                                    <option value="es-AR-ElenaNeural">Elena — ♀</option>
+                                    <option value="es-AR-TomasNeural">Tomas — ♂</option>
+                                </optgroup>
+                                <optgroup label="🇲🇽 México">
+                                    <option value="es-MX-DaliaNeural">Dalia — ♀</option>
+                                    <option value="es-MX-JorgeNeural">Jorge — ♂</option>
+                                </optgroup>
+                                <optgroup label="🇪🇸 España">
+                                    <option value="es-ES-ElviraNeural">Elvira — ♀</option>
+                                    <option value="es-ES-AlvaroNeural">Alvaro — ♂</option>
+                                </optgroup>
+                            </select>
+                            <div class="sb-tts-label" style="margin-top:6px;">API Key <span style="font-size:0.6rem;color:var(--text-muted);">(se guarda localmente)</span></div>
+                            <input type="password" class="sb-tts-select" id="sb-azure-key-input"
+                                   placeholder="Pegar clave de Azure aquí"
+                                   style="font-size:0.68rem;padding:4px 7px;"
+                                   oninput="setAzureConfig(this.value, undefined);document.getElementById('sp-azure-key') && (document.getElementById('sp-azure-key').value=this.value)">
+                            <div class="sb-tts-label" style="margin-top:4px;">Región</div>
+                            <select class="sb-tts-select" id="sb-azure-region-select"
+                                    onchange="setAzureConfig(undefined, this.value)">
+                                <option value="eastus">eastus (EE.UU. Este)</option>
+                                <option value="eastus2">eastus2</option>
+                                <option value="brazilsouth">brazilsouth (Brasil — más cercano)</option>
+                                <option value="westus">westus</option>
+                                <option value="westeurope">westeurope</option>
                             </select>
                         </div>
 
@@ -676,6 +716,26 @@ bookmark_flag
                     <option value="es-GQ-TeresaNeural">Teresa — ♀</option>
                 </optgroup>
             </select>
+        <select id="azure-voice-select" class="tts-bar-voice tts-bar-voice--server"
+                style="display:none;"
+                onchange="setAzureTtsVoice(this.value)">
+            <optgroup label="🇨🇴 Colombia">
+                <option value="es-CO-SalomeNeural" selected>Salomé — ♀ ⭐</option>
+                <option value="es-CO-GonzaloNeural">Gonzalo — ♂</option>
+            </optgroup>
+            <optgroup label="🇦🇷 Argentina">
+                <option value="es-AR-ElenaNeural">Elena — ♀</option>
+                <option value="es-AR-TomasNeural">Tomas — ♂</option>
+            </optgroup>
+            <optgroup label="🇲🇽 México">
+                <option value="es-MX-DaliaNeural">Dalia — ♀</option>
+                <option value="es-MX-JorgeNeural">Jorge — ♂</option>
+            </optgroup>
+            <optgroup label="🇪🇸 España">
+                <option value="es-ES-ElviraNeural">Elvira — ♀</option>
+                <option value="es-ES-AlvaroNeural">Alvaro — ♂</option>
+            </optgroup>
+        </select>
         <button type="button" id="btn-edge-voz-predeterminada" onclick="guardarVozPredeterminada()">⭐ Predeterminado</button>
         <div id="voice-roles-panel" class="voice-roles-panel"></div>
     </div>
@@ -817,6 +877,52 @@ bookmark_flag
                         <div>
                             <select class="settings-select" id="sp-browser-voice"
                                     onchange="document.getElementById('voice-select').value=this.value;document.getElementById('voice-select').dispatchEvent(new Event('change'))"></select>
+                        </div>
+                    </div>
+                    <!-- Azure TTS -->
+                    <div class="settings-row" style="flex-direction:column;align-items:flex-start;gap:6px;">
+                        <div><div class="sr-label">☁ Azure TTS — API Key</div>
+                             <div style="font-size:0.6rem;color:var(--text-muted);">500.000 chars/mes gratis · voz Salomé funciona en celular</div></div>
+                        <input type="password" class="settings-select" id="sp-azure-key"
+                               placeholder="Pegar Azure Subscription Key"
+                               style="width:100%;font-size:0.7rem;"
+                               oninput="setAzureConfig(this.value,undefined);var sb=document.getElementById('sb-azure-key-input');if(sb)sb.value=this.value;">
+                    </div>
+                    <div class="settings-row">
+                        <div><div class="sr-label">Azure Región</div></div>
+                        <div>
+                            <select class="settings-select" id="sp-azure-region"
+                                    onchange="setAzureConfig(undefined,this.value);var sb=document.getElementById('sb-azure-region-select');if(sb)sb.value=this.value;">
+                                <option value="eastus">eastus</option>
+                                <option value="eastus2">eastus2</option>
+                                <option value="brazilsouth">brazilsouth ★</option>
+                                <option value="westus">westus</option>
+                                <option value="westeurope">westeurope</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="settings-row">
+                        <div><div class="sr-label">Voz Azure TTS</div></div>
+                        <div>
+                            <select class="settings-select" id="sp-azure-voice"
+                                    onchange="setAzureTtsVoice(this.value)">
+                                <optgroup label="🇨🇴 Colombia">
+                                    <option value="es-CO-SalomeNeural" selected>Salomé ♀ ⭐</option>
+                                    <option value="es-CO-GonzaloNeural">Gonzalo ♂</option>
+                                </optgroup>
+                                <optgroup label="🇦🇷 Argentina">
+                                    <option value="es-AR-ElenaNeural">Elena ♀</option>
+                                    <option value="es-AR-TomasNeural">Tomas ♂</option>
+                                </optgroup>
+                                <optgroup label="🇲🇽 México">
+                                    <option value="es-MX-DaliaNeural">Dalia ♀</option>
+                                    <option value="es-MX-JorgeNeural">Jorge ♂</option>
+                                </optgroup>
+                                <optgroup label="🇪🇸 España">
+                                    <option value="es-ES-ElviraNeural">Elvira ♀</option>
+                                    <option value="es-ES-AlvaroNeural">Alvaro ♂</option>
+                                </optgroup>
+                            </select>
                         </div>
                     </div>
                 </div>
@@ -1437,8 +1543,6 @@ bookmark_flag
     <script src="js/init.js"></script>
     <!--<script src="layout-a.js"></script>-->
 
-    <!-- mobile.js: bottom sheet, swipe y tap targets ≤ 600px -->
-    <script src="js/mobile.js"></script>
 
 </body>
 </html>

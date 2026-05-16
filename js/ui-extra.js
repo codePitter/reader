@@ -729,22 +729,44 @@
     // SIDEBAR TTS SECTION — engine switcher + voice sync
     // ══════════════════════════════════════════════════════════
     window._sbTtsSetEngine = function (engine) {
-        var isEdge = engine === 'edge';
-        // Sync the existing pill + toggleServidorLive if needed
+        var isEdge   = engine === 'edge';
+        var isAzure  = engine === 'azure';
+        var isBrowser = !isEdge && !isAzure;
+
+        // ── Sync _usarAzure flag ──
+        if (typeof _usarAzure !== 'undefined') {
+            if (isAzure !== _usarAzure) {
+                _usarAzure = isAzure;
+                if (typeof uSet === 'function') uSet('tts_motor', isAzure ? 'azure' : '');
+            }
+        }
+        // ── Sync _usarServidorLive flag ──
         var currentLive = typeof _usarServidorLive !== 'undefined' ? _usarServidorLive : false;
-        if (isEdge !== currentLive && typeof toggleServidorLive === 'function') {
+        if (isEdge !== currentLive && typeof toggleServidorLive === 'function' && !isAzure) {
+            toggleServidorLive();
+        } else if (isAzure && currentLive && typeof toggleServidorLive === 'function') {
+            // Desactivar servidor live si activamos Azure
             toggleServidorLive();
         }
+
         // Update buttons
         var btnB = document.getElementById('sb-tts-btn-browser');
         var btnE = document.getElementById('sb-tts-btn-edge');
-        if (btnB) btnB.classList.toggle('active', !isEdge);
-        if (btnE) btnE.classList.toggle('active',  isEdge);
+        var btnA = document.getElementById('sb-tts-btn-azure');
+        if (btnB) btnB.classList.toggle('active', isBrowser);
+        if (btnE) btnE.classList.toggle('active', isEdge);
+        if (btnA) btnA.classList.toggle('active', isAzure);
+
         // Show/hide panels
         var panelB = document.getElementById('sb-tts-browser-panel');
         var panelE = document.getElementById('sb-tts-edge-panel');
-        if (panelB) panelB.style.display = isEdge ? 'none' : '';
-        if (panelE) panelE.style.display = isEdge ? ''     : 'none';
+        var panelA = document.getElementById('sb-tts-azure-panel');
+        if (panelB) panelB.style.display = isBrowser ? '' : 'none';
+        if (panelE) panelE.style.display = isEdge    ? '' : 'none';
+        if (panelA) panelA.style.display = isAzure   ? '' : 'none';
+
+        // Sync _sincronizarBtnServidorLive para la barra TTS inferior
+        if (typeof _sincronizarBtnServidorLive === 'function') _sincronizarBtnServidorLive();
     };
 
     // Poblar selector de voces del navegador cuando estén listas
@@ -763,8 +785,9 @@
     // Sync inicial del estado del motor
     document.addEventListener('DOMContentLoaded', function () {
         // Determinar motor actual
-        var live = (typeof uGet === 'function') && uGet('tts_servidor_live') === 'true';
-        _sbTtsSetEngine(live ? 'edge' : 'browser');
+        var motor = (typeof uGet === 'function') && uGet('tts_motor');
+        var live  = (typeof uGet === 'function') && uGet('tts_servidor_live') === 'true';
+        _sbTtsSetEngine(motor === 'azure' ? 'azure' : (live ? 'edge' : 'browser'));
         // Sync Edge voice select
         var edgeSb = document.getElementById('sb-edge-voice-select');
         var edgeMain = document.getElementById('edge-voice-select');

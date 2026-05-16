@@ -16,6 +16,67 @@ function _getTTSApiURL() {
 // Voz Edge TTS activa — se puede cambiar desde la UI
 let _edgeTtsVoice = uGet('edge_tts_voice') || 'es-MX-JorgeNeural';
 
+// ─── MOTOR AZURE TTS ───
+// Llama a la API REST de Microsoft Speech directamente desde el navegador.
+// No requiere servidor local — funciona en celular o cualquier red.
+let _usarAzure       = uGet('tts_motor') === 'azure';
+let _azureTtsKey     = uGet('azure_tts_key')    || '';
+let _azureTtsRegion  = uGet('azure_tts_region') || 'eastus';
+let _azureTtsVoice   = uGet('azure_tts_voice')  || 'es-CO-SalomeNeural';
+
+function setAzureTtsVoice(voice) {
+    _azureTtsVoice = voice;
+    uSet('azure_tts_voice', voice);
+    // Sincronizar selectores
+    ['azure-voice-select','sb-azure-voice-select','sp-azure-voice'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el && el.value !== voice) el.value = voice;
+    });
+    mostrarNotificacion('✓ Voz Azure: ' + voice.split('-').slice(2).join('-'));
+}
+
+function setAzureConfig(key, region) {
+    if (key    !== undefined) { _azureTtsKey    = key;    uSet('azure_tts_key',    key);    }
+    if (region !== undefined) { _azureTtsRegion = region; uSet('azure_tts_region', region); }
+}
+
+// Genera audio con Azure Speech REST API (llamada directa desde el navegador).
+// La subscription key queda en localStorage — solo apto para uso personal.
+async function generarAudioAzure(texto, { silencioso = false } = {}) {
+    if (!_azureTtsKey) {
+        if (!silencioso) mostrarNotificacion('⚠ Configurá la API Key de Azure en Ajustes → TTS');
+        return null;
+    }
+    try {
+        const textoNorm = _normalizarTextoTTS(texto);
+        const voice     = _azureTtsVoice || 'es-CO-SalomeNeural';
+        // Escapar caracteres reservados en SSML
+        const ssml = `<speak version="1.0" xml:lang="es"><voice name="${voice}">`
+            + textoNorm.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+            + `</voice></speak>`;
+
+        const audioRes = await fetch(
+            `https://${_azureTtsRegion}.tts.speech.microsoft.com/cognitiveservices/v1`,
+            {
+                method : 'POST',
+                headers: {
+                    'Ocp-Apim-Subscription-Key' : _azureTtsKey,
+                    'Content-Type'              : 'application/ssml+xml',
+                    'X-Microsoft-OutputFormat'  : 'audio-24khz-48kbitrate-mono-mp3'
+                },
+                body: ssml
+            }
+        );
+        if (!audioRes.ok) throw new Error(`Azure HTTP ${audioRes.status}`);
+        const blob = await audioRes.blob();
+        return URL.createObjectURL(blob);
+    } catch (error) {
+        console.error('[Azure TTS] Error:', error);
+        if (!silencioso) mostrarNotificacion('⚠️ Error Azure TTS: ' + error.message);
+        return null;
+    }
+}
+
 // ─── TOGGLE: usar servidor local para reproducción en vivo ───
 // Cuando está activo, leerOracionLocal() se usa en lugar de SpeechSynthesis
 // Se persiste en localStorage para recordar la preferencia del usuario
@@ -70,19 +131,26 @@ function _sincronizarBtnServidorLive() {
     const btn = document.getElementById('btn-tts-servidor-live');
     const voiceSelect = document.getElementById('voice-select');
     const edgeSelect = document.getElementById('edge-voice-select');
+    const azureSelect = document.getElementById('azure-voice-select');
     if (!btn) return;
 
-    if (_usarServidorLive) {
+    if (_usarAzure) {
+        btn.classList.remove('active');
+        btn.title = 'Motor: Azure TTS (nube)';
+        if (edgeSelect)  edgeSelect.style.display  = 'none';
+        if (azureSelect) azureSelect.style.display = '';
+        if (voiceSelect) voiceSelect.style.display = 'none';
+    } else if (_usarServidorLive) {
         btn.classList.add('active');
         btn.title = 'Usando servidor local (Edge TTS) — clic para volver al navegador';
-        // Mostrar selector de voz Edge, ocultar el del navegador
-        if (edgeSelect) edgeSelect.style.display = '';
+        if (edgeSelect)  edgeSelect.style.display  = '';
+        if (azureSelect) azureSelect.style.display = 'none';
         if (voiceSelect) voiceSelect.style.display = 'none';
     } else {
         btn.classList.remove('active');
         btn.title = 'Usar servidor TTS local (Edge TTS) para reproducción en vivo';
-        // Mostrar selector del navegador, ocultar Edge
-        if (edgeSelect) edgeSelect.style.display = 'none';
+        if (edgeSelect)  edgeSelect.style.display  = 'none';
+        if (azureSelect) azureSelect.style.display = 'none';
         if (voiceSelect) voiceSelect.style.display = '';
     }
 }
@@ -170,6 +238,13 @@ async function generarAudioLocal(texto, { silencioso = false } = {}) {
     }
 }
 
+// ─── DISPATCHER: genera audio con el motor activo (Azure o Edge-local) ───
+// Reemplaza las llamadas directas a generarAudioLocal() dentro del motor local.
+async function _generarAudioActivo(texto, opts) {
+    if (_usarAzure) return generarAudioAzure(texto, opts);
+    return generarAudioLocal(texto, opts);
+}
+
 // ─── PRE-FETCH CACHE ───
 // Mapa index → Promise<audioUrl|null> para oraciones pre-generadas en background.
 // Se limpia al detener/iniciar TTS para liberar URLs de objeto.
@@ -182,7 +257,7 @@ function _preFetchOracion(index) {
     if (_ttsAudioCache.has(index)) return;
     // No pre-fetch mientras hay una exportación en curso (el servidor está ocupado)
     if (typeof _expCancelled !== 'undefined' && window._exportEnCurso) return;
-    const promise = generarAudioLocal(sentences[index], { silencioso: true }).catch(() => null);
+    const promise = _generarAudioActivo(sentences[index], { silencioso: true }).catch(() => null);
     _ttsAudioCache.set(index, promise);
 }
 
@@ -391,6 +466,21 @@ document.addEventListener('DOMContentLoaded', () => {
     // Restaurar voz Edge TTS en el selector
     const edgeSel = document.getElementById('edge-voice-select');
     if (edgeSel && _edgeTtsVoice) edgeSel.value = _edgeTtsVoice;
+    // Restaurar configuración Azure en los campos de la UI
+    const azureSel = document.getElementById('azure-voice-select');
+    if (azureSel && _azureTtsVoice) azureSel.value = _azureTtsVoice;
+    const sbAzSel = document.getElementById('sb-azure-voice-select');
+    if (sbAzSel && _azureTtsVoice) sbAzSel.value = _azureTtsVoice;
+    const sbAzKey = document.getElementById('sb-azure-key-input');
+    if (sbAzKey && _azureTtsKey) sbAzKey.value = _azureTtsKey;
+    const sbAzReg = document.getElementById('sb-azure-region-select');
+    if (sbAzReg && _azureTtsRegion) sbAzReg.value = _azureTtsRegion;
+    const spAzKey = document.getElementById('sp-azure-key');
+    if (spAzKey && _azureTtsKey) spAzKey.value = _azureTtsKey;
+    const spAzReg = document.getElementById('sp-azure-region');
+    if (spAzReg && _azureTtsRegion) spAzReg.value = _azureTtsRegion;
+    const spAzVoice = document.getElementById('sp-azure-voice');
+    if (spAzVoice && _azureTtsVoice) spAzVoice.value = _azureTtsVoice;
 });
 
 // Controles de TTS — actualizar display Y persistir en uStorage
@@ -536,9 +626,9 @@ function resaltarOracion(index) {
 // ─── TTS ENGINE — leerOracion, iniciarTTS, envolver spans ───
 function leerOracion(index) {
     // ── Guardia de exclusión mutua ──
-    // Si XTTS está activo y disponible, este motor no debe dispararse.
+    // Si XTTS/Azure está activo y disponible, este motor no debe dispararse.
     // Silenciamos el browser synth por si quedó algo colgado y abortamos.
-    if (_usarServidorLive && servidorTTSDisponible) {
+    if ((_usarServidorLive && servidorTTSDisponible) || _usarAzure) {
         if (synth.speaking || synth.pending) synth.cancel();
         return;
     }
@@ -672,10 +762,18 @@ function iniciarTTS(fraseInicial = 0) {
         abrirvideo();
     }
 
-    // Elegir motor según el toggle _usarServidorLive.
-    // Si el servidor local está activado Y disponible → Edge TTS en vivo.
-    // En caso contrario → SpeechSynthesis del navegador (comportamiento original).
-    if (_usarServidorLive && servidorTTSDisponible) {
+    // Elegir motor según el toggle activo.
+    // Azure (nube) → leerOracionLocal() con generarAudioAzure()
+    // Edge TTS local → leerOracionLocal() con generarAudioLocal()
+    // Navegador → SpeechSynthesis (comportamiento original).
+    if (_usarAzure) {
+        if (!_azureTtsKey) {
+            mostrarNotificacion('⚠ Ingresá la API Key de Azure en Ajustes → TTS');
+        } else {
+            mostrarNotificacion('☁ Reproduciendo con Azure TTS...');
+        }
+        leerOracionLocal(_inicio);
+    } else if (_usarServidorLive && servidorTTSDisponible) {
         mostrarNotificacion('🖥 Reproduciendo con TTS Local...');
         leerOracionLocal(_inicio);
     } else {
@@ -750,7 +848,9 @@ function reanudarTTS() {
         currentSentenceIndex = indiceActual;
         actualizarEstadoTTS('reproduciendo');
         // Usar el motor correcto según configuración activa (igual que iniciarTTS)
-        if (typeof _usarServidorLive !== 'undefined' && _usarServidorLive &&
+        if (typeof _usarAzure !== 'undefined' && _usarAzure) {
+            leerOracionLocal(indiceActual);
+        } else if (typeof _usarServidorLive !== 'undefined' && _usarServidorLive &&
             typeof servidorTTSDisponible !== 'undefined' && servidorTTSDisponible) {
             leerOracionLocal(indiceActual);
         } else {
@@ -920,6 +1020,21 @@ window._applyStoredTTSPrefs = function () {
     if (savedLive !== null) {
         _usarServidorLive = savedLive === 'true';
     }
+    // Restaurar motor Azure
+    var savedMotor = uGet('tts_motor');
+    _usarAzure = savedMotor === 'azure';
+    var savedAzureVoice = uGet('azure_tts_voice');
+    if (savedAzureVoice) {
+        _azureTtsVoice = savedAzureVoice;
+        ['azure-voice-select','sb-azure-voice-select','sp-azure-voice'].forEach(function(id){
+            var el = document.getElementById(id);
+            if (el) el.value = savedAzureVoice;
+        });
+    }
+    var savedAzureKey = uGet('azure_tts_key');
+    if (savedAzureKey) { _azureTtsKey = savedAzureKey; }
+    var savedAzureRegion = uGet('azure_tts_region');
+    if (savedAzureRegion) { _azureTtsRegion = savedAzureRegion; }
     _sincronizarBtnServidorLive();
     // Sincronizar también la pill del sidebar nuevo
     var pill = document.getElementById('pill-tts-local');
@@ -929,7 +1044,7 @@ window._applyStoredTTSPrefs = function () {
     }
     // Sincronizar los botones Browser/Edge del sidebar TTS
     if (typeof window._sbTtsSetEngine === 'function') {
-        window._sbTtsSetEngine(_usarServidorLive ? 'edge' : 'browser');
+        window._sbTtsSetEngine(_usarAzure ? 'azure' : (_usarServidorLive ? 'edge' : 'browser'));
     }
     // Sincronizar voz Edge en el settings panel
     if (savedVoice) {
