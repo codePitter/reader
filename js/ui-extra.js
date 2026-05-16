@@ -791,6 +791,25 @@
 // SELECTOR DE PROVEEDORES DE MÚSICA (READER MODE)
 // ══════════════════════════════════════════════════════════
 
+// ── Helper reutilizable: actualiza el panel de key según el proveedor ──
+function _actualizarPanelKey(provider) {
+    const NEEDS_KEY = { freesound: true, jamendo: true, pixabay: true, ccmixter: false, local: false };
+    const needsKey  = NEEDS_KEY[provider] || false;
+    const keyPanel  = document.getElementById('provider-key-panel');
+    if (!keyPanel) return;
+    keyPanel.style.display = needsKey ? 'block' : 'none';
+    const keyInput = document.getElementById('provider-api-key');
+    if (keyInput) {
+        let existingKey = '';
+        if (provider === 'freesound') existingKey = uGet('freesound_api_key') || '';
+        if (provider === 'jamendo')   existingKey = uGet('jamendo_api_key')   || '';
+        if (provider === 'pixabay')   existingKey = uGet('pixabay_music_key') || '';
+        // Limpiar siempre el campo para que el usuario pueda escribir la nueva key
+        keyInput.value       = '';
+        keyInput.placeholder = existingKey ? '••••••••  (key guardada — pegá la nueva para cambiar)' : 'Pegar API key';
+    }
+}
+
 window._toggleMusicProviderMenu = function() {
     const menu = document.getElementById('music-provider-menu');
     if (!menu) return;
@@ -803,29 +822,15 @@ window._toggleMusicProviderMenu = function() {
         opt.classList.toggle('active', opt.dataset.provider === currentProvider);
     });
 
-    // Mostrar/ocultar panel de key según proveedor activo
-    const MUSIC_PROVIDERS_NEEDS_KEY = { freesound: true, jamendo: true, pixabay: false, ccmixter: false, local: false };
-    const needsKey = MUSIC_PROVIDERS_NEEDS_KEY[currentProvider] || false;
-    const keyPanel = document.getElementById('provider-key-panel');
-    if (keyPanel) {
-        keyPanel.style.display = needsKey ? 'block' : 'none';
-        // Pre-cargar key existente (enmascarada)
-        const keyInput = document.getElementById('provider-api-key');
-        if (keyInput) {
-            let existingKey = '';
-            if (currentProvider === 'freesound') existingKey = uGet('freesound_api_key') || '';
-            if (currentProvider === 'jamendo')   existingKey = uGet('jamendo_api_key')   || '';
-            keyInput.value       = existingKey ? '••••••••' : '';
-            keyInput.placeholder = existingKey ? 'Key ya guardada' : 'Pegar API key';
-        }
-    }
+    // Actualizar panel de key para el proveedor actual
+    _actualizarPanelKey(currentProvider);
 };
 
 window.guardarProviderApiKey = function() {
     const keyInput = document.getElementById('provider-api-key');
     if (!keyInput) return;
     const key = keyInput.value.trim();
-    if (!key || key === '••••••••') {
+    if (!key) {
         if (typeof mostrarNotificacion === 'function') mostrarNotificacion('⚠ Ingresa una API key');
         return;
     }
@@ -839,10 +844,14 @@ window.guardarProviderApiKey = function() {
         uSet('jamendo_api_key', key);
         window.JAMENDO_API_KEY = key;
         if (typeof mostrarNotificacion === 'function') mostrarNotificacion('✓ Jamendo API key guardada');
+    } else if (currentProvider === 'pixabay') {
+        uSet('pixabay_music_key', key);
+        window.PIXABAY_MUSIC_KEY = key;
+        if (typeof mostrarNotificacion === 'function') mostrarNotificacion('✓ Pixabay API key guardada');
     }
 
     keyInput.value = '';
-    // Cerrar el menú después de guardar
+    keyInput.placeholder = '••••••••  (key guardada — pegá la nueva para cambiar)';
     const menu = document.getElementById('music-provider-menu');
     if (menu) menu.style.display = 'none';
 };
@@ -851,13 +860,16 @@ window.guardarProviderApiKey = function() {
 document.addEventListener('click', function(e) {
     const opt = e.target.closest('.music-provider-opt');
     if (opt && opt.dataset.provider) {
+        const newProvider = opt.dataset.provider;
         if (typeof cambiarProveedorMusica === 'function') {
-            cambiarProveedorMusica(opt.dataset.provider);
+            cambiarProveedorMusica(newProvider);
         }
-        // Actualizar estado visual inmediatamente
+        // Actualizar estado visual
         document.querySelectorAll('.music-provider-opt').forEach(o => {
-            o.classList.toggle('active', o.dataset.provider === opt.dataset.provider);
+            o.classList.toggle('active', o.dataset.provider === newProvider);
         });
+        // Refrescar panel de key para el nuevo proveedor seleccionado
+        _actualizarPanelKey(newProvider);
     }
 });
 

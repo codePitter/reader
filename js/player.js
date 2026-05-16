@@ -479,25 +479,17 @@ const GENRE_LABELS = {
     horror: 'Horror oscuro', adventure: 'Aventura épica'
 };
 
-// ── PIXABAY MUSIC API (opcional: funciona sin key, pero con límites) ────
+// ── PIXABAY MUSIC API (requiere key — el endpoint público no existe) ────
 async function buscarEnPixabayMusic(genre) {
-    const keyParam = PIXABAY_MUSIC_KEY ? `key=${PIXABAY_MUSIC_KEY}&` : '';
-    const url = `https://pixabay.com/api/music/?${keyParam}q=${encodeURIComponent(genre)}&per_page=10`;
+    if (!PIXABAY_MUSIC_KEY) {
+        console.warn('🎵 [Pixabay] Sin API key — configurala en el menú 🎛️');
+        return null;
+    }
+    const url = `https://pixabay.com/api/music/?key=${PIXABAY_MUSIC_KEY}&q=${encodeURIComponent(genre)}&per_page=15`;
     try {
         const res = await fetch(url);
         if (!res.ok) {
-            if ((res.status === 401 || res.status === 400) && PIXABAY_MUSIC_KEY) {
-                // Reintentar sin key
-                const fbRes = await fetch(`https://pixabay.com/api/music/?q=${encodeURIComponent(genre)}&per_page=5`);
-                if (!fbRes.ok) return null;
-                const fbData = await fbRes.json();
-                if (fbData.hits && fbData.hits.length) {
-                    return fbData.hits.map(track => ({
-                        url: track.audio, name: track.title,
-                        duration: track.duration, rating: 3.5
-                    }));
-                }
-            }
+            console.error(`🎵 [Pixabay] Error HTTP ${res.status}${res.status === 401 ? ' — API key inválida' : ''}`);
             return null;
         }
         const data = await res.json();
@@ -507,26 +499,17 @@ async function buscarEnPixabayMusic(genre) {
                 duration: track.duration, rating: 3.5
             }));
         }
-    } catch(e) { console.warn('Pixabay Music falló:', e); }
+    } catch(e) { console.warn('🎵 [Pixabay] Error:', e.message); }
     return null;
 }
 
-// ── CCMIXTER API (sin key)
+// ── CCMIXTER API — DESHABILITADO ────────────────────────────────────
+// El browser rechaza la respuesta con ERR_RESPONSE_HEADERS_TOO_BIG
+// (ccMixter incluye waveforms serializados en los headers HTTP).
+// No tiene fix client-side. La opción queda en el menú pero cae
+// automáticamente a la cascada de proveedores.
 async function buscarEnCcMixter(genre) {
-    const url = `https://ccmixter.org/api/query?datasource=uploads&search_type=any&search=${encodeURIComponent(genre)}&f=json&count=20`;
-    try {
-        const res = await fetch(url);
-        if (!res.ok) return null;
-        const data = await res.json();
-        if (data && Array.isArray(data)) {
-            return data.filter(t => t.file_page_url && t.upload_name).map(track => ({
-                url: track.file_page_url.replace('/page/', '/download/') + '.mp3',
-                name: track.upload_name,
-                duration: 180,
-                rating: 3.0
-            }));
-        }
-    } catch(e) { console.warn('ccMixter falló:', e); }
+    console.warn('🎵 [ccMixter] Deshabilitado — ERR_RESPONSE_HEADERS_TOO_BIG (limitación del browser)');
     return null;
 }
 
@@ -865,21 +848,64 @@ async function selectGenre(genre) {
     await playAmbient(genre);
 }
 
+// ── Orden de cascada: si el proveedor elegido falla, se prueban los siguientes ──
+// Solo se intenta un proveedor si tiene key disponible (donde aplica)
+const _PROVIDER_CASCADE = ['freesound', 'jamendo', 'pixabay', 'ccmixter'];
+
+function _providerHasKey(provider) {
+    if (provider === 'freesound') return !!freesoundApiKey;
+    if (provider === 'jamendo')   return !!JAMENDO_API_KEY;
+    if (provider === 'pixabay')   return !!PIXABAY_MUSIC_KEY;
+    return true; // ccmixter/local: no necesitan key (aunque ccmixter siempre falla)
+}
+
+async function _buscarConCascada(genre) {
+    // Construir orden: proveedor elegido primero, luego el resto
+    const startIdx = _PROVIDER_CASCADE.indexOf(musicProvider);
+    const order = startIdx >= 0
+        ? [..._PROVIDER_CASCADE.slice(startIdx), ..._PROVIDER_CASCADE.slice(0, startIdx)]
+        : _PROVIDER_CASCADE;
+
+    for (const provider of order) {
+        if (!_providerHasKey(provider)) {
+            console.log(`🎵 [Cascade] ${provider} — sin key, saltando`);
+            continue;
+        }
+        const p = MUSIC_PROVIDERS[provider];
+        if (!p?.search) continue;
+
+        console.log(`🎵 [Cascade] Intentando ${provider}...`);
+        try {
+            const results = await p.search(genre);
+            if (results && results.length) {
+                console.log(`🎵 [Cascade] ✓ ${provider} devolvió ${results.length} tracks`);
+                // Cachear solo si las URLs no expiran
+                if (provider !== 'jamendo') {
+                    if (!window._lastFreesoundResults) window._lastFreesoundResults = {};
+                    _lastFreesoundResults[_getCacheKey()] = results;
+                }
+                return { results, provider };
+            }
+        } catch(e) {
+            console.warn(`🎵 [Cascade] ${provider} lanzó error:`, e.message);
+        }
+        console.warn(`🎵 [Cascade] ${provider} no devolvió tracks — probando siguiente`);
+    }
+    return null; // todos fallaron → local
+}
+
 async function playAmbient(genre) {
     const g = genre || ambientGenre;
-    console.log(`🎵 [Player] playAmbient("${g}") — proveedor: ${musicProvider}`);
+    console.log(`🎵 [Player] playAmbient("${g}") — proveedor elegido: ${musicProvider}`);
 
-    // Intentar con el proveedor activo (excepto 'local')
     if (musicProvider !== 'local') {
-        const results = await buscarMusica(g);
-        if (results && results.length) {
+        const found = await _buscarConCascada(g);
+        if (found) {
+            const { results, provider } = found;
             const track = _weightedPickByRating(results);
-            if (track && track.url) {
-                console.log(`🎵 [Player] Reproduciendo desde ${musicProvider}: "${track.name}"`);
-                if (freesoundAudio) {
-                    freesoundAudio.pause();
-                    freesoundAudio.src = '';
-                }
+            if (track?.url) {
+                console.log(`🎵 [Player] Reproduciendo desde ${provider}: "${track.name}"`);
+                if (freesoundAudio) { freesoundAudio.pause(); freesoundAudio.src = ''; }
                 freesoundAudio = new Audio(track.url);
                 freesoundAudio.loop = false;
                 freesoundAudio.volume = ambientVolume;
@@ -893,7 +919,10 @@ async function playAmbient(genre) {
                     document.getElementById('ambient-play-btn').textContent = '⏸';
                     document.getElementById('ambient-eq').classList.add('playing');
                     document.getElementById('ambient-track-name').textContent = track.name;
-                    document.getElementById('ambient-track-genre').textContent = `♪ ${MUSIC_PROVIDERS[musicProvider]?.name || 'Música'}`;
+                    const providerLabel = provider !== musicProvider
+                        ? `♪ ${MUSIC_PROVIDERS[provider]?.name} (fallback)`
+                        : `♪ ${MUSIC_PROVIDERS[provider]?.name || 'Música'}`;
+                    document.getElementById('ambient-track-genre').textContent = providerLabel;
                     document.getElementById('ambient-player').classList.add('ambient-playing');
                     _syncReaderMusicUI();
                 }).catch((err) => {
@@ -903,9 +932,9 @@ async function playAmbient(genre) {
                 return;
             }
         }
-        console.warn(`🎵 [Player] Proveedor ${musicProvider} no devolvió tracks — fallback a generador local`);
+        console.warn(`🎵 [Player] Todos los proveedores fallaron — usando generador local`);
     }
-    // Fallback: procedural
+    // Último recurso: generador procedural local
     playAmbientLocal(g);
 }
 
@@ -1046,21 +1075,18 @@ async function siguienteTrack() {
     }
 
     // La caché puede estar bajo la key del universo o del género — limpiar la correcta
-    // Jamendo no usa caché (URLs expiran), así que solo rotamos para otros proveedores
+    // Jamendo no usa caché (URLs expiran), para el resto rotamos el pool
     const cacheKey = (typeof aiDetectedUniverse !== 'undefined' && aiDetectedUniverse)
         ? `__universe__${aiDetectedUniverse}`
         : ambientGenre;
 
-    if (musicProvider !== 'jamendo' && _lastFreesoundResults[cacheKey]) {
-        // Rotar el pool: mover el primer track al final para garantizar variedad
-        // sin destruir el pool (evita requests innecesarios cuando queda 1 solo track)
+    const noCache = musicProvider === 'jamendo' ||
+        (musicProvider !== 'freesound' && !_providerHasKey(musicProvider));
+
+    if (!noCache && _lastFreesoundResults[cacheKey]) {
         const pool = _lastFreesoundResults[cacheKey];
-        if (pool.length > 1) {
-            pool.push(pool.shift());
-        }
-        if (pool.length === 0) {
-            delete _lastFreesoundResults[cacheKey];
-        }
+        if (pool.length > 1) pool.push(pool.shift());
+        if (pool.length === 0) delete _lastFreesoundResults[cacheKey];
     }
     document.getElementById('ambient-track-name').textContent = '⏳ Cargando siguiente...';
     await playAmbient(ambientGenre);
