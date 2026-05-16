@@ -10,6 +10,35 @@ let ambientPlaying = false;
 let ambientGenre = null;
 let ambientGainNode = null;
 let ambientVolume = 0.15;
+let musicProvider = uGet('music_provider') || 'freesound';
+let PIXABAY_MUSIC_KEY = uGet('pixabay_music_key') || '';
+let JAMENDO_API_KEY = uGet('jamendo_api_key') || '';
+
+// Mapeo de proveedores a funciones de búsqueda
+const MUSIC_PROVIDERS = {
+    freesound: { name: 'Freesound', needsKey: true, search: buscarEnFreesound },
+    pixabay: { name: 'Pixabay Music', needsKey: false, search: buscarEnPixabayMusic },
+    ccmixter: { name: 'ccMixter', needsKey: false, search: buscarEnCcMixter },
+    jamendo: { name: 'Jamendo', needsKey: true, search: buscarEnJamendo },
+    local: { name: 'Generador local', needsKey: false, search: null }
+};
+
+function cambiarProveedorMusica(provider) {
+    musicProvider = provider;
+    uSet('music_provider', provider);
+    // Limpiar caché para forzar nueva búsqueda
+    const cacheKey = getCacheKey();
+    delete _lastFreesoundResults[cacheKey];
+    if (ambientPlaying) {
+        stopAmbient();
+        playAmbient(ambientGenre);
+    }
+    // Actualizar UI del selector
+    document.querySelectorAll('.music-provider-opt').forEach(opt => {
+        opt.classList.toggle('active', opt.dataset.provider === provider);
+    });
+    mostrarNotificacion(`🎵 Motor cambiado a: ${MUSIC_PROVIDERS[provider]?.name || provider}`);
+}
 
 function getAudioCtx() {
     if (!ambientCtx) ambientCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -433,6 +462,67 @@ const GENRE_LABELS = {
     horror: 'Horror oscuro', adventure: 'Aventura épica'
 };
 
+// ── PIXABAY MUSIC API (sin key)
+async function buscarEnPixabayMusic(genre) {
+    const url = `https://pixabay.com/api/music/?key=${PIXABAY_MUSIC_KEY}&q=${encodeURIComponent(genre)}&per_page=10`;
+    try {
+        const res = await fetch(url);
+        if (!res.ok) return null;
+        const data = await res.json();
+        if (data.hits && data.hits.length) {
+            return data.hits.map(track => ({
+                url: track.audio,
+                name: track.title,
+                duration: track.duration,
+                rating: 3.5
+            }));
+        }
+    } catch(e) { console.warn('Pixabay Music falló:', e); }
+    return null;
+}
+
+// ── CCMIXTER API (sin key)
+async function buscarEnCcMixter(genre) {
+    const url = `https://ccmixter.org/api/query?datasource=uploads&search_type=any&search=${encodeURIComponent(genre)}&f=json&count=20`;
+    try {
+        const res = await fetch(url);
+        if (!res.ok) return null;
+        const data = await res.json();
+        if (data && Array.isArray(data)) {
+            return data.filter(t => t.file_page_url && t.upload_name).map(track => ({
+                url: track.file_page_url.replace('/page/', '/download/') + '.mp3',
+                name: track.upload_name,
+                duration: 180,
+                rating: 3.0
+            }));
+        }
+    } catch(e) { console.warn('ccMixter falló:', e); }
+    return null;
+}
+
+// ── JAMENDO API (requiere key)
+async function buscarEnJamendo(genre) {
+    if (!JAMENDO_API_KEY) return null;
+    const url = `https://api.jamendo.com/v3.0/tracks/?client_id=${JAMENDO_API_KEY}&format=json&limit=15&tags=${encodeURIComponent(genre)}&audioformat=mp32`;
+    try {
+        const res = await fetch(url);
+        if (!res.ok) return null;
+        const data = await res.json();
+        if (data.results && data.results.length) {
+            return data.results.map(track => ({
+                url: track.audio,
+                name: track.name,
+                duration: track.duration,
+                rating: track.rating || 3.0
+            }));
+        }
+    } catch(e) { console.warn('Jamendo falló:', e); }
+    return null;
+}
+
+
+
+
 // ── Freesound API key management ──
 let freesoundApiKey = uGet('freesound_api_key') || 'JCXLtKvEpLo3DJTYy3pRIXEcEWMTLRWK3UEcJ5iD';
 
@@ -597,7 +687,23 @@ function limpiarCacheAmbiental() {
     Object.keys(_lastFreesoundResults).forEach(k => delete _lastFreesoundResults[k]);
     console.log('🎵 Cache ambiental limpiada');
 }
-
+async function buscarMusica(genre) {
+    const provider = MUSIC_PROVIDERS[musicProvider];
+    if (!provider || !provider.search) {
+        // Fallback a generador local
+        return null;
+    }
+    try {
+        const results = await provider.search(genre);
+        if (results && results.length) {
+            _lastFreesoundResults[getCacheKey()] = results;
+            return results;
+        }
+    } catch(e) {
+        console.warn(`Proveedor ${musicProvider} falló:`, e);
+    }
+    return null;
+}
 async function buscarEnFreesound(genre, subtono) {
     if (!freesoundApiKey) {
         console.warn('🎵 [Freesound] Sin API key — usando generador local');

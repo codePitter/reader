@@ -786,3 +786,27 @@
     });
 
 })();
+
+window._toggleMusicProviderMenu = function() {
+    const menu = document.getElementById('music-provider-menu');
+    if (!menu) return;
+    const isVisible = menu.style.display === 'block';
+    menu.style.display = isVisible ? 'none' : 'block';
+    // Actualizar estado visual de opciones
+    document.querySelectorAll('.music-provider-opt').forEach(opt => {
+        opt.classList.toggle('active', opt.dataset.provider === musicProvider);
+    });
+    // Mostrar/ocultar panel de key según proveedor activo
+    const needsKey = MUSIC_PROVIDERS[musicProvider]?.needsKey;
+    const keyPanel = document.getElementById('provider-key-panel');
+    if (keyPanel) keyPanel.style.display = needsKey ? 'block' : 'none';
+};
+
+// Cerrar menú al hacer clic fuera
+document.addEventListener('click', function(e) {
+    const menu = document.getElementById('music-provider-menu');
+    const btn = document.getElementById('ar-music-provider-btn');
+    if (menu && btn && !btn.contains(e.target) && !menu.contains(e.target)) {
+        menu.style.display = 'none';
+    }
+});
