@@ -725,8 +725,12 @@ async function buscarMusica(genre) {
     try {
         const results = await provider.search(genre);
         if (results && results.length) {
-            if (!window._lastFreesoundResults) window._lastFreesoundResults = {};
-            _lastFreesoundResults[_getCacheKey()] = results;
+            // Jamendo usa URLs firmadas con tokens que expiran ~1 minuto después
+            // de ser generadas → NO cachear, pedir URL fresca en cada track
+            if (musicProvider !== 'jamendo') {
+                if (!window._lastFreesoundResults) window._lastFreesoundResults = {};
+                _lastFreesoundResults[_getCacheKey()] = results;
+            }
             return results;
         }
     } catch(e) {
@@ -1020,10 +1024,11 @@ async function siguienteTrack() {
     const audioYaTerminado = freesoundAudio && freesoundAudio.ended;
     const esProcedural = ambientPlaying && ambientNodes.length > 0 && !freesoundAudio;
 
-    // Si hay un track de Freesound reproduciéndose, NO interrumpir —
-    // dejarlo terminar solo; el onended se encargará de llamar siguienteTrack().
-    if (esFreesoundActivo) {
-        console.log('🎵 [Player] siguienteTrack ignorado — Freesound activo, dejando terminar');
+    // Si hay un track reproduciéndose activamente:
+    // - Freesound/otros: dejarlo terminar solo (onended llama a siguienteTrack)
+    // - Jamendo: sí interrumpir porque la URL del siguiente track va a ser fresca de todos modos
+    if (esFreesoundActivo && musicProvider !== 'jamendo') {
+        console.log('🎵 [Player] siguienteTrack ignorado — audio activo, dejando terminar');
         return;
     }
 
@@ -1041,18 +1046,18 @@ async function siguienteTrack() {
     }
 
     // La caché puede estar bajo la key del universo o del género — limpiar la correcta
+    // Jamendo no usa caché (URLs expiran), así que solo rotamos para otros proveedores
     const cacheKey = (typeof aiDetectedUniverse !== 'undefined' && aiDetectedUniverse)
         ? `__universe__${aiDetectedUniverse}`
         : ambientGenre;
 
-    if (_lastFreesoundResults[cacheKey]) {
+    if (musicProvider !== 'jamendo' && _lastFreesoundResults[cacheKey]) {
         // Rotar el pool: mover el primer track al final para garantizar variedad
         // sin destruir el pool (evita requests innecesarios cuando queda 1 solo track)
         const pool = _lastFreesoundResults[cacheKey];
         if (pool.length > 1) {
             pool.push(pool.shift());
         }
-        // Solo limpiar si el pool está realmente vacío
         if (pool.length === 0) {
             delete _lastFreesoundResults[cacheKey];
         }
