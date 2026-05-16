@@ -9,25 +9,28 @@ let ambientGainNode = null;
 let ambientVolume = 0.15;
 
 // ─── PROVEEDORES DE MÚSICA ─────────────────────────────────────────
-let musicProvider = 'freesound';
-let PIXABAY_MUSIC_KEY = '';
+let musicProvider = 'jamendo';
+let PIXABAY_MUSIC_KEY = ''; // conservado por compatibilidad pero no expuesto en UI
 let JAMENDO_API_KEY = '';
 
 // Mapeo de proveedores a funciones de búsqueda
 // IMPORTANTE: se define ANTES del IIFE que lo referencia
 const MUSIC_PROVIDERS = {
-    freesound: { name: 'Freesound', needsKey: true, search: null },   // se parchea abajo
-    pixabay:   { name: 'Pixabay Music', needsKey: false, search: null },
+    jamendo:   { name: 'Jamendo', needsKey: true, search: null },      // motor predeterminado
+    freesound: { name: 'Freesound', needsKey: true, search: null },    // se parchea abajo
     ccmixter:  { name: 'ccMixter', needsKey: false, search: null },
-    jamendo:   { name: 'Jamendo', needsKey: true, search: null },
     local:     { name: 'Generador local', needsKey: false, search: null }
 };
 
 // Cargar preferencias guardadas
 (function initMusicProvider() {
     const saved = uGet('music_provider');
-    if (saved && MUSIC_PROVIDERS[saved]) musicProvider = saved;
-    PIXABAY_MUSIC_KEY = uGet('pixabay_music_key') || '';
+    // Si tenía pixabay guardado o no hay preferencia, usar jamendo como predeterminado
+    if (saved && MUSIC_PROVIDERS[saved] && saved !== 'pixabay') {
+        musicProvider = saved;
+    } else {
+        musicProvider = 'jamendo';
+    }
     JAMENDO_API_KEY   = uGet('jamendo_api_key')   || '';
 })();
 
@@ -848,15 +851,14 @@ async function selectGenre(genre) {
     await playAmbient(genre);
 }
 
-// ── Orden de cascada: si el proveedor elegido falla, se prueban los siguientes ──
-// Solo se intenta un proveedor si tiene key disponible (donde aplica)
-const _PROVIDER_CASCADE = ['freesound', 'jamendo', 'pixabay', 'ccmixter'];
+// ── Orden de cascada: Jamendo → Freesound → ccMixter → local ──
+// Si el proveedor elegido falla o no tiene key, se prueban los siguientes hasta caer en local
+const _PROVIDER_CASCADE = ['jamendo', 'freesound', 'ccmixter'];
 
 function _providerHasKey(provider) {
     if (provider === 'freesound') return !!freesoundApiKey;
     if (provider === 'jamendo')   return !!JAMENDO_API_KEY;
-    if (provider === 'pixabay')   return !!PIXABAY_MUSIC_KEY;
-    return true; // ccmixter/local: no necesitan key (aunque ccmixter siempre falla)
+    return true; // ccmixter/local: no necesitan key
 }
 
 async function _buscarConCascada(genre) {
@@ -1169,10 +1171,9 @@ async function selectGenreWithAnalysis(genre, secondary, confidence, intensity, 
 
 // ─── Parchear referencias de búsqueda en MUSIC_PROVIDERS ───────────
 // Se hace aquí porque las funciones se declaran después del objeto
-MUSIC_PROVIDERS.freesound.search = buscarEnFreesound;
-MUSIC_PROVIDERS.pixabay.search   = buscarEnPixabayMusic;
-MUSIC_PROVIDERS.ccmixter.search  = buscarEnCcMixter;
 MUSIC_PROVIDERS.jamendo.search   = buscarEnJamendo;
+MUSIC_PROVIDERS.freesound.search = buscarEnFreesound;
+MUSIC_PROVIDERS.ccmixter.search  = buscarEnCcMixter;
 
 // ─── POLYFILLS ───
 // roundRect polyfill for browsers that don't support it

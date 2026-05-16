@@ -793,7 +793,7 @@
 
 // ── Helper reutilizable: actualiza el panel de key según el proveedor ──
 function _actualizarPanelKey(provider) {
-    const NEEDS_KEY = { freesound: true, jamendo: true, pixabay: true, ccmixter: false, local: false };
+    const NEEDS_KEY = { freesound: true, jamendo: true, ccmixter: false, local: false };
     const needsKey  = NEEDS_KEY[provider] || false;
     const keyPanel  = document.getElementById('provider-key-panel');
     if (!keyPanel) return;
@@ -803,7 +803,6 @@ function _actualizarPanelKey(provider) {
         let existingKey = '';
         if (provider === 'freesound') existingKey = uGet('freesound_api_key') || '';
         if (provider === 'jamendo')   existingKey = uGet('jamendo_api_key')   || '';
-        if (provider === 'pixabay')   existingKey = uGet('pixabay_music_key') || '';
         // Limpiar siempre el campo para que el usuario pueda escribir la nueva key
         keyInput.value       = '';
         keyInput.placeholder = existingKey ? '••••••••  (key guardada — pegá la nueva para cambiar)' : 'Pegar API key';
@@ -817,7 +816,7 @@ window._toggleMusicProviderMenu = function() {
     menu.style.display = isVisible ? 'none' : 'block';
 
     // Actualizar estado visual de opciones
-    const currentProvider = typeof musicProvider !== 'undefined' ? musicProvider : 'freesound';
+    const currentProvider = typeof musicProvider !== 'undefined' ? musicProvider : 'jamendo';
     document.querySelectorAll('.music-provider-opt').forEach(opt => {
         opt.classList.toggle('active', opt.dataset.provider === currentProvider);
     });
@@ -835,7 +834,7 @@ window.guardarProviderApiKey = function() {
         return;
     }
 
-    const currentProvider = typeof musicProvider !== 'undefined' ? musicProvider : 'freesound';
+    const currentProvider = typeof musicProvider !== 'undefined' ? musicProvider : 'jamendo';
     if (currentProvider === 'freesound') {
         uSet('freesound_api_key', key);
         window.freesoundApiKey = key;
@@ -844,10 +843,6 @@ window.guardarProviderApiKey = function() {
         uSet('jamendo_api_key', key);
         window.JAMENDO_API_KEY = key;
         if (typeof mostrarNotificacion === 'function') mostrarNotificacion('✓ Jamendo API key guardada');
-    } else if (currentProvider === 'pixabay') {
-        uSet('pixabay_music_key', key);
-        window.PIXABAY_MUSIC_KEY = key;
-        if (typeof mostrarNotificacion === 'function') mostrarNotificacion('✓ Pixabay API key guardada');
     }
 
     keyInput.value = '';
