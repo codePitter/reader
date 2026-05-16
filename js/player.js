@@ -849,7 +849,9 @@ async function selectGenre(genre) {
 
 // ── Orden de cascada: si el proveedor elegido falla, se prueban los siguientes ──
 // Solo se intenta un proveedor si tiene key disponible (donde aplica)
-const _PROVIDER_CASCADE = ['freesound', 'jamendo', 'pixabay', 'ccmixter'];
+// ── Orden de cascada: Jamendo → Freesound → local ──
+// ccMixter excluido: siempre falla con ERR_RESPONSE_HEADERS_TOO_BIG (headers HTTP demasiado grandes)
+const _PROVIDER_CASCADE = ['jamendo', 'freesound'];
 
 function _providerHasKey(provider) {
     if (provider === 'freesound') return !!freesoundApiKey;
