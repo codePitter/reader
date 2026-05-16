@@ -747,6 +747,12 @@ window.envolverOracionesEnSpans = function envolverOracionesEnSpans(contenedor, 
 const _generarAudioLocalOriginal = typeof generarAudioLocal === 'function' ? generarAudioLocal : null;
 
 async function generarAudioLocal(texto, { silencioso = false, voice = null } = {}) {
+    // Si Azure está activo, delegar completamente a ese motor (ignora voice-roles)
+    if (typeof _usarAzure !== 'undefined' && _usarAzure) {
+        return typeof generarAudioAzure === 'function'
+            ? generarAudioAzure(texto, { silencioso })
+            : null;
+    }
     try {
         const textoNorm = typeof _normalizarTextoTTS === 'function' ? _normalizarTextoTTS(texto) : texto;
         const vozFinal = voice || (typeof _edgeTtsVoice !== 'undefined' ? _edgeTtsVoice : '');
